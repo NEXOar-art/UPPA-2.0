@@ -1,0 +1,122 @@
+{
+  "entities": {
+    "Usuario": {
+      "title": "Usuario",
+      "description": "Perfil de usuario en UPPA Comunidad de Transporte",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "UID de Firebase Authentication" },
+        "nombre": { "type": "string", "description": "Nombre y apellido" },
+        "email": { "type": "string", "format": "email", "description": "Correo electrónico" },
+        "rol": {
+          "type": "string",
+          "enum": ["pasajero", "chofer_micro", "chofer_moto", "chofer_auto", "administrador"],
+          "description": "Rol del usuario en la plataforma"
+        },
+        "esChofer": { "type": "boolean", "description": "Si está prestando servicio como chofer" },
+        "tipoVehiculo": { "type": "string", "enum": ["moto", "auto", "micro", null] },
+        "activo": { "type": "boolean", "description": "Estado de la cuenta" },
+        "fotoPerfil": { "type": "string", "description": "URL de foto de perfil" },
+        "telefono": { "type": "string", "description": "Teléfono de contacto o WhatsApp" },
+        "barrio": { "type": "string", "description": "Barrio de Zárate o Campana" },
+        "fechaRegistro": { "type": "string", "description": "Fecha de registro ISO" }
+      },
+      "required": ["nombre", "email", "rol", "activo"]
+    },
+    "Reporte": {
+      "title": "Reporte",
+      "description": "Incidente o estado del recorrido en tiempo real",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "ID del reporte" },
+        "usuarioId": { "type": "string", "description": "UID del autor" },
+        "nombreUsuario": { "type": "string", "description": "Nombre del usuario desnormalizado" },
+        "tipo": {
+          "type": "string",
+          "enum": ["demora", "accidente", "corte", "control", "congestion", "alerta"],
+          "description": "Tipo de evento de tránsito"
+        },
+        "descripcion": { "type": "string", "description": "Detalle del incidente" },
+        "ubicacion": {
+          "type": "object",
+          "properties": {
+            "lat": { "type": "number" },
+            "lng": { "type": "number" }
+          },
+          "required": ["lat", "lng"]
+        },
+        "ruta": { "type": "string", "description": "Ruta asociada (ej: campana-zarate)" },
+        "estado": { "type": "string", "enum": ["activo", "resuelto", "oculto"] }
+      },
+      "required": ["usuarioId", "nombreUsuario", "tipo", "descripcion", "ubicacion", "estado"]
+    },
+    "MensajeChat": {
+      "title": "MensajeChat",
+      "description": "Mensaje en sala comunitaria en tiempo real",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "usuarioId": { "type": "string" },
+        "nombreUsuario": { "type": "string" },
+        "texto": { "type": "string" },
+        "rol": { "type": "string" },
+        "fotoPerfil": { "type": "string" },
+        "replyTo": { "type": "object" }
+      },
+      "required": ["usuarioId", "nombreUsuario", "texto"]
+    },
+    "SolicitudTransporte": {
+      "title": "SolicitudTransporte",
+      "description": "Solicitud de transporte alternativo cuando el pasajero queda a pie",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "pasajeroId": { "type": "string" },
+        "nombrePasajero": { "type": "string" },
+        "origen": { "type": "string" },
+        "destino": { "type": "string" },
+        "estado": {
+          "type": "string",
+          "enum": ["pendiente", "aceptado", "en_camino", "completado", "cancelado"]
+        },
+        "tipoVehiculoRequerido": { "type": "string", "enum": ["moto", "auto"] },
+        "choferId": { "type": "string" }
+      },
+      "required": ["pasajeroId", "nombrePasajero", "origen", "destino", "estado", "tipoVehiculoRequerido"]
+    },
+    "HabilitacionChofer": {
+      "title": "HabilitacionChofer",
+      "description": "Habilitación de chofer con transferencia y clave admin 0608",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "driverId": { "type": "string" },
+        "driverName": { "type": "string" },
+        "vehicleType": { "type": "string", "enum": ["moto", "auto"] },
+        "vehicleModel": { "type": "string" },
+        "whatsapp": { "type": "string" },
+        "zone": { "type": "string" },
+        "horas": { "type": "number" },
+        "estado": { "type": "string", "enum": ["pendiente", "activo", "expirado", "revocado"] },
+        "activadoConClaveAdmin": { "type": "boolean" },
+        "activationCode": { "type": "string" },
+        "startsAt": { "type": "number" },
+        "endsAt": { "type": "number" }
+      },
+      "required": ["driverName", "vehicleType", "whatsapp", "estado"]
+    },
+    "CodigoHabilitacion": {
+      "title": "CodigoHabilitacion",
+      "description": "Código de habilitación único e irrepetible de 6 dígitos en codigos_habilitacion",
+      "type": "object",
+      "properties": {
+        "codigo": { "type": "string", "description": "ID del documento (ej: H4K9P2)" },
+        "usado": { "type": "boolean" },
+        "tipoVehiculo": { "type": "string", "enum": ["moto", "auto"] },
+        "creadoEn": { "type": "number" },
+        "usadoPor": { "type": "string" }
+      },
+      "required": ["usado", "tipoVehiculo", "creadoEn"]
+    }
+  }
+}

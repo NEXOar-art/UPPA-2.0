@@ -1,0 +1,6 @@
+{
+  "name": "UPPA – Comunidad de Transporte Zárate ↔ Campana",
+  "description": "Plataforma comunitaria de movilidad en tiempo real para la línea Zárate ↔ Barrio Malvinas, red de respaldo moto/auto taxi y mapa interactivo estilo Tesla.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
