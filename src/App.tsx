@@ -37,6 +37,7 @@ import { LoginPage } from './components/auth/LoginPage';
 import { LocationPermissionModal } from './components/auth/LocationPermissionModal';
 import { DriverConnectionBar } from './components/driver/DriverConnectionBar';
 import { SplashScreen } from './components/splash/SplashScreen';
+import { PedirTransporteModal } from './components/common/PedirTransporteModal';
 import { useAuth } from './context/AuthContext';
 import {
   ActiveDriverSession,
@@ -141,6 +142,7 @@ export default function App() {
 
   // Modals
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  const [isPedirTransporteOpen, setIsPedirTransporteOpen] = useState(false);
   const [isPublishTaxiOpen, setIsPublishTaxiOpen] = useState(false);
   const [publishTaxiInitialTab, setPublishTaxiInitialTab] = useState<'transfer' | 'enter-code'>('transfer');
   const [isContactAdOpen, setIsContactAdOpen] = useState(false);
@@ -797,6 +799,7 @@ export default function App() {
                 isDriverOnline={isDriverOnline}
                 activeTrackingTaxi={activeTrackingTaxi}
                 onClearTrackingTaxi={() => setActiveTrackingTaxi(null)}
+                onOpenPedirTransporte={() => setIsPedirTransporteOpen(true)}
               />
             </div>
 
@@ -868,6 +871,17 @@ export default function App() {
         initialLng={userLocation?.lng || -58.9592}
         currentUserName={currentUser.name}
         currentUserId={currentUser.id}
+      />
+
+      <PedirTransporteModal
+        isOpen={isPedirTransporteOpen}
+        onClose={() => setIsPedirTransporteOpen(false)}
+        currentUserId={currentUser.id}
+        currentUserName={currentUser.name}
+        initialOrigin={userLocation?.address || 'Campana Centro (Plaza Eduardo Costa)'}
+        onSuccess={() => {
+          showToast('¡Aviso de transporte emitido a choferes de Moto y Auto Taxi!');
+        }}
       />
 
       <PublishTaxiModal

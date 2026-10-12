@@ -26,6 +26,8 @@ import {
   ArrowRight,
   Sparkles,
   MessageCircle,
+  Zap,
+  Bike,
 } from 'lucide-react';
 
 export const CARTOGRAPHY_API_KEY = '0a49b2d34b5b7e8b65a6bd7da25e4bd8';
@@ -82,6 +84,7 @@ interface TeslaMapProps {
   isDriverOnline?: boolean;
   activeTrackingTaxi?: TaxiListing | null;
   onClearTrackingTaxi?: () => void;
+  onOpenPedirTransporte?: () => void;
 }
 
 interface TrajectoryResult {
@@ -109,6 +112,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
   isDriverOnline = false,
   activeTrackingTaxi,
   onClearTrackingTaxi,
+  onOpenPedirTransporte,
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
@@ -1185,6 +1189,18 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
 
       {/* Floating Bottom Quick Action Pills (Center-Right) */}
       <div className="absolute bottom-6 right-4 z-20 flex items-center gap-2">
+        {onOpenPedirTransporte && (
+          <button
+            onClick={onOpenPedirTransporte}
+            className="h-11 px-3.5 rounded-2xl bg-gradient-to-r from-amber-500 via-orange-500 to-yellow-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black text-xs flex items-center gap-1.5 shadow-xl shadow-amber-500/25 active:scale-95 transition-all cursor-pointer ring-1 ring-amber-300"
+            title="Pedir Transporte Alternativo (Aviso a Moto Taxi y Auto Taxi)"
+          >
+            <Zap className="w-4 h-4 fill-slate-950" />
+            <span className="hidden sm:inline">Pedir Transporte Alternativo</span>
+            <span className="sm:hidden">Pedir Transporte</span>
+          </button>
+        )}
+
         <button
           onClick={handleLocateMe}
           className="w-11 h-11 rounded-2xl glass-button text-slate-200 hover:text-sky-300 flex items-center justify-center shadow-lg"
