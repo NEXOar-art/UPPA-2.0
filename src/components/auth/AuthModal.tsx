@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, UserRole } from '../../types';
 import { useAuth } from '../../context/AuthContext';
+import { authService } from '../../services/authService';
 import { updateUserDocument } from '../../services/firestoreService';
 import { ResetPasswordModal } from './ResetPasswordModal';
 import {
@@ -118,10 +119,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   if (!isOpen) return null;
 
-  const currentUid = authUser?.uid || currentUser.uid || currentUser.id;
-  const currentRol = authUser?.rol || currentUser.rol || (currentUser.role === 'admin' ? 'administrador' : 'cliente');
-  const currentEstado = authUser?.estado || currentUser.estado || 'activo';
-  const currentFecha = authUser?.fechaRegistro || currentUser.fechaRegistro || 'Reciente';
+  const currentUid = authUser?.uid || currentUser?.uid || currentUser?.id || '';
+  const currentRol = authUser?.rol || currentUser?.rol || (currentUser?.role === 'admin' ? 'administrador' : 'pasajero');
+  const currentEstado = authUser?.estado || currentUser?.estado || 'activo';
+  const currentFecha = authUser?.fechaRegistro || currentUser?.fechaRegistro || 'Reciente';
 
   // Handler: Crear nuevo perfil en Firebase y disparar email de verificación
   const handleRegisterProfile = async (e: React.FormEvent) => {
@@ -169,9 +170,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       // Actualizar el estado del usuario en la app
       onUpdateUser({
         ...currentUser,
-        id: profile.uid,
-        uid: profile.uid,
-        name: profile.nombre,
+        id: profile.uid || profile.id || currentUser.id,
+        uid: profile.uid || profile.id || currentUser.uid,
+        name: profile.nombre || profile.name || currentUser.name,
+        nombre: profile.nombre || profile.name || currentUser.nombre,
         email: profile.email,
         role: isChofer ? 'driver' : 'passenger',
         rol: profile.rol as any,
@@ -218,9 +220,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
       onUpdateUser({
         ...currentUser,
-        id: profile.uid,
-        uid: profile.uid,
-        name: profile.nombre,
+        id: profile.uid || profile.id || currentUser.id,
+        uid: profile.uid || profile.id || currentUser.uid,
+        name: profile.nombre || profile.name || currentUser.name,
+        nombre: profile.nombre || profile.name || currentUser.nombre,
         email: profile.email,
         role: profile.rol === 'administrador' ? 'admin' : (profile.esChofer ? 'driver' : 'passenger'),
         rol: profile.rol as any,
@@ -249,9 +252,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       const profile = await loginWithGoogle();
       onUpdateUser({
         ...currentUser,
-        id: profile.uid,
-        uid: profile.uid,
-        name: profile.nombre,
+        id: profile.uid || profile.id || currentUser.id,
+        uid: profile.uid || profile.id || currentUser.uid,
+        name: profile.nombre || profile.name || currentUser.name,
+        nombre: profile.nombre || profile.name || currentUser.nombre,
         email: profile.email,
         role: profile.rol === 'administrador' ? 'admin' : 'passenger',
         rol: profile.rol as any,
@@ -286,6 +290,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       }
       if (updateProfileData) {
         await updateProfileData({
+          name: editName.trim(),
           nombre: editName.trim(),
           barrio: editBarrio.trim(),
           phone: editPhone.trim(),
@@ -295,6 +300,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       onUpdateUser({
         ...currentUser,
         name: editName.trim(),
+        nombre: editName.trim(),
         barrio: editBarrio.trim(),
         phone: editPhone.trim(),
       });
@@ -364,7 +370,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               </h2>
               <p className="text-[11px] text-slate-400 font-mono">
                 {mode === 'profile'
-                  ? `Firestore: usuarios/${currentUid.slice(0, 8)}...`
+                  ? `Firestore: usuarios/${(currentUid || 'usr').slice(0, 8)}...`
                   : 'Autenticación Oficial & Cloud Firestore'}
               </p>
             </div>
@@ -791,7 +797,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   className={`px-2 py-0.5 rounded-md font-bold uppercase text-[10px] ${
                     currentRol === 'administrador'
                       ? 'bg-purple-950 text-purple-300 border border-purple-700'
-                      : currentRol.includes('chofer')
+                      : currentRol?.includes('chofer')
                       ? 'bg-emerald-950 text-emerald-300 border border-emerald-700'
                       : 'bg-sky-950 text-sky-300 border border-sky-700'
                   }`}

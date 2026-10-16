@@ -34,6 +34,7 @@ import {
 } from '../../services/realtimeFirebaseService';
 import { getTimerState } from '../../services/driverActivationService';
 import { UppaDatabaseViewer } from './UppaDatabaseViewer';
+import { AdminRealtimeCharts } from './AdminRealtimeCharts';
 import {
   Shield,
   KeyRound,
@@ -61,6 +62,9 @@ import {
   MapPin,
   ExternalLink,
   Database,
+  Activity,
+  TrendingUp,
+  LineChart,
 } from 'lucide-react';
 
 interface AdminPanelProps {
@@ -100,7 +104,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   // Tab State
   const [activeTab, setActiveTab] = useState<
-    'choferes' | 'usuarios' | 'database' | 'reportes' | 'chat' | 'solicitudes' | 'metricas' | 'alerta'
+    'choferes' | 'usuarios' | 'database' | 'reportes' | 'chat' | 'solicitudes' | 'metricas' | 'graficos' | 'alerta'
   >('choferes');
 
   // Real-Time Firestore State
@@ -469,6 +473,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         >
           <BarChart3 className="w-3.5 h-3.5" />
           <span>Métricas en Vivo</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('graficos')}
+          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 ${
+            activeTab === 'graficos'
+              ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-md shadow-purple-600/30'
+              : 'text-slate-400 hover:text-white bg-slate-900/60 hover:bg-slate-800'
+          }`}
+        >
+          <Activity className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
+          <span>Gráficos Recharts</span>
         </button>
 
         <button
@@ -1309,6 +1325,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* TAB: GRÁFICOS Y MÉTRICAS RECHARTS EN TIEMPO REAL */}
+      {activeTab === 'graficos' && (
+        <AdminRealtimeCharts
+          reportes={reportes}
+          habilitaciones={habilitaciones}
+          usuarios={usuarios}
+          events={events}
+          taxis={taxis}
+          solicitudes={solicitudes}
+        />
       )}
 
       {/* TAB 7: TRANSMITIR ALERTA GENERAL */}

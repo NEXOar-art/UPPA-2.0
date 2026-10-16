@@ -94,9 +94,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onExploreGuest })
           setIsSubmitting(false);
           const computedRole = mapFirestoreRolToAppRole(userProfile.rol, userProfile.esChofer || role === 'driver' || role === 'chofer_moto' || role === 'chofer_auto');
           onLogin({
-            id: userProfile.uid,
-            uid: userProfile.uid,
-            name: userProfile.nombre,
+            id: userProfile.uid || userProfile.id || 'usr_' + Date.now(),
+            uid: userProfile.uid || userProfile.id,
+            name: userProfile.nombre || userProfile.name || 'Usuario',
+            nombre: userProfile.nombre || userProfile.name || 'Usuario',
             email: userProfile.email,
             role: computedRole,
             rol: userProfile.rol,
@@ -118,9 +119,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onExploreGuest })
           setIsSubmitting(false);
           const computedRole = mapFirestoreRolToAppRole(userProfile.rol, userProfile.esChofer);
           onLogin({
-            id: userProfile.uid,
-            uid: userProfile.uid,
-            name: userProfile.nombre,
+            id: userProfile.uid || userProfile.id || 'usr_' + Date.now(),
+            uid: userProfile.uid || userProfile.id,
+            name: userProfile.nombre || userProfile.name || 'Usuario',
+            nombre: userProfile.nombre || userProfile.name || 'Usuario',
             email: userProfile.email,
             role: computedRole,
             rol: userProfile.rol,
@@ -151,9 +153,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onExploreGuest })
         setIsSubmitting(false);
         const computedRole = mapFirestoreRolToAppRole(userProfile.rol, userProfile.esChofer);
         onLogin({
-          id: userProfile.uid,
-          uid: userProfile.uid,
-          name: userProfile.nombre,
+          id: userProfile.uid || userProfile.id || 'usr_' + Date.now(),
+          uid: userProfile.uid || userProfile.id,
+          name: userProfile.nombre || userProfile.name || 'Usuario',
+          nombre: userProfile.nombre || userProfile.name || 'Usuario',
           email: userProfile.email,
           role: computedRole,
           rol: userProfile.rol,

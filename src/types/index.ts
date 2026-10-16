@@ -10,17 +10,19 @@ export type UserRole =
   | 'advertiser'
   | 'cliente';
 
-export function mapFirestoreRolToAppRole(rol?: string, esChofer?: boolean): UserRole {
+export function mapRoleToAppRole(rol?: string, esChofer?: boolean): UserRole {
   if (rol === 'administrador' || rol === 'admin') return 'admin';
   if (esChofer || rol === 'chofer_auto' || rol === 'chofer_moto' || rol === 'chofer_micro' || rol === 'driver') {
     return 'driver';
   }
   return 'passenger';
 }
+export const mapFirestoreRolToAppRole = mapRoleToAppRole;
 
 export interface User {
   id: string;
   name: string;
+  nombre?: string;
   email: string;
   role: UserRole;
   phone?: string;
@@ -152,17 +154,17 @@ export interface HabilitacionChofer {
   zone: string;
   horas: number;
   estado: 'pendiente' | 'activo' | 'expirado' | 'revocado';
-  activadoConClaveAdmin: boolean;
+  activadoConClaveAdmin?: boolean;
   claveAdminUsada?: string; // '0608'
   activationCode?: string;
   startsAt?: number;
   endsAt?: number;
   comprobanteUrl?: string;
   comprobanteFileName?: string;
-  alias: string; // 'luciaveronicag'
-  cvu: string; // '0000003100020253501840'
-  titular: string; // 'Lucia Veronica Gimenez'
-  createdAt: any;
+  alias?: string; // 'luciaveronicag'
+  cvu?: string; // '0000003100020253501840'
+  titular?: string; // 'Lucia Veronica Gimenez'
+  createdAt?: any;
   habilitadoPor?: string;
   adminNotes?: string;
 }

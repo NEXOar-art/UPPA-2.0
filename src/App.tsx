@@ -131,9 +131,10 @@ export default function App() {
       const computedRole = mapFirestoreRolToAppRole(authUser.rol, authUser.esChofer || isDriverMode || currentUser.role === 'driver');
       const synchedUser: User = {
         ...currentUser,
-        id: authUser.uid,
-        uid: authUser.uid,
-        name: authUser.nombre || currentUser.name,
+        id: authUser.uid || authUser.id || currentUser.id,
+        uid: authUser.uid || authUser.id || currentUser.uid,
+        name: authUser.nombre || authUser.name || currentUser.name,
+        nombre: authUser.nombre || authUser.name || currentUser.nombre,
         email: authUser.email || currentUser.email,
         role: computedRole,
         rol: authUser.rol,

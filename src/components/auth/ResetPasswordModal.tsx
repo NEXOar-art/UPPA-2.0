@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-import { sendPasswordResetEmail } from 'firebase/auth';
-import { auth } from '../../config/firebase';
+import { authService } from '../../services/authService';
 import {
   X,
   KeyRound,
@@ -40,18 +39,10 @@ export const ResetPasswordModal: React.FC<ResetPasswordModalProps> = ({
     setErrorMessage(null);
 
     try {
-      await sendPasswordResetEmail(auth, cleanEmail);
+      await authService.resetPassword(cleanEmail);
       setIsSent(true);
     } catch (err: any) {
-      let msg = 'No se pudo enviar el correo de recuperación.';
-      if (err.code === 'auth/user-not-found') {
-        msg = 'No existe una cuenta registrada con ese correo electrónico.';
-      } else if (err.code === 'auth/invalid-email') {
-        msg = 'El formato de correo no es válido.';
-      } else if (err.message) {
-        msg = err.message;
-      }
-      setErrorMessage(msg);
+      setErrorMessage(err.message || 'No se pudo enviar el correo de recuperación.');
     } finally {
       setIsSending(false);
     }
