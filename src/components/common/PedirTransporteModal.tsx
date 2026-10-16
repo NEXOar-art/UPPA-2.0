@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { SolicitudTransporteFirestore } from '../../types';
 import { crearSolicitudTransporte } from '../../services/realtimeFirebaseService';
 import {
@@ -39,6 +39,17 @@ export const PedirTransporteModal: React.FC<PedirTransporteModalProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      if (initialOrigin) setOrigen(initialOrigin);
+      if (currentUserName && currentUserName !== 'Pasajero Comunidad UPPA') {
+        setNombre(currentUserName);
+      }
+      setErrorMsg('');
+      setSuccessMsg(null);
+    }
+  }, [isOpen, initialOrigin, currentUserName]);
 
   if (!isOpen) return null;
 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { User, UserRole } from '../../types';
+import { User, UserRole, mapFirestoreRolToAppRole } from '../../types';
 import heroCorridorImg from '../../assets/images/uppa_zarate_corridor_1791318316432.jpg';
 import { useAuth } from '../../context/AuthContext';
 import { ResetPasswordModal } from './ResetPasswordModal';
@@ -20,6 +20,8 @@ import {
   RefreshCw,
   AlertCircle,
   CheckCircle2,
+  Phone,
+  MapPin,
 } from 'lucide-react';
 
 interface LoginPageProps {
@@ -28,18 +30,29 @@ interface LoginPageProps {
 }
 
 export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onExploreGuest }) => {
-  const { registerWithEmail, loginWithEmail, loginWithGoogle, authError, setAuthError } = useAuth();
+  const {
+    registerWithEmail,
+    loginWithEmail,
+    loginWithGoogle,
+    authError,
+    setAuthError,
+    authNotice,
+    isResilientMode,
+  } = useAuth();
 
   const [authMode, setAuthMode] = useState<'login' | 'register'>('register');
   const [email, setEmail] = useState('gastonrobertogimenez@gmail.com');
   const [password, setPassword] = useState('uppa2026password');
   const [name, setName] = useState('Gaston Gimenez');
   const [role, setRole] = useState<UserRole>('passenger');
+  const [phone, setPhone] = useState('+54 9 3487 55-2190');
+  const [barrio, setBarrio] = useState('Campana Centro (Plaza Eduardo Costa)');
 
   const [showPassword, setShowPassword] = useState(false);
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [localNotice, setLocalNotice] = useState<string | null>(null);
+  const [showFirebaseInfo, setShowFirebaseInfo] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -68,25 +81,30 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onExploreGuest })
         // 1. Firebase Authentication createUserWithEmailAndPassword
         // 2. Automáticamente crea el documento en users/{uid} con rol="cliente", estado="activo"
         setLocalNotice('Creando usuario en Firebase Auth & Firestore...');
-        const userProfile = await registerWithEmail(cleanEmail, cleanPassword, cleanName, role);
+        const userProfile = await registerWithEmail(cleanEmail, cleanPassword, cleanName, role, {
+          phone: phone.trim(),
+          barrio: barrio.trim(),
+        });
 
-        setLocalNotice('¡Cuenta creada y sincronizada en Firestore!');
+        setLocalNotice('¡Perfil creado en Firebase y mail de autenticación enviado!');
         setTimeout(() => {
           setIsSubmitting(false);
+          const computedRole = mapFirestoreRolToAppRole(userProfile.rol, userProfile.esChofer || role === 'driver' || role === 'chofer_moto' || role === 'chofer_auto');
           onLogin({
             id: userProfile.uid,
             uid: userProfile.uid,
             name: userProfile.nombre,
             email: userProfile.email,
-            role: userProfile.rol === 'administrador' ? 'admin' : role,
+            role: computedRole,
             rol: userProfile.rol,
             estado: userProfile.estado,
             fechaRegistro: userProfile.fechaRegistro,
             barrio: userProfile.barrio,
             phone: userProfile.phone,
             avatarUrl: userProfile.avatarUrl,
+            emailVerificado: false,
           });
-        }, 300);
+        }, 500);
       } else {
         // Inicio de sesión con email y contraseña mediante Firebase Auth
         setLocalNotice('Verificando credenciales con Firebase Auth...');
@@ -95,12 +113,13 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onExploreGuest })
         setLocalNotice('¡Sesión iniciada correctamente con Firebase!');
         setTimeout(() => {
           setIsSubmitting(false);
+          const computedRole = mapFirestoreRolToAppRole(userProfile.rol, userProfile.esChofer);
           onLogin({
             id: userProfile.uid,
             uid: userProfile.uid,
             name: userProfile.nombre,
             email: userProfile.email,
-            role: userProfile.rol === 'administrador' ? 'admin' : role,
+            role: computedRole,
             rol: userProfile.rol,
             estado: userProfile.estado,
             fechaRegistro: userProfile.fechaRegistro,
@@ -127,12 +146,13 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onExploreGuest })
 
       setTimeout(() => {
         setIsSubmitting(false);
+        const computedRole = mapFirestoreRolToAppRole(userProfile.rol, userProfile.esChofer);
         onLogin({
           id: userProfile.uid,
           uid: userProfile.uid,
           name: userProfile.nombre,
           email: userProfile.email,
-          role: userProfile.rol === 'administrador' ? 'admin' : role,
+          role: computedRole,
           rol: userProfile.rol,
           estado: userProfile.estado,
           fechaRegistro: userProfile.fechaRegistro,
@@ -177,13 +197,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onExploreGuest })
         </div>
 
         <div className="flex items-center gap-2">
-          <button
-            onClick={onExploreGuest}
-            className="px-3.5 py-1.5 rounded-2xl glass-pill hover:bg-white/10 text-xs font-semibold text-slate-300 hover:text-white flex items-center gap-1.5 transition-all active:scale-95 shadow-md"
-          >
-            <span>Explorar Mapa</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </button>
+          <div className="px-3 py-1.5 rounded-2xl bg-sky-500/10 border border-sky-400/30 text-xs font-bold text-sky-200 flex items-center gap-1.5 shadow-sm">
+            <Shield className="w-3.5 h-3.5 text-cyan-400" />
+            <span>Acceso Requerido</span>
+          </div>
         </div>
       </header>
 
@@ -283,15 +300,58 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onExploreGuest })
               {authError && (
                 <div className="mb-3 p-2.5 rounded-xl bg-rose-500/15 border border-rose-500/30 text-[11px] text-rose-300 flex items-start gap-2 animate-in fade-in">
                   <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                  <span>{authError}</span>
+                  <div className="flex-1">
+                    <span>
+                      {authError.includes('configuration-not-found') || authError.includes('CONFIGURATION_NOT_FOUND')
+                        ? 'El proyecto de Firebase aún no tiene habilitado el proveedor de correo en la Consola. Iniciá sesión o registrate con cualquier contraseña para acceder en Modo Resiliente.'
+                        : authError}
+                    </span>
+                  </div>
                 </div>
               )}
 
-              {/* Status Notice */}
-              {localNotice && (
+              {/* Status / Resilient Notice */}
+              {(localNotice || authNotice) && (
                 <div className="mb-3 p-2.5 rounded-xl bg-emerald-500/15 border border-emerald-400/30 text-[11px] text-emerald-300 text-center font-mono flex items-center justify-center gap-1.5 animate-in fade-in">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>{localNotice}</span>
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                  <span>{authNotice || localNotice}</span>
+                </div>
+              )}
+
+              {/* Modo Resiliente Info Banner */}
+              {isResilientMode && !authError && (
+                <div className="mb-3 px-3 py-1.5 rounded-xl bg-sky-500/10 border border-sky-400/20 text-[10.5px] text-sky-200 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5 font-mono">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                    <span>Modo Resiliente Inteligente Activo</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowFirebaseInfo(!showFirebaseInfo)}
+                    className="underline text-[10px] text-sky-300 hover:text-white cursor-pointer"
+                  >
+                    {showFirebaseInfo ? 'Ocultar info' : 'Ver info'}
+                  </button>
+                </div>
+              )}
+
+              {showFirebaseInfo && (
+                <div className="mb-3 p-3 rounded-2xl bg-black/60 border border-white/10 text-[10.5px] text-slate-300 space-y-1.5 animate-in fade-in font-sans">
+                  <p className="font-bold text-white flex items-center gap-1">
+                    <span>⚙️ Configuración Firebase (uppa-comunidad-de-transporte)</span>
+                  </p>
+                  <p className="text-slate-400 leading-relaxed text-[10px]">
+                    Para activar la base en la nube oficial:
+                  </p>
+                  <ol className="list-decimal pl-4 space-y-0.5 text-[9.5px] text-slate-300">
+                    <li>Entrá a <strong>console.firebase.google.com</strong></li>
+                    <li>Seleccioná <strong>uppa-comunidad-de-transporte</strong></li>
+                    <li>En <strong>Authentication &gt; Sign-in method</strong>, activá <strong>Correo/Contraseña</strong></li>
+                    <li>En <strong>Firestore Database</strong>, hacé clic en Crear base de datos</li>
+                  </ol>
+                  <p className="text-emerald-400 text-[9.5px] font-semibold pt-1">
+                    ✓ Mientras tanto, todas las funciones de UPPA están 100% operativas en modo resiliente.
+                  </p>
                 </div>
               )}
 
@@ -344,6 +404,40 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onExploreGuest })
                             )}
                           </button>
                         ))}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-300 mb-1 uppercase tracking-wider">
+                          Teléfono
+                        </label>
+                        <div className="relative">
+                          <Phone className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                          <input
+                            type="tel"
+                            value={phone}
+                            onChange={(e) => setPhone(e.target.value)}
+                            placeholder="+54 9 3487..."
+                            className="w-full bg-white/[0.04] border border-white/10 rounded-2xl pl-8 pr-2.5 py-2 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-sky-400/70 font-mono"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-300 mb-1 uppercase tracking-wider">
+                          Barrio / Zona
+                        </label>
+                        <div className="relative">
+                          <MapPin className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                          <input
+                            type="text"
+                            value={barrio}
+                            onChange={(e) => setBarrio(e.target.value)}
+                            placeholder="Campana Centro"
+                            className="w-full bg-white/[0.04] border border-white/10 rounded-2xl pl-8 pr-2.5 py-2 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-sky-400/70"
+                          />
+                        </div>
                       </div>
                     </div>
                   </>
@@ -455,13 +549,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onExploreGuest })
                   <span>Recuperar contraseña</span>
                 </button>
 
-                <button
-                  type="button"
-                  onClick={onExploreGuest}
-                  className="text-[11px] text-slate-400 hover:text-white transition-colors"
-                >
-                  Modo invitado →
-                </button>
+                <span className="text-[11px] text-slate-500 font-mono">
+                  🔒 Autenticación Requerida
+                </span>
               </div>
             </div>
           </div>

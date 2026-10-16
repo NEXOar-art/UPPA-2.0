@@ -9,6 +9,7 @@ import {
   SolicitudTransporteFirestore,
   MensajeChatFirestore,
   AnalyticsSummary,
+  User,
 } from '../../types';
 import {
   ADMIN_MASTER_PIN,
@@ -32,6 +33,7 @@ import {
   suscribirCodigosHabilitacion,
 } from '../../services/realtimeFirebaseService';
 import { getTimerState } from '../../services/driverActivationService';
+import { UppaDatabaseViewer } from './UppaDatabaseViewer';
 import {
   Shield,
   KeyRound,
@@ -58,6 +60,7 @@ import {
   Radio,
   MapPin,
   ExternalLink,
+  Database,
 } from 'lucide-react';
 
 interface AdminPanelProps {
@@ -67,6 +70,7 @@ interface AdminPanelProps {
   onDeleteEvent: (eventId: string) => void;
   onVerifyEvent: (eventId: string) => void;
   onBroadcastAlert: (title: string, description: string) => void;
+  currentUser?: User;
 }
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({
@@ -76,7 +80,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   onDeleteEvent,
   onVerifyEvent,
   onBroadcastAlert,
+  currentUser,
 }) => {
+  // Check if current user is an authenticated administrator
+  const isUserAdmin = currentUser?.role === 'admin' || currentUser?.rol === 'administrador';
+
   // Authentication & PIN State
   const [isAdminUnlocked, setIsAdminUnlocked] = useState<boolean>(() => {
     try {
@@ -85,12 +93,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       return false;
     }
   });
+
+  const effectiveUnlocked = isAdminUnlocked || isUserAdmin;
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState<string | null>(null);
 
   // Tab State
   const [activeTab, setActiveTab] = useState<
-    'choferes' | 'usuarios' | 'reportes' | 'chat' | 'solicitudes' | 'metricas' | 'alerta'
+    'choferes' | 'usuarios' | 'database' | 'reportes' | 'chat' | 'solicitudes' | 'metricas' | 'alerta'
   >('choferes');
 
   // Real-Time Firestore State
@@ -105,6 +115,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [searchFilter, setSearchFilter] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [actionSuccessMessage, setActionSuccessMessage] = useState<string | null>(null);
+  const [actionErrorMessage, setActionErrorMessage] = useState<string | null>(null);
 
   // Driver Enablement with PIN "0608" State
   const [selectedHabIdForActivation, setSelectedHabIdForActivation] = useState<string | null>(null);
@@ -118,6 +129,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [isGeneratingCode, setIsGeneratingCode] = useState(false);
   const [lastGeneratedCode, setLastGeneratedCode] = useState<string | null>(null);
 
+  const showErrorBanner = (msg: string) => {
+    setActionErrorMessage(msg);
+    setTimeout(() => setActionErrorMessage(null), 4500);
+  };
+
   const handleGenerarCodigo = async (tipoVehiculo: 'moto' | 'auto') => {
     setIsGeneratingCode(true);
     try {
@@ -125,7 +141,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       setLastGeneratedCode(code);
       showSuccessBanner(`¡Código único ${code} generado en Firestore para ${tipoVehiculo === 'moto' ? 'Moto' : 'Auto'}!`);
     } catch (e: any) {
-      alert(e.message || 'Error al generar código');
+      showErrorBanner(e.message || 'Error al generar código');
     } finally {
       setIsGeneratingCode(false);
     }
@@ -202,7 +218,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   // Handle Enable Driver with PIN "0608"
   const handleHabilitarChofer = async (habId: string) => {
     if (adminActivationPin.trim() !== ADMIN_MASTER_PIN) {
-      alert('Clave de administrador incorrecta. Debe ingresar 0608.');
+      showErrorBanner('Clave de administrador incorrecta. Debe ingresar 0608.');
       return;
     }
 
@@ -212,7 +228,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       showSuccessBanner(res.message);
       setSelectedHabIdForActivation(null);
     } catch (err: any) {
-      alert(err.message || 'Error al habilitar chofer');
+      showErrorBanner(err.message || 'Error al habilitar chofer');
     } finally {
       setIsEnablingDriver(false);
     }
@@ -225,8 +241,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     setTimeout(() => setCopiedKey(null), 2000);
   };
 
-  // PIN Unlock Screen if locked
-  if (!isAdminUnlocked) {
+  // PIN Unlock Screen if locked (or auto-unlocked if current user is admin)
+  if (!effectiveUnlocked) {
     return (
       <div className="flex-1 overflow-y-auto bg-[#07090e] p-4 flex items-center justify-center">
         <div className="w-full max-w-md bg-[#0f1422] border border-purple-500/30 rounded-3xl p-6 sm:p-8 shadow-2xl relative overflow-hidden backdrop-blur-xl">
@@ -356,6 +372,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         </div>
       )}
 
+      {/* Error notification banner */}
+      {actionErrorMessage && (
+        <div className="bg-rose-500/20 border border-rose-400/40 text-rose-200 text-xs px-4 py-2.5 rounded-xl flex items-center gap-2 animate-in fade-in">
+          <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+          <span>{actionErrorMessage}</span>
+        </div>
+      )}
+
       {/* Navigation Tabs */}
       <div className="flex items-center gap-1 overflow-x-auto pb-1 border-b border-white/5 scrollbar-none">
         <button
@@ -385,6 +409,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         >
           <Users className="w-3.5 h-3.5" />
           <span>Usuarios ({usuarios.length})</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('database')}
+          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 ${
+            activeTab === 'database'
+              ? 'bg-purple-600 text-white shadow-md'
+              : 'text-slate-400 hover:text-white bg-slate-900/60'
+          }`}
+        >
+          <Database className="w-3.5 h-3.5 text-cyan-400" />
+          <span>Base de Datos de Usuarios</span>
         </button>
 
         <button
@@ -963,6 +999,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               </table>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* TAB 2.5: BASE DE DATOS DE USUARIOS (CREDENCIALES Y REGISTROS) */}
+      {activeTab === 'database' && (
+        <div className="bg-[#0b0e17] border border-white/5 rounded-2xl p-4 shadow-xl">
+          <UppaDatabaseViewer isEmbedded={true} currentUserRole="admin" />
         </div>
       )}
 

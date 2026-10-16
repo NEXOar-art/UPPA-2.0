@@ -10,6 +10,14 @@ export type UserRole =
   | 'advertiser'
   | 'cliente';
 
+export function mapFirestoreRolToAppRole(rol?: string, esChofer?: boolean): UserRole {
+  if (rol === 'administrador' || rol === 'admin') return 'admin';
+  if (esChofer || rol === 'chofer_auto' || rol === 'chofer_moto' || rol === 'chofer_micro' || rol === 'driver') {
+    return 'driver';
+  }
+  return 'passenger';
+}
+
 export interface User {
   id: string;
   name: string;
@@ -19,13 +27,14 @@ export interface User {
   barrio?: string;
   avatarUrl?: string;
   uid?: string;
-  rol?: 'pasajero' | 'chofer_micro' | 'chofer_moto' | 'chofer_auto' | 'administrador' | 'cliente';
+  rol?: 'pasajero' | 'chofer_micro' | 'chofer_moto' | 'chofer_auto' | 'administrador' | 'cliente' | string;
   esChofer?: boolean;
   tipoVehiculo?: 'moto' | 'auto' | 'micro' | null;
   activo?: boolean;
   fotoPerfil?: string;
   telefono?: string;
   estado?: 'activo' | 'inactivo' | 'suspendido';
+  emailVerificado?: boolean;
   ultimaConexion?: any;
   fechaRegistro?: any;
 }
@@ -38,6 +47,7 @@ export interface UsuarioFirestore {
   esChofer: boolean;
   tipoVehiculo: 'moto' | 'auto' | 'micro' | null;
   activo: boolean;
+  emailVerificado?: boolean;
   fotoPerfil?: string;
   telefono?: string;
   barrio?: string;

@@ -19,6 +19,7 @@ import {
   AdListing,
   User,
   PushNotificationPayload,
+  mapFirestoreRolToAppRole,
 } from './types';
 import { computeLineSentiment } from './utils/sentiment';
 import { UserLocation, reverseGeocode } from './utils/geolocation';
@@ -68,20 +69,46 @@ import {
   X,
   Bike,
   KeyRound,
+  Mail,
 } from 'lucide-react';
 
 export default function App() {
   const {
     user: authUser,
     isAuthenticated,
+    isEmailVerified,
     isAdmin: isFirebaseAdmin,
     logout: firebaseLogout,
     isLoading: isAuthLoading,
   } = useAuth();
 
-  // Authentication state - Open by default for everyone
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [currentUser, setCurrentUser] = useState<User>(INITIAL_USER);
+  // Authentication state - Requerida al inicio para acceder a todas las funcionalidades
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => {
+    try {
+      const stored = localStorage.getItem('uppa_session_user');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed && parsed.email && !parsed.email.includes('guest')) {
+          return true;
+        }
+      }
+    } catch {}
+    return false;
+  });
+
+  const [currentUser, setCurrentUser] = useState<User>(() => {
+    try {
+      const stored = localStorage.getItem('uppa_session_user');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed && parsed.email && !parsed.email.includes('guest')) {
+          return parsed;
+        }
+      }
+    } catch {}
+    return INITIAL_USER;
+  });
+
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [showSplash, setShowSplash] = useState(true);
 
@@ -100,25 +127,44 @@ export default function App() {
   // Sync Firebase Auth session with App state
   useEffect(() => {
     if (authUser) {
-      setCurrentUser((prev) => ({
-        ...prev,
+      const isDriverMode = driverSession && driverSession.endsAt > Date.now();
+      const computedRole = mapFirestoreRolToAppRole(authUser.rol, authUser.esChofer || isDriverMode || currentUser.role === 'driver');
+      const synchedUser: User = {
+        ...currentUser,
         id: authUser.uid,
         uid: authUser.uid,
-        name: authUser.nombre || prev.name,
-        email: authUser.email || prev.email,
-        role: authUser.rol === 'administrador' ? 'admin' : (prev.role === 'admin' ? 'passenger' : prev.role),
+        name: authUser.nombre || currentUser.name,
+        email: authUser.email || currentUser.email,
+        role: computedRole,
         rol: authUser.rol,
+        esChofer: authUser.esChofer || computedRole === 'driver',
         estado: authUser.estado,
         fechaRegistro: authUser.fechaRegistro,
-        barrio: authUser.barrio || prev.barrio,
-        phone: authUser.phone || prev.phone,
-        avatarUrl: authUser.avatarUrl || prev.avatarUrl,
-      }));
+        barrio: authUser.barrio || currentUser.barrio,
+        phone: authUser.phone || currentUser.phone,
+        avatarUrl: authUser.avatarUrl || currentUser.avatarUrl,
+        emailVerificado: authUser.emailVerificado ?? isEmailVerified,
+      };
+      setCurrentUser(synchedUser);
       setIsLoggedIn(true);
+      try {
+        localStorage.setItem('uppa_session_user', JSON.stringify(synchedUser));
+      } catch {}
     } else if (!isAuthLoading) {
+      try {
+        const stored = localStorage.getItem('uppa_session_user');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed && parsed.email && !parsed.email.includes('guest')) {
+            setCurrentUser(parsed);
+            setIsLoggedIn(true);
+            return;
+          }
+        }
+      } catch {}
       setIsLoggedIn(false);
     }
-  }, [authUser, isAuthLoading]);
+  }, [authUser, isAuthLoading, isEmailVerified]);
 
   // Global State
   const [routes, setRoutes] = useState<TransitRoute[]>(MOCK_ROUTES);
@@ -545,11 +591,46 @@ export default function App() {
     setActiveTab('chat');
   };
 
+  // Pantalla de Carga Inicial con Logo Oficial UPPA
+  if (showSplash) {
+    return <SplashScreen onFinish={() => setShowSplash(false)} />;
+  }
+
+  // Si Firebase Auth está inicializando la verificación de sesión
+  if (isAuthLoading) {
+    return (
+      <div className="min-h-screen w-full bg-[#07090e] flex flex-col items-center justify-center text-slate-100 font-sans">
+        <div className="w-14 h-14 rounded-3xl bg-gradient-to-br from-sky-400 to-cyan-500 flex items-center justify-center font-bold text-slate-950 font-display text-2xl shadow-xl shadow-sky-500/25 animate-pulse">
+          U
+        </div>
+        <p className="mt-4 text-xs font-semibold text-sky-300">Conectando con Firebase Authentication...</p>
+        <span className="text-[11px] text-slate-500 font-mono mt-1">UPPA · Zárate ↔ Campana</span>
+      </div>
+    );
+  }
+
+  // Autenticación Requerida al Inicio para acceder a todas las funcionalidades
+  if (!isLoggedIn) {
+    return (
+      <LoginPage
+        onLogin={(user) => {
+          try {
+            localStorage.setItem('uppa_session_user', JSON.stringify(user));
+          } catch {}
+          setCurrentUser(user);
+          setIsLoggedIn(true);
+          setIsLocationModalOpen(true);
+          showToast(`¡Bienvenido a UPPA, ${user.name}!`);
+        }}
+        onExploreGuest={() => {
+          showToast('La autenticación es obligatoria para acceder a las funcionalidades');
+        }}
+      />
+    );
+  }
+
   return (
     <div className="flex flex-col h-screen w-screen bg-[#07090e] text-slate-100 overflow-hidden font-sans">
-      {/* Splash Screen / Pantalla de Carga Inicial con Logo Oficial UPPA */}
-      {showSplash && <SplashScreen onFinish={() => setShowSplash(false)} />}
-
       {/* Toast Notification */}
       {toastMessage && (
         <div className="fixed top-14 left-1/2 -translate-x-1/2 z-50 glass-panel px-4 py-2 rounded-2xl shadow-2xl text-xs flex items-center gap-2 border-sky-400/40 text-sky-200 animate-in fade-in duration-200">
@@ -620,6 +701,24 @@ export default function App() {
             );
           })}
         </aside>
+      )}
+
+      {/* Alerta / Recordatorio de email pendiente de autenticar */}
+      {isLoggedIn && !isEmailVerified && authUser?.email && !authUser.email.includes('guest') && (
+        <div className="bg-gradient-to-r from-amber-500/20 via-orange-500/20 to-amber-500/20 border-b border-amber-500/30 px-3 py-1.5 flex items-center justify-between text-xs text-amber-200 z-40 backdrop-blur-md">
+          <div className="flex items-center gap-2 truncate">
+            <Mail className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+            <span className="truncate">
+              Correo <strong>{authUser.email}</strong> pendiente de autenticación en Firebase.
+            </span>
+          </div>
+          <button
+            onClick={() => setIsAuthModalOpen(true)}
+            className="text-[11px] font-bold text-amber-300 hover:text-white underline cursor-pointer shrink-0 ml-2"
+          >
+            Verificar o Reenviar Mail
+          </button>
+        </div>
       )}
 
       {/* Floating Glass Top Bar (Tesla / Uber Style) */}
@@ -715,8 +814,8 @@ export default function App() {
             <>
               <button
                 onClick={() => setIsAuthModalOpen(true)}
-                className="p-1.5 rounded-xl glass-button text-xs text-slate-300 hover:text-white"
-                title="Mi Perfil"
+                className="relative px-2.5 py-1.5 rounded-xl glass-button text-xs text-slate-300 hover:text-white cursor-pointer flex items-center gap-1.5 transition-all"
+                title={isEmailVerified ? `Mi Perfil: ${currentUser.name} (Email Autenticado)` : `Mi Perfil: ${currentUser.name} (Email Pendiente de Autenticación)`}
               >
                 <span className="text-sm">
                   {currentUser.role === 'admin' || isFirebaseAdmin || currentUser.rol === 'administrador'
@@ -725,6 +824,15 @@ export default function App() {
                     ? '🚕'
                     : '👤'}
                 </span>
+                <span className="text-xs font-bold text-white max-w-[110px] truncate hidden md:inline">
+                  {currentUser.name}
+                </span>
+                {!isEmailVerified && (
+                  <span
+                    className="w-2 h-2 rounded-full bg-amber-400 border border-[#0a0d14] animate-pulse shrink-0"
+                    title="Email pendiente de verificar"
+                  />
+                )}
               </button>
 
               <button
@@ -736,7 +844,7 @@ export default function App() {
                   } catch {}
                   showToast('Sesión cerrada');
                 }}
-                className="p-1.5 rounded-xl glass-button text-slate-400 hover:text-rose-300"
+                className="p-1.5 rounded-xl glass-button text-slate-400 hover:text-rose-300 cursor-pointer"
                 title="Cerrar sesión"
               >
                 <LogOut className="w-3.5 h-3.5" />
@@ -745,11 +853,11 @@ export default function App() {
           ) : (
             <button
               onClick={() => setIsAuthModalOpen(true)}
-              className="h-8 px-2.5 rounded-xl glass-button text-xs font-semibold text-slate-300 hover:text-white flex items-center gap-1.5 transition-all shadow-sm"
-              title="Acceso Libre para toda la comunidad (Registro opcional)"
+              className="h-8 px-2.5 rounded-xl bg-gradient-to-r from-sky-500/25 to-cyan-500/25 hover:from-sky-500/35 hover:to-cyan-500/35 border border-sky-400/50 text-xs font-bold text-sky-200 hover:text-white flex items-center gap-1.5 transition-all shadow-sm shadow-sky-500/10 cursor-pointer active:scale-95"
+              title="Crear un perfil en Firebase y autenticar por correo"
             >
-              <UserIcon className="w-3.5 h-3.5 text-slate-400" />
-              <span className="hidden md:inline text-[11px] text-slate-400">Acceso Libre</span>
+              <UserIcon className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Hacerse un Perfil</span>
             </button>
           )}
         </div>
@@ -817,6 +925,8 @@ export default function App() {
         {activeTab === 'taxi' && (
           <TaxiMarketplace
             taxis={taxis}
+            currentUserId={currentUser.id}
+            currentUserName={currentUser.name}
             onOpenPublishModal={(tab) => {
               setPublishTaxiInitialTab(tab || 'transfer');
               setIsPublishTaxiOpen(true);
@@ -845,6 +955,7 @@ export default function App() {
             onDeleteEvent={handleDeleteEvent}
             onVerifyEvent={handleVerifyEvent}
             onBroadcastAlert={handleBroadcastAlert}
+            currentUser={currentUser}
           />
         )}
       </main>

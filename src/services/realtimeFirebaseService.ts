@@ -409,7 +409,42 @@ export async function crearReporte(data: {
 
     return { id: newDoc.id, ...nuevoReporte, creadoEn: Date.now() };
   } catch (error) {
-    handleFirestoreError(error, OperationType.CREATE, path);
+    console.warn('Firestore crearReporte notice (fallback local):', error);
+    const localId = `rep-local-${Date.now()}`;
+    const fallbackReport: ReporteFirestore = {
+      id: localId,
+      usuarioId: data.usuarioId,
+      nombreUsuario: data.nombreUsuario,
+      tipo: data.tipo,
+      descripcion: data.descripcion,
+      ubicacion: data.ubicacion,
+      ruta: data.ruta || 'campana-zarate',
+      estado: 'activo',
+      confirmaciones: 1,
+      creadoEn: Date.now(),
+    };
+    const cached = getCached<ReporteFirestore[]>('reportes', MOCK_INITIAL_REPORTES);
+    setCached('reportes', [fallbackReport, ...cached]);
+
+    const typeLabel =
+      data.tipo === 'accidente'
+        ? '🚨 Accidente reportado'
+        : data.tipo === 'corte'
+        ? '⛔ Corte de ruta'
+        : data.tipo === 'control'
+        ? '👮 Control policial'
+        : data.tipo === 'congestion'
+        ? '🚗 Tráfico denso'
+        : '⏳ Demora en el recorrido';
+
+    triggerInAppPushNotification(
+      `${typeLabel} (${data.ruta || 'Zárate ↔ Campana'})`,
+      `${data.nombreUsuario}: ${data.descripcion}`,
+      'reporte',
+      { reporteId: localId, ubicacion: data.ubicacion }
+    );
+
+    return fallbackReport;
   }
 }
 
@@ -453,7 +488,61 @@ export async function eliminarReporte(reporteId: string): Promise<void> {
 // ---------------------------------------------------------------------------
 // 3. CHAT COMUNITARIO: salas_chat/{salaId}/mensajes/{mensajeId}
 // ---------------------------------------------------------------------------
+// Tiempo de permanencia estricto en memoria: 15 minutos (luego se borran automáticamente)
+export const CHAT_MESSAGE_TTL_MS = 15 * 60 * 1000;
+
+export function getMessageTimestampMs(enviadoEn: any): number {
+  if (!enviadoEn) return Date.now();
+  if (typeof enviadoEn === 'number') return enviadoEn;
+  if (typeof enviadoEn.toMillis === 'function') return enviadoEn.toMillis();
+  if (typeof enviadoEn.seconds === 'number') return enviadoEn.seconds * 1000;
+  if (typeof enviadoEn === 'string') {
+    const parsed = Date.parse(enviadoEn);
+    return isNaN(parsed) ? Date.now() : parsed;
+  }
+  return Date.now();
+}
+
+export function isChatMessageValid(enviadoEn: any): boolean {
+  const ts = getMessageTimestampMs(enviadoEn);
+  return (Date.now() - ts) < CHAT_MESSAGE_TTL_MS;
+}
+
+// In-Memory Cross-Tab Broadcast Channel para sincronización instantánea
+const chatBroadcastChannel = typeof window !== 'undefined' && 'BroadcastChannel' in window
+  ? new BroadcastChannel('uppa_community_chat')
+  : null;
+
 const MOCK_INITIAL_CHAT: Record<string, MensajeChatFirestore[]> = {
+  'todos': [
+    {
+      id: 'msg-init-1',
+      salaId: 'todos',
+      usuarioId: 'usr-1',
+      nombreUsuario: 'Lucas Pasajero',
+      texto: '¿Alguien sabe si el 228 pasó por Justo Vigalondo?',
+      rol: 'pasajero',
+      enviadoEn: Date.now() - 4 * 60 * 1000,
+    },
+    {
+      id: 'msg-init-2',
+      salaId: 'todos',
+      usuarioId: 'usr-2',
+      nombreUsuario: 'Esteban Chofer',
+      texto: 'Viene saliendo de Barrio Malvinas hacia McDonald\'s por Colectora Sur, viene en horario.',
+      rol: 'chofer_micro',
+      enviadoEn: Date.now() - 2 * 60 * 1000,
+    },
+    {
+      id: 'msg-init-3',
+      salaId: 'todos',
+      usuarioId: 'usr-3',
+      nombreUsuario: 'Lucia Moto Taxi',
+      texto: 'Tengo moto disponible en Colectora y Grassi por si alguien necesita viaje directo.',
+      rol: 'chofer_moto',
+      enviadoEn: Date.now() - 1 * 60 * 1000,
+    },
+  ],
   'campana-zarate': [
     {
       id: 'msg-1',
@@ -462,7 +551,7 @@ const MOCK_INITIAL_CHAT: Record<string, MensajeChatFirestore[]> = {
       nombreUsuario: 'Lucas Pasajero',
       texto: '¿Alguien sabe si el 228 pasó por Justo Vigalondo?',
       rol: 'pasajero',
-      enviadoEn: Date.now() - 10 * 60 * 1000,
+      enviadoEn: Date.now() - 4 * 60 * 1000,
     },
     {
       id: 'msg-2',
@@ -471,7 +560,7 @@ const MOCK_INITIAL_CHAT: Record<string, MensajeChatFirestore[]> = {
       nombreUsuario: 'Esteban Chofer',
       texto: 'Viene saliendo de Barrio Malvinas hacia McDonald\'s por Colectora Sur, viene en horario.',
       rol: 'chofer_micro',
-      enviadoEn: Date.now() - 7 * 60 * 1000,
+      enviadoEn: Date.now() - 2 * 60 * 1000,
     },
     {
       id: 'msg-3',
@@ -480,7 +569,7 @@ const MOCK_INITIAL_CHAT: Record<string, MensajeChatFirestore[]> = {
       nombreUsuario: 'Lucia Moto Taxi',
       texto: 'Tengo moto disponible en Colectora y Grassi por si alguien necesita viaje directo.',
       rol: 'chofer_moto',
-      enviadoEn: Date.now() - 3 * 60 * 1000,
+      enviadoEn: Date.now() - 1 * 60 * 1000,
     },
   ],
   'zarate-campana': [
@@ -491,7 +580,7 @@ const MOCK_INITIAL_CHAT: Record<string, MensajeChatFirestore[]> = {
       nombreUsuario: 'Mariano Zárate',
       texto: 'Saliendo servicio desde Terminal de Zárate hacia Campana.',
       rol: 'chofer_micro',
-      enviadoEn: Date.now() - 8 * 60 * 1000,
+      enviadoEn: Date.now() - 3 * 60 * 1000,
     },
   ],
   'general': [
@@ -500,9 +589,9 @@ const MOCK_INITIAL_CHAT: Record<string, MensajeChatFirestore[]> = {
       salaId: 'general',
       usuarioId: 'usr-gen-1',
       nombreUsuario: 'Comunidad UPPA',
-      texto: '¡Bienvenidos a la red colaborativa en tiempo real de transporte!',
+      texto: '¡Bienvenidos al Chat Comunitario en tiempo real de Campana y Zárate!',
       rol: 'administrador',
-      enviadoEn: Date.now() - 30 * 60 * 1000,
+      enviadoEn: Date.now() - 5 * 60 * 1000,
     },
   ],
 };
@@ -512,27 +601,118 @@ export function subscribeToChat(
   callback: (mensajes: MensajeChatFirestore[]) => void,
   onError?: (error: any) => void
 ) {
-  const safeSala = salaId || 'campana-zarate';
+  const safeSala = salaId || 'todos';
   const subcolRef = collection(db, COL_SALAS_CHAT, safeSala, COL_MENSAJES);
-  const q = query(subcolRef, orderBy('enviadoEn', 'asc'), limitToLast(50));
+  const q = query(subcolRef, orderBy('enviadoEn', 'asc'), limitToLast(150));
 
-  return onSnapshot(
+  let currentMessages: MensajeChatFirestore[] = [];
+
+  // Helper para filtrar y emitir sólo mensajes que tienen menos de 15 minutos exactos de permanencia
+  const emitActiveMessages = (msgs: MensajeChatFirestore[]) => {
+    const seen = new Set<string>();
+    const valid: MensajeChatFirestore[] = [];
+
+    for (const m of msgs) {
+      if (!m || !m.id) continue;
+      if (!seen.has(m.id) && isChatMessageValid(m.enviadoEn)) {
+        seen.add(m.id);
+        valid.push({
+          ...m,
+          enviadoEn: getMessageTimestampMs(m.enviadoEn),
+        });
+      }
+    }
+
+    // Ordenar cronológicamente
+    valid.sort((a, b) => getMessageTimestampMs(a.enviadoEn) - getMessageTimestampMs(b.enviadoEn));
+
+    currentMessages = valid;
+    setCached(`chat_${safeSala}`, valid);
+    setCached('chat_todos', valid);
+    callback(valid);
+  };
+
+  // Limpieza periódica en la memoria cada 2 segundos: elimina automáticamente los que superan 15 min
+  const pruneInterval = setInterval(() => {
+    if (currentMessages.length > 0) {
+      const remaining = currentMessages.filter((m) => isChatMessageValid(m.enviadoEn));
+      if (remaining.length !== currentMessages.length) {
+        emitActiveMessages(remaining);
+      }
+    }
+  }, 2000);
+
+  // Escuchar eventos en tiempo real entre pestañas y ventanas
+  const handleBroadcast = (event: MessageEvent) => {
+    if (event.data?.type === 'NEW_CHAT_MESSAGE') {
+      const incoming = event.data.message as MensajeChatFirestore;
+      if (incoming && isChatMessageValid(incoming.enviadoEn)) {
+        const merged = [...currentMessages.filter((m) => m.id !== incoming.id), incoming];
+        emitActiveMessages(merged);
+      }
+    } else if (event.data?.type === 'DELETE_CHAT_MESSAGE') {
+      const deletedId = event.data.messageId;
+      emitActiveMessages(currentMessages.filter((m) => m.id !== deletedId));
+    }
+  };
+
+  if (chatBroadcastChannel) {
+    chatBroadcastChannel.addEventListener('message', handleBroadcast);
+  }
+
+  // Cargar estado inicial desde caché local de inmediato (0ms de latencia)
+  const initialCache = getCached<MensajeChatFirestore[]>(`chat_${safeSala}`, MOCK_INITIAL_CHAT[safeSala] || MOCK_INITIAL_CHAT['todos'] || []);
+  emitActiveMessages(initialCache);
+
+  // Suscripción reactiva en tiempo real a Firebase Firestore
+  const unsubFirestore = onSnapshot(
     q,
     (snapshot) => {
-      const list: MensajeChatFirestore[] = snapshot.docs.map((d) => ({
-        id: d.id,
-        salaId: safeSala,
-        ...(d.data() as Omit<MensajeChatFirestore, 'id' | 'salaId'>),
-      }));
-      setCached(`chat_${safeSala}`, list);
-      callback(list);
+      const remoteList: MensajeChatFirestore[] = snapshot.docs.map((d) => {
+        const dData = d.data();
+        return {
+          id: d.id,
+          salaId: dData.salaId || safeSala,
+          usuarioId: dData.usuarioId || 'usr',
+          nombreUsuario: dData.nombreUsuario || 'Vecino UPPA',
+          texto: dData.texto || '',
+          rol: dData.rol || 'pasajero',
+          avatarUrl: dData.avatarUrl,
+          enviadoEn: getMessageTimestampMs(dData.enviadoEn || dData.timestampMs),
+          replyTo: dData.replyTo,
+          reportado: dData.reportado,
+        };
+      });
+
+      // Fusionar mensajes de Firestore con mensajes locales pendientes para no perder ningún envío
+      const mergedMap = new Map<string, MensajeChatFirestore>();
+      for (const m of currentMessages) {
+        if (isChatMessageValid(m.enviadoEn)) {
+          mergedMap.set(m.id, m);
+        }
+      }
+      for (const m of remoteList) {
+        if (isChatMessageValid(m.enviadoEn)) {
+          mergedMap.set(m.id, m);
+        }
+      }
+
+      emitActiveMessages(Array.from(mergedMap.values()));
     },
     (err) => {
-      console.warn(`Firestore chat sala ${safeSala} onSnapshot error/offline:`, err);
+      console.warn(`Firestore chat sala ${safeSala} onSnapshot notice:`, err);
       if (onError) onError(err);
-      callback(getCached<MensajeChatFirestore[]>(`chat_${safeSala}`, MOCK_INITIAL_CHAT[safeSala] || []));
+      emitActiveMessages(getCached<MensajeChatFirestore[]>(`chat_${safeSala}`, currentMessages));
     }
   );
+
+  return () => {
+    clearInterval(pruneInterval);
+    if (chatBroadcastChannel) {
+      chatBroadcastChannel.removeEventListener('message', handleBroadcast);
+    }
+    unsubFirestore();
+  };
 }
 
 export async function enviarMensajeChat(
@@ -546,44 +726,92 @@ export async function enviarMensajeChat(
     replyTo?: { id: string; nombreUsuario: string; texto: string };
   }
 ): Promise<MensajeChatFirestore> {
-  const safeSala = salaId || 'campana-zarate';
-  const path = `${COL_SALAS_CHAT}/${safeSala}/${COL_MENSAJES}`;
-  try {
-    const subcolRef = collection(db, COL_SALAS_CHAT, safeSala, COL_MENSAJES);
-    const newDoc = doc(subcolRef);
+  const safeSala = salaId || 'todos';
+  const cleanText = data.texto.trim();
+  const now = Date.now();
+  const generatedId = `msg_${now}_${Math.random().toString(36).substring(2, 8)}`;
 
-    const payload: any = {
+  const localMessage: MensajeChatFirestore = {
+    id: generatedId,
+    salaId: safeSala,
+    usuarioId: data.usuarioId,
+    nombreUsuario: data.nombreUsuario || 'Vecino UPPA',
+    texto: cleanText,
+    rol: (data.rol as any) || 'pasajero',
+    avatarUrl: data.avatarUrl || `https://api.dicebear.com/7.x/bottts/svg?seed=${data.usuarioId}&backgroundColor=12141c`,
+    enviadoEn: now,
+    replyTo: data.replyTo,
+  };
+
+  // 1. Guardar de inmediato en la memoria local (cache) para todos los canales
+  try {
+    const cached = getCached<MensajeChatFirestore[]>(`chat_${safeSala}`, []);
+    const updated = [...cached.filter((m) => m.id !== generatedId && isChatMessageValid(m.enviadoEn)), localMessage];
+    setCached(`chat_${safeSala}`, updated);
+
+    // Garantizar que siempre se guarde también en 'todos'
+    const cachedTodos = getCached<MensajeChatFirestore[]>('chat_todos', []);
+    setCached('chat_todos', [...cachedTodos.filter((m) => m.id !== generatedId && isChatMessageValid(m.enviadoEn)), localMessage]);
+  } catch (e) {
+    console.warn('Chat local cache write warning:', e);
+  }
+
+  // 2. Difundir a todas las pestañas abiertas mediante BroadcastChannel
+  try {
+    chatBroadcastChannel?.postMessage({
+      type: 'NEW_CHAT_MESSAGE',
+      salaId: safeSala,
+      message: localMessage,
+    });
+  } catch (e) {
+    console.warn('BroadcastChannel postMessage warning:', e);
+  }
+
+  // 3. Notificación push interna para alertar a otros usuarios
+  try {
+    triggerInAppPushNotification(
+      `💬 Mensaje de ${data.nombreUsuario}`,
+      cleanText.length > 50 ? cleanText.substring(0, 47) + '...' : cleanText,
+      'chat',
+      { salaId: safeSala, mensajeId: generatedId }
+    );
+  } catch (e) {}
+
+  // 4. Guardar en Firestore tanto en la sala como en 'todos' para que todos lo vean
+  try {
+    const firestorePayload: any = {
+      id: generatedId,
+      salaId: safeSala,
       usuarioId: data.usuarioId,
-      nombreUsuario: data.nombreUsuario,
-      texto: data.texto.trim(),
+      nombreUsuario: data.nombreUsuario || 'Vecino UPPA',
+      texto: cleanText,
       rol: data.rol || 'pasajero',
-      enviadoEn: serverTimestamp(),
-      avatarUrl: data.avatarUrl || `https://api.dicebear.com/7.x/bottts/svg?seed=${data.usuarioId}&backgroundColor=12141c`,
+      enviadoEn: now,
+      timestampMs: now,
+      avatarUrl: localMessage.avatarUrl,
     };
 
     if (data.replyTo) {
-      payload.replyTo = data.replyTo;
+      firestorePayload.replyTo = data.replyTo;
     }
 
-    await setDoc(newDoc, payload);
+    // Guardar en la colección global 'todos' (alimenta el stream de todos los que entran a la app)
+    const globalRef = doc(db, COL_SALAS_CHAT, 'todos', COL_MENSAJES, generatedId);
+    setDoc(globalRef, firestorePayload).catch((fsErr) => {
+      console.warn('Firestore setDoc global chat notice:', fsErr);
+    });
 
-    // Trigger in-app notification for others
-    triggerInAppPushNotification(
-      `Nuevo mensaje en ${safeSala === 'campana-zarate' ? 'Campana ↔ Zárate' : safeSala}`,
-      `${data.nombreUsuario}: ${data.texto.length > 50 ? data.texto.substring(0, 47) + '...' : data.texto}`,
-      'chat',
-      { salaId: safeSala, mensajeId: newDoc.id }
-    );
-
-    return {
-      id: newDoc.id,
-      salaId: safeSala,
-      ...payload,
-      enviadoEn: Date.now(),
-    };
-  } catch (error) {
-    handleFirestoreError(error, OperationType.CREATE, path);
+    if (safeSala !== 'todos') {
+      const specificRef = doc(db, COL_SALAS_CHAT, safeSala, COL_MENSAJES, generatedId);
+      setDoc(specificRef, firestorePayload).catch((fsErr) => {
+        console.warn('Firestore setDoc specific chat notice:', fsErr);
+      });
+    }
+  } catch (fsErr) {
+    console.warn('Firestore setDoc notice:', fsErr);
   }
+
+  return localMessage;
 }
 
 export async function eliminarMensajeChat(salaId: string, mensajeId: string): Promise<void> {
@@ -723,7 +951,38 @@ export async function crearSolicitudTransporte(data: {
 
     return { id: newDoc.id, ...payload, fechaSolicitud: Date.now() };
   } catch (error) {
-    handleFirestoreError(error, OperationType.CREATE, path);
+    console.warn('Firestore crearSolicitudTransporte notice (fallback local):', error);
+    const localId = `sol-local-${Date.now()}`;
+    const fallbackSolicitud: SolicitudTransporteFirestore = {
+      id: localId,
+      pasajeroId: data.pasajeroId,
+      nombrePasajero: data.nombrePasajero,
+      telefonoPasajero: data.telefonoPasajero || '',
+      origen: data.origen,
+      destino: data.destino,
+      origenCoords: data.origenCoords || { lat: -34.2096, lng: -58.9426 },
+      destinoCoords: data.destinoCoords || { lat: -34.1914, lng: -58.9447 },
+      estado: 'pendiente',
+      tipoVehiculoRequerido: data.tipoVehiculoRequerido,
+      choferId: null,
+      choferNombre: null,
+      choferTelefono: null,
+      fechaSolicitud: Date.now(),
+      precioEstimado: data.precioEstimado || (data.tipoVehiculoRequerido === 'moto' ? 2200 : 3800),
+      distanciaKm: data.distanciaKm || 4.5,
+    };
+
+    const cached = getCached<SolicitudTransporteFirestore[]>('solicitudes', MOCK_INITIAL_SOLICITUDES);
+    setCached('solicitudes', [fallbackSolicitud, ...cached]);
+
+    triggerInAppPushNotification(
+      `🚕 Nueva solicitud de transporte (${data.tipoVehiculoRequerido === 'moto' ? 'Moto' : 'Auto'})`,
+      `${data.nombrePasajero} necesita viaje: ${data.origen} ➔ ${data.destino}`,
+      'transporte',
+      { solicitudId: localId }
+    );
+
+    return fallbackSolicitud;
   }
 }
 
@@ -888,7 +1147,39 @@ export async function solicitarHabilitacionChofer(data: {
 
     return { id: newDoc.id, ...payload, createdAt: Date.now() };
   } catch (error) {
-    handleFirestoreError(error, OperationType.CREATE, path);
+    console.warn('Firestore solicitarHabilitacionChofer notice (fallback local):', error);
+    const localId = `hab-local-${Date.now()}`;
+    const fallbackHab: HabilitacionChofer = {
+      id: localId,
+      driverId: data.driverId,
+      driverName: data.driverName.trim(),
+      vehicleType: data.vehicleType,
+      vehicleModel: data.vehicleModel.trim(),
+      whatsapp: data.whatsapp.replace(/\D/g, ''),
+      zone: data.zone.trim() || 'Zárate ↔ Campana',
+      horas: data.horas || 12,
+      estado: 'pendiente',
+      activadoConClaveAdmin: false,
+      alias: 'luciaveronicag',
+      cvu: '0000003100020253501840',
+      titular: 'Lucia Veronica Gimenez',
+      comprobanteUrl: data.comprobanteUrl || '',
+      comprobanteFileName: data.comprobanteFileName || 'comprobante_transferencia.pdf',
+      createdAt: Date.now(),
+      adminNotes: 'Comprobante transferido a luciaveronicag. En espera de habilitación con clave 0608.',
+    };
+
+    const cached = getCached<HabilitacionChofer[]>('habilitaciones', MOCK_INITIAL_HABILITACIONES);
+    setCached('habilitaciones', [fallbackHab, ...cached]);
+
+    triggerInAppPushNotification(
+      '📋 Nueva Solicitud de Chofer Pendiente',
+      `${data.driverName} solicitó habilitar ${data.vehicleType === 'moto' ? 'Moto' : 'Auto'} por ${data.horas}h. Habilitar con clave 0608.`,
+      'admin',
+      { habilitacionId: localId }
+    );
+
+    return fallbackHab;
   }
 }
 

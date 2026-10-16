@@ -20,12 +20,15 @@ export interface UserProfile {
   uid: string;
   nombre: string;
   email: string;
-  rol: 'cliente' | 'administrador';
+  rol: 'cliente' | 'administrador' | string;
   estado: 'activo' | 'inactivo' | 'suspendido';
   fechaRegistro: string;
   phone?: string;
   barrio?: string;
   avatarUrl?: string;
+  emailVerificado?: boolean;
+  esChofer?: boolean;
+  tipoVehiculo?: 'moto' | 'auto' | 'micro' | null;
 }
 
 export const USERS_COLLECTION = 'users';
@@ -49,6 +52,9 @@ export async function getUserDocument(uid: string): Promise<UserProfile | null> 
         phone: data.telefono || data.phone || '',
         barrio: data.barrio || 'Zárate ↔ Campana',
         avatarUrl: data.fotoPerfil || data.avatarUrl || `https://api.dicebear.com/7.x/bottts/svg?seed=${uid}&backgroundColor=12141c`,
+        emailVerificado: data.emailVerificado ?? false,
+        esChofer: data.esChofer ?? false,
+        tipoVehiculo: data.tipoVehiculo || null,
       } as UserProfile;
     }
 
@@ -64,7 +70,12 @@ export async function getUserDocument(uid: string): Promise<UserProfile | null> 
 
 export async function createUserDocument(
   uid: string,
-  data: Omit<UserProfile, 'uid'> & { esChofer?: boolean; tipoVehiculo?: string | null }
+  data: Omit<UserProfile, 'uid'> & {
+    esChofer?: boolean;
+    tipoVehiculo?: string | null;
+    emailVerificado?: boolean;
+    telefono?: string;
+  }
 ): Promise<UserProfile> {
   const path = `${USUARIOS_COLLECTION}/${uid}`;
   try {
@@ -75,21 +86,26 @@ export async function createUserDocument(
       rol: data.rol || 'cliente',
       estado: data.estado || 'activo',
       fechaRegistro: data.fechaRegistro || new Date().toISOString(),
-      phone: data.phone || '',
+      phone: data.phone || data.telefono || '',
       barrio: data.barrio || 'Zárate ↔ Campana',
       avatarUrl: data.avatarUrl || `https://api.dicebear.com/7.x/bottts/svg?seed=${uid}&backgroundColor=12141c`,
+      emailVerificado: data.emailVerificado ?? false,
+      esChofer: data.esChofer ?? false,
+      tipoVehiculo: (data.tipoVehiculo as any) || null,
     };
 
     // Save in 'usuarios' (spec schema)
     const usuarioPayload = {
+      uid,
       nombre: data.nombre,
       email: data.email,
       rol: (data.rol as any) || 'pasajero',
       esChofer: data.esChofer ?? ((data.rol as any)?.startsWith?.('chofer') || false),
       tipoVehiculo: data.tipoVehiculo ?? ((data.rol as any) === 'chofer_moto' ? 'moto' : (data.rol as any) === 'chofer_auto' ? 'auto' : (data.rol as any) === 'chofer_micro' ? 'micro' : null),
       activo: data.estado !== 'suspendido',
+      emailVerificado: data.emailVerificado ?? false,
       fotoPerfil: fullProfile.avatarUrl,
-      telefono: data.phone || '',
+      telefono: data.phone || data.telefono || '',
       barrio: data.barrio || 'Zárate ↔ Campana',
       ultimaConexion: serverTimestamp(),
       fechaRegistro: serverTimestamp(),
@@ -122,8 +138,36 @@ export async function updateUserDocument(
   try {
     const docRef = doc(db, USERS_COLLECTION, uid);
     await updateDoc(docRef, { ...partial });
+
+    // Also sync usuarios collection
+    try {
+      const docRefU = doc(db, USUARIOS_COLLECTION, uid);
+      const uPatch: any = {};
+      if (partial.nombre !== undefined) uPatch.nombre = partial.nombre;
+      if (partial.phone !== undefined) uPatch.telefono = partial.phone;
+      if (partial.barrio !== undefined) uPatch.barrio = partial.barrio;
+      if (partial.avatarUrl !== undefined) uPatch.fotoPerfil = partial.avatarUrl;
+      if (partial.emailVerificado !== undefined) uPatch.emailVerificado = partial.emailVerificado;
+      if (partial.rol !== undefined) uPatch.rol = partial.rol;
+      if (Object.keys(uPatch).length > 0) {
+        await updateDoc(docRefU, uPatch);
+      }
+    } catch (errSync) {
+      console.warn('Sync to usuarios collection warning:', errSync);
+    }
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, path);
+  }
+}
+
+export async function marcarEmailVerificadoEnFirestore(uid: string): Promise<void> {
+  try {
+    const docRefU = doc(db, USUARIOS_COLLECTION, uid);
+    await updateDoc(docRefU, { emailVerificado: true, ultimaConexion: serverTimestamp() });
+    const docRefLegacy = doc(db, USERS_COLLECTION, uid);
+    await updateDoc(docRefLegacy, { emailVerificado: true });
+  } catch (err) {
+    console.warn('Could not mark emailVerificado in Firestore:', err);
   }
 }
 
