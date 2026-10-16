@@ -128,12 +128,18 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
           cleanEmail,
           driverPassword,
           driverName.trim() || 'Conductor UPPA',
-          vehicleType === 'moto' ? 'chofer_moto' : 'chofer_auto'
+          vehicleType === 'moto' ? 'chofer_moto' : 'chofer_auto',
+          {
+            phone: whatsapp.trim(),
+            barrio: zone.trim(),
+            esChofer: true,
+            tipoVehiculo: vehicleType,
+          }
         );
-        setDriverAuthSuccessMsg(`¡Conductor registrado en Firebase! (${profile.email})`);
+        setDriverAuthSuccessMsg(`¡Conductor de ${vehicleType === 'moto' ? 'Moto Taxi' : 'Auto Taxi'} registrado y autenticado en Firebase! (${profile.email})`);
       } else {
         const profile = await loginWithEmail(cleanEmail, driverPassword);
-        setDriverAuthSuccessMsg(`¡Sesión iniciada con Firebase como chofer! (${profile.email})`);
+        setDriverAuthSuccessMsg(`¡Sesión iniciada con Firebase como chofer de ${vehicleType === 'moto' ? 'Moto Taxi' : 'Auto Taxi'}! (${profile.email})`);
       }
       setShowDriverAuthSection(false);
     } catch (err: any) {

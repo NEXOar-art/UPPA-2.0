@@ -32,6 +32,8 @@ interface TaxiMarketplaceProps {
   onSelectTaxiOnMap?: (taxi: TaxiListing) => void;
   currentUserId?: string;
   currentUserName?: string;
+  currentUserPhone?: string;
+  currentUserRole?: string;
 }
 
 export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
@@ -40,6 +42,8 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
   onSelectTaxiOnMap,
   currentUserId = 'usr-anon',
   currentUserName = 'Pasajero',
+  currentUserPhone = '',
+  currentUserRole = 'passenger',
 }) => {
   const [vehicleFilter, setVehicleFilter] = useState<'all' | 'auto' | 'moto'>('all');
   const [solicitudes, setSolicitudes] = useState<SolicitudTransporteFirestore[]>([]);
@@ -89,12 +93,12 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
         solId,
         currentUserId,
         currentUserName,
-        '3489690058'
+        currentUserPhone || '3489690058'
       );
       setRideSuccessNotice('¡Aceptaste el viaje! Los datos fueron actualizados en tiempo real.');
       setTimeout(() => setRideSuccessNotice(null), 4000);
     } catch (e: any) {
-      alert('Error al aceptar viaje');
+      alert('Error al aceptar viaje: ' + (e.message || ''));
     }
   };
 

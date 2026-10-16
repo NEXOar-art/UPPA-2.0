@@ -4,14 +4,15 @@ import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
 
 // Your web app's Firebase configuration
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
   apiKey: "AIzaSyDwmqGW80oUPt_gwPOT1dIjNsuSCdYLlhY",
   authDomain: "uppa-comunidad-de-transporte.firebaseapp.com",
   projectId: "uppa-comunidad-de-transporte",
   storageBucket: "uppa-comunidad-de-transporte.firebasestorage.app",
   messagingSenderId: "764901450549",
-  appId: "1:764901450549:web:3777d692466d5176bde27c",
-  measurementId: "G-R1FE4M8BTY"
+  appId: "1:764901450549:web:fec66aab9a0ed699bde27c",
+  measurementId: "G-Y6Z08EPRRE"
 };
 
 // Initialize Firebase

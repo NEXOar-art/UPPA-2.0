@@ -80,10 +80,13 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onExploreGuest })
       if (authMode === 'register') {
         // 1. Firebase Authentication createUserWithEmailAndPassword
         // 2. Automáticamente crea el documento en users/{uid} con rol="cliente", estado="activo"
-        setLocalNotice('Creando usuario en Firebase Auth & Firestore...');
+        const isChofer = role === 'chofer_moto' || role === 'chofer_auto' || role === 'chofer_micro' || role === 'driver';
+        const tipoVehiculo = role === 'chofer_moto' ? 'moto' : role === 'chofer_auto' ? 'auto' : role === 'chofer_micro' ? 'micro' : null;
         const userProfile = await registerWithEmail(cleanEmail, cleanPassword, cleanName, role, {
           phone: phone.trim(),
           barrio: barrio.trim(),
+          esChofer: isChofer,
+          tipoVehiculo: tipoVehiculo,
         });
 
         setLocalNotice('¡Perfil creado en Firebase y mail de autenticación enviado!');

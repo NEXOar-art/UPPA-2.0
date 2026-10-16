@@ -927,6 +927,8 @@ export default function App() {
             taxis={taxis}
             currentUserId={currentUser.id}
             currentUserName={currentUser.name}
+            currentUserPhone={currentUser.phone}
+            currentUserRole={currentUser.role}
             onOpenPublishModal={(tab) => {
               setPublishTaxiInitialTab(tab || 'transfer');
               setIsPublishTaxiOpen(true);
