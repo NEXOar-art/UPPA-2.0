@@ -265,6 +265,9 @@ export interface MensajeChatFirestore {
     texto: string;
   };
   reportado?: boolean;
+  reacciones?: Record<string, number>;
+  userReactions?: Record<string, string[]>;
+  telefonoContacto?: string;
 }
 
 export interface PushNotificationPayload {

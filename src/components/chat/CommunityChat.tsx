@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { User, MapEvent, MensajeChatFirestore } from '../../types';
 import {
   subscribeToChat,
@@ -6,8 +6,6 @@ import {
   eliminarMensajeChat,
   reportarMensajeChat,
   getMessageTimestampMs,
-  isChatMessageValid,
-  CHAT_MESSAGE_TTL_MS,
 } from '../../services/realtimeFirebaseService';
 import {
   Send,
@@ -25,9 +23,13 @@ import {
   User as UserIcon,
   X,
   Check,
-  Timer,
   Zap,
   Radio,
+  Search,
+  Phone,
+  RefreshCw,
+  Smile,
+  Volume2,
 } from 'lucide-react';
 
 interface CommunityChatProps {
@@ -37,20 +39,27 @@ interface CommunityChatProps {
 }
 
 type ChannelType = 'todos' | 'campana-zarate' | 'zarate-campana' | 'general';
+type RoleFilter = 'todos' | 'choferes' | 'pasajeros' | 'colectivos';
+
+const QUICK_REACTIONS = ['👍', '🚌', '🛵', '🚕', '❤️', '⚠️'];
 
 export const CommunityChat: React.FC<CommunityChatProps> = ({
   currentUser,
   activeContextEvent,
   onClearContextEvent,
 }) => {
-  // Por defecto, mostrar 'todos' para contener todos los mensajes de todos los usuarios
+  // Por defecto, 'todos' para ver la totalidad de mensajes de la comunidad sin restricciones
   const [selectedChannel, setSelectedChannel] = useState<ChannelType>('todos');
+  const [roleFilter, setRoleFilter] = useState<RoleFilter>('todos');
+  const [searchQuery, setSearchQuery] = useState('');
   const [messages, setMessages] = useState<MensajeChatFirestore[]>([]);
   const [inputText, setInputText] = useState('');
   const [replyingTo, setReplyingTo] = useState<{ id: string; nombreUsuario: string; texto: string } | null>(null);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
   const [nowTimestamp, setNowTimestamp] = useState<number>(Date.now());
   const [isSending, setIsSending] = useState<boolean>(false);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+  const [showReactionPickerForId, setShowReactionPickerForId] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -60,18 +69,32 @@ export const CommunityChat: React.FC<CommunityChatProps> = ({
     setTimeout(() => setActionNotice(null), 3500);
   };
 
-  // Timer activo que actualiza la hora cada 2 segundos y elimina automáticamente
-  // de la memoria los mensajes que superaron los 15 minutos exactos de permanencia
+  // Sonido suave al enviar mensaje
+  const playChime = () => {
+    try {
+      if (typeof window !== 'undefined' && 'AudioContext' in window) {
+        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+        const ctx = new AudioCtx();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(659.25, ctx.currentTime); // E5
+        osc.frequency.exponentialRampToValueAtTime(1046.5, ctx.currentTime + 0.12); // C6
+        gain.gain.setValueAtTime(0.04, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.25);
+      }
+    } catch {}
+  };
+
+  // Actualiza la hora de referencia cada 30 segundos para las etiquetas relativas
   useEffect(() => {
     const timer = setInterval(() => {
-      const now = Date.now();
-      setNowTimestamp(now);
-      setMessages((prev) => {
-        const filtered = prev.filter((m) => isChatMessageValid(m.enviadoEn));
-        return filtered.length !== prev.length ? filtered : prev;
-      });
-    }, 2000);
-
+      setNowTimestamp(Date.now());
+    }, 30000);
     return () => clearInterval(timer);
   }, []);
 
@@ -81,7 +104,7 @@ export const CommunityChat: React.FC<CommunityChatProps> = ({
       setMessages(roomMessages);
       setTimeout(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-      }, 60);
+      }, 70);
     });
 
     return () => unsubscribe();
@@ -95,18 +118,44 @@ export const CommunityChat: React.FC<CommunityChatProps> = ({
     }
   }, [activeContextEvent]);
 
+  // Filtrado de mensajes por rol y búsqueda
+  const filteredMessages = useMemo(() => {
+    let list = messages;
+
+    // Filtro por rol
+    if (roleFilter === 'choferes') {
+      list = list.filter((m) => m.rol === 'chofer_moto' || m.rol === 'chofer_auto' || m.rol === 'driver');
+    } else if (roleFilter === 'colectivos') {
+      list = list.filter((m) => m.rol === 'chofer_micro');
+    } else if (roleFilter === 'pasajeros') {
+      list = list.filter((m) => m.rol === 'pasajero' || !m.rol);
+    }
+
+    // Filtro por texto de búsqueda
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      list = list.filter(
+        (m) =>
+          m.texto.toLowerCase().includes(q) ||
+          m.nombreUsuario.toLowerCase().includes(q) ||
+          (m.replyTo && m.replyTo.texto.toLowerCase().includes(q))
+      );
+    }
+
+    return list;
+  }, [messages, roleFilter, searchQuery]);
+
   // Envío sin límites: el usuario puede enviar la cantidad de mensajes que quiera
   const handleSendMessage = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     const textToSend = inputText.trim();
     if (!textToSend) return;
 
-    // Limpiar input inmediatamente y enfocar de nuevo para permitir envíos consecutivos ilimitados
+    playChime();
     setInputText('');
     const currentReply = replyingTo;
     setReplyingTo(null);
 
-    // Reenfocar inmediatamente el campo de texto
     setTimeout(() => {
       inputRef.current?.focus();
     }, 20);
@@ -126,16 +175,17 @@ export const CommunityChat: React.FC<CommunityChatProps> = ({
       avatarUrl: currentUser.avatarUrl || `https://api.dicebear.com/7.x/bottts/svg?seed=${currentUser.id || 'usr'}&backgroundColor=12141c`,
       enviadoEn: now,
       replyTo: currentReply || undefined,
+      telefonoContacto: currentUser.phone || undefined,
+      reacciones: {},
     };
 
-    // Agregar de inmediato en la memoria local (optimistic update sin bloqueo)
-    setMessages((prev) => [...prev.filter((m) => isChatMessageValid(m.enviadoEn)), optimisticMessage]);
+    // Agregar de inmediato en la memoria local (optimistic update en 0ms)
+    setMessages((prev) => [...prev, optimisticMessage]);
 
     setTimeout(() => {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, 50);
+    }, 40);
 
-    // Enviar a Firebase Firestore y sincronizar
     try {
       setIsSending(true);
       const sent = await enviarMensajeChat(selectedChannel, {
@@ -147,17 +197,33 @@ export const CommunityChat: React.FC<CommunityChatProps> = ({
         replyTo: currentReply || undefined,
       });
 
-      // Reemplazar tempId por sent.id en el estado local
-      setMessages((prev) => prev.map((m) => (m.id === tempId ? sent : m)));
+      setMessages((prev) => prev.map((m) => (m.id === tempId ? { ...sent, reacciones: m.reacciones } : m)));
     } catch (err: any) {
       console.warn('Sincronización en segundo plano:', err);
     } finally {
       setIsSending(false);
-      // Garantizar que el input permanezca enfocado para el siguiente mensaje
       setTimeout(() => {
         inputRef.current?.focus();
       }, 10);
     }
+  };
+
+  // Reacción con emojis para interacción instantánea
+  const handleToggleReaction = (msgId: string, emoji: string) => {
+    setMessages((prev) =>
+      prev.map((m) => {
+        if (m.id !== msgId) return m;
+        const currentReactions = { ...(m.reacciones || {}) };
+        const currentCount = currentReactions[emoji] || 0;
+        currentReactions[emoji] = currentCount + 1;
+        return {
+          ...m,
+          reacciones: currentReactions,
+        };
+      })
+    );
+    setShowReactionPickerForId(null);
+    showNotice(`Reaccionaste con ${emoji}`);
   };
 
   const handleMention = (userName: string) => {
@@ -171,23 +237,31 @@ export const CommunityChat: React.FC<CommunityChatProps> = ({
   };
 
   const handleDelete = async (mensajeId: string) => {
-    // Eliminar inmediatamente de la memoria local
     setMessages((prev) => prev.filter((m) => m.id !== mensajeId));
     try {
       await eliminarMensajeChat(selectedChannel, mensajeId);
       showNotice('Mensaje borrado');
     } catch (e) {
-      showNotice('Mensaje eliminado de la memoria');
+      showNotice('Mensaje eliminado');
     }
   };
 
   const handleReport = async (mensajeId: string) => {
     try {
       await reportarMensajeChat(selectedChannel, mensajeId);
-      showNotice('Mensaje reportado para moderación');
+      showNotice('Mensaje reportado para moderación comunitaria');
     } catch (e) {
       showNotice('Reporte recibido');
     }
+  };
+
+  const handleManualRefresh = () => {
+    setIsRefreshing(true);
+    subscribeToChat(selectedChannel, (roomMessages) => {
+      setMessages(roomMessages);
+      setIsRefreshing(false);
+      showNotice('Chat sincronizado');
+    });
   };
 
   const getRoleBadge = (rol?: string) => {
@@ -207,26 +281,19 @@ export const CommunityChat: React.FC<CommunityChatProps> = ({
     }
   };
 
-  const formatTime = (ts: any) => {
+  const formatFriendlyTime = (ts: any) => {
     const ms = getMessageTimestampMs(ts);
     const d = new Date(ms);
-    return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
-  };
+    const diffMs = nowTimestamp - ms;
+    const diffMins = Math.floor(diffMs / 60000);
 
-  // Cálculo del tiempo restante de los 15 minutos exactos de permanencia en memoria
-  const getRemainingTimeBadge = (ts: any) => {
-    const ms = getMessageTimestampMs(ts);
-    const elapsed = nowTimestamp - ms;
-    const remainingMs = Math.max(0, CHAT_MESSAGE_TTL_MS - elapsed);
-    const remainingMins = Math.ceil(remainingMs / (60 * 1000));
-
-    if (remainingMins <= 1) {
-      return { text: '< 1 min', color: 'text-rose-400 bg-rose-500/10 border-rose-500/30 font-bold' };
+    if (diffMins < 1) return 'Ahora mismo';
+    if (diffMins < 60) return `Hace ${diffMins} min`;
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) {
+      return `Hoy ${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
     }
-    if (remainingMins <= 5) {
-      return { text: `${remainingMins} min`, color: 'text-amber-400 bg-amber-500/10 border-amber-500/30' };
-    }
-    return { text: `${remainingMins} min`, color: 'text-slate-400 bg-white/[0.03] border-white/5' };
+    return `${d.getDate()}/${d.getMonth() + 1} ${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
   };
 
   const userRoleBadge = getRoleBadge(currentUser.rol || currentUser.role);
@@ -235,8 +302,8 @@ export const CommunityChat: React.FC<CommunityChatProps> = ({
   return (
     <div className="w-full h-full flex flex-col bg-[#07090e] text-slate-100 overflow-hidden font-sans">
       {/* Top Header / Channel Tabs */}
-      <div className="p-3 sm:p-4 border-b border-white/5 bg-[#0b0e17]/95 backdrop-blur-xl shrink-0">
-        <div className="flex flex-wrap items-center justify-between gap-2 mb-2.5">
+      <div className="p-3 sm:p-4 border-b border-white/5 bg-[#0b0e17]/95 backdrop-blur-xl shrink-0 space-y-2.5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-2xl bg-gradient-to-br from-purple-500/30 to-indigo-500/30 border border-purple-400/40 flex items-center justify-center text-purple-300 shadow-md shadow-purple-500/15">
               <MessageSquare className="w-4.5 h-4.5" />
@@ -244,28 +311,35 @@ export const CommunityChat: React.FC<CommunityChatProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-sm font-extrabold text-white flex items-center gap-1.5 font-display">
-                  Chat Comunitario en Tiempo Real
+                  Chat Comunitario Abierto
                 </h2>
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" title="En vivo" />
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                  <span>COMUNIDAD EN VIVO</span>
+                </span>
               </div>
-              <p className="text-[11px] text-slate-400 flex items-center gap-1.5">
+              <p className="text-[11px] text-slate-400 flex items-center gap-1.5 flex-wrap">
                 <span className="text-purple-300 font-semibold">
-                  {selectedChannel === 'todos' ? 'Todos los Usuarios (Campana ↔ Zárate)' : selectedChannel}
+                  {selectedChannel === 'todos' ? 'Todos los Vecinos (Campana ↔ Zárate)' : selectedChannel}
                 </span>
                 <span>•</span>
                 <span className="text-cyan-300 font-mono text-[10.5px]">
-                  {messages.length} mensajes en vivo
+                  {messages.length} mensajes visibles para toda la comunidad
                 </span>
               </p>
             </div>
           </div>
 
-          {/* Banner de permanencia de 15 minutos en memoria */}
           <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-purple-500/10 border border-purple-400/25 text-[11px] text-purple-200 font-mono shadow-sm">
-              <Timer className="w-3.5 h-3.5 text-cyan-400" />
-              <span>Memoria: <strong>15 min</strong> (autoborrado)</span>
-            </div>
+            <button
+              onClick={handleManualRefresh}
+              disabled={isRefreshing}
+              className="p-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-white/10 transition-colors flex items-center gap-1 text-xs"
+              title="Refrescar mensajes"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-purple-400' : ''}`} />
+              <span className="hidden sm:inline text-[11px]">Sincronizar</span>
+            </button>
 
             {actionNotice && (
               <div className="px-3 py-1 rounded-full bg-purple-500/20 border border-purple-400/40 text-[11px] font-bold text-purple-200 animate-in fade-in">
@@ -276,12 +350,12 @@ export const CommunityChat: React.FC<CommunityChatProps> = ({
         </div>
 
         {/* Channel Selector Pills */}
-        <div className="flex items-center gap-1.5 pt-1 overflow-x-auto scrollbar-none">
+        <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pt-0.5">
           {[
             { id: 'todos' as const, label: '🌐 Todos los Mensajes' },
             { id: 'campana-zarate' as const, label: '🏙️ Campana ↔ Zárate' },
             { id: 'zarate-campana' as const, label: '🏙️ Zárate ↔ Campana' },
-            { id: 'general' as const, label: '💬 General' },
+            { id: 'general' as const, label: '💬 General & Avisos' },
           ].map((ch) => (
             <button
               key={ch.id}
@@ -300,8 +374,53 @@ export const CommunityChat: React.FC<CommunityChatProps> = ({
           ))}
         </div>
 
+        {/* Search & Filter Bar */}
+        <div className="flex items-center gap-2 pt-1 flex-wrap sm:flex-nowrap">
+          <div className="relative flex-1 min-w-[140px]">
+            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Buscar por línea 228, chofer, parada..."
+              className="w-full h-8 pl-8 pr-3 rounded-xl bg-slate-900/90 border border-white/10 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-purple-400"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-center gap-1 text-[11px] overflow-x-auto scrollbar-none shrink-0">
+            {(
+              [
+                { id: 'todos', label: 'Todos' },
+                { id: 'pasajeros', label: 'Pasajeros' },
+                { id: 'choferes', label: 'Taxis/Motos' },
+                { id: 'colectivos', label: 'Colectivos' },
+              ] as const
+            ).map((filter) => (
+              <button
+                key={filter.id}
+                onClick={() => setRoleFilter(filter.id)}
+                className={`px-2 py-1 rounded-lg font-semibold transition-all whitespace-nowrap ${
+                  roleFilter === filter.id
+                    ? 'bg-purple-600/30 text-purple-200 border border-purple-400/30'
+                    : 'text-slate-400 hover:text-white bg-slate-900/50'
+                }`}
+              >
+                {filter.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* Identificación Visible del Usuario Activo en el Chat */}
-        <div className="mt-2.5 pt-2 border-t border-white/5 flex items-center justify-between text-xs flex-wrap gap-2">
+        <div className="pt-2 border-t border-white/5 flex items-center justify-between text-xs flex-wrap gap-2">
           <div className="flex items-center gap-2">
             <div className="relative">
               <img
@@ -314,13 +433,9 @@ export const CommunityChat: React.FC<CommunityChatProps> = ({
               />
               <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-400 border border-[#0b0e17]" />
             </div>
-            <div className="flex items-center gap-1.5">
-              <span className="text-[11.5px] text-slate-300">
-                Tu Usuario:
-              </span>
-              <strong className="text-white font-extrabold text-xs">
-                {currentUser.name}
-              </strong>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-[11.5px] text-slate-300">Tu Usuario:</span>
+              <strong className="text-white font-extrabold text-xs">{currentUser.name}</strong>
               <span className={`px-2 py-0.5 rounded-md text-[9.5px] font-bold border flex items-center gap-1 ${userRoleBadge.bg}`}>
                 <CurrentUserRoleIcon className="w-2.5 h-2.5" />
                 <span>{userRoleBadge.label}</span>
@@ -360,22 +475,26 @@ export const CommunityChat: React.FC<CommunityChatProps> = ({
 
       {/* Message Stream */}
       <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3.5">
-        {messages.length === 0 ? (
-          <div className="text-center text-xs text-slate-400 py-16 space-y-2 max-w-sm mx-auto">
+        {filteredMessages.length === 0 ? (
+          <div className="text-center text-xs text-slate-400 py-16 space-y-3 max-w-sm mx-auto">
             <div className="w-12 h-12 rounded-2xl bg-purple-500/10 border border-purple-400/20 flex items-center justify-center mx-auto text-purple-400">
               <Sparkles className="w-6 h-6 animate-pulse" />
             </div>
-            <h3 className="font-extrabold text-sm text-slate-200">Chat Comunitario en Vivo</h3>
+            <h3 className="font-extrabold text-sm text-slate-200">
+              {searchQuery ? 'No hay mensajes que coincidan' : 'Comunidad de Campana & Zárate Conectada'}
+            </h3>
             <p className="text-[11.5px] leading-relaxed text-slate-400">
-              Escribí tu mensaje. Todos los pasajeros y choferes de Moto y Auto Taxi de Campana y Zárate lo verán al instante. Permanecerá 15 minutos en memoria y luego se borrará automáticamente.
+              {searchQuery
+                ? 'Probá buscando con otra palabra o limpiando el filtro.'
+                : 'Sé el primero en consultar el estado de tu colectivo o coordinar un viaje con los choferes de Moto y Auto Taxi.'}
             </p>
           </div>
         ) : (
-          messages.map((msg) => {
+          filteredMessages.map((msg) => {
             const isMe = msg.usuarioId === (currentUser.id || currentUser.uid) || msg.nombreUsuario === currentUser.name;
             const roleInfo = getRoleBadge(msg.rol);
             const RoleIcon = roleInfo.icon;
-            const remaining = getRemainingTimeBadge(msg.enviadoEn);
+            const isDriver = msg.rol === 'chofer_moto' || msg.rol === 'chofer_auto' || msg.rol === 'driver';
 
             return (
               <div
@@ -393,7 +512,7 @@ export const CommunityChat: React.FC<CommunityChatProps> = ({
                 />
 
                 <div className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} max-w-[85%] sm:max-w-[75%]`}>
-                  {/* Name, Role & 15m Expiration Badge */}
+                  {/* Name, Role & Relative Time */}
                   <div className="flex items-center gap-1.5 text-[11px] mb-1 px-1 flex-wrap">
                     <span
                       className={`font-extrabold cursor-pointer hover:underline ${
@@ -410,15 +529,7 @@ export const CommunityChat: React.FC<CommunityChatProps> = ({
                     </span>
                     <span className="text-[10px] text-slate-400 font-mono flex items-center gap-0.5">
                       <Clock className="w-2.5 h-2.5" />
-                      {formatTime(msg.enviadoEn)}
-                    </span>
-                    {/* Badge de permanencia en memoria (15 min) */}
-                    <span
-                      className={`px-1.5 py-0.2 rounded text-[9px] font-mono border flex items-center gap-0.5 ${remaining.color}`}
-                      title="Permanencia de 15 minutos en la memoria comunitaria"
-                    >
-                      <Timer className="w-2.5 h-2.5" />
-                      <span>{remaining.text}</span>
+                      {formatFriendlyTime(msg.enviadoEn)}
                     </span>
                   </div>
 
@@ -440,12 +551,58 @@ export const CommunityChat: React.FC<CommunityChatProps> = ({
                   >
                     <p className="whitespace-pre-wrap break-words text-[12.5px]">{msg.texto}</p>
 
-                    {/* Actions on hover (Reply, Mention, Delete, Report) */}
+                    {/* Acciones directas si es conductor y ofrece viaje */}
+                    {isDriver && !isMe && (
+                      <div className="mt-2 pt-2 border-t border-white/10 flex items-center gap-2">
+                        <button
+                          onClick={() => {
+                            const cleanPhone = (msg.telefonoContacto || '5493489123456').replace(/\D/g, '');
+                            const text = encodeURIComponent(`Hola ${msg.nombreUsuario}, te escribo desde la app UPPA por tu mensaje en el chat: "${msg.texto}"`);
+                            window.open(`https://wa.me/${cleanPhone}?text=${text}`, '_blank');
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-extrabold text-[10.5px] flex items-center gap-1 shadow-sm transition-all"
+                        >
+                          <Phone className="w-3 h-3" />
+                          <span>Contactar Chofer</span>
+                        </button>
+                        <button
+                          onClick={() => setReplyingTo({ id: msg.id, nombreUsuario: msg.nombreUsuario, texto: msg.texto })}
+                          className="px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white text-[10.5px] font-semibold"
+                        >
+                          Responder acá
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Reacciones visuales activas */}
+                    {msg.reacciones && Object.keys(msg.reacciones).length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        {Object.entries(msg.reacciones).map(([emoji, count]) => (
+                          <button
+                            key={emoji}
+                            onClick={() => handleToggleReaction(msg.id, emoji)}
+                            className="px-1.5 py-0.5 rounded-full bg-black/40 border border-white/10 text-[11px] flex items-center gap-1 hover:border-purple-400 transition-colors"
+                          >
+                            <span>{emoji}</span>
+                            <span className="font-mono text-[10px] text-slate-300">{count}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Barra de Acciones rápidas al pasar el cursor */}
                     <div
                       className={`absolute -bottom-3 ${
                         isMe ? 'left-2' : 'right-2'
                       } hidden group-hover:flex items-center gap-1 bg-slate-900/95 border border-white/10 px-1.5 py-0.5 rounded-full shadow-lg text-[10px] z-10`}
                     >
+                      <button
+                        onClick={() => setShowReactionPickerForId(showReactionPickerForId === msg.id ? null : msg.id)}
+                        className="p-1 hover:text-amber-300 text-slate-400 cursor-pointer"
+                        title="Reaccionar"
+                      >
+                        <Smile className="w-3 h-3" />
+                      </button>
                       <button
                         onClick={() => setReplyingTo({ id: msg.id, nombreUsuario: msg.nombreUsuario, texto: msg.texto })}
                         className="p-1 hover:text-purple-300 text-slate-400 cursor-pointer"
@@ -478,6 +635,21 @@ export const CommunityChat: React.FC<CommunityChatProps> = ({
                         </button>
                       )}
                     </div>
+
+                    {/* Picker de Reacciones flotante */}
+                    {showReactionPickerForId === msg.id && (
+                      <div className="absolute -bottom-10 left-0 bg-slate-900 border border-purple-500/30 p-1.5 rounded-full shadow-2xl flex items-center gap-1.5 z-20 animate-in zoom-in-95">
+                        {QUICK_REACTIONS.map((emoji) => (
+                          <button
+                            key={emoji}
+                            onClick={() => handleToggleReaction(msg.id, emoji)}
+                            className="w-6 h-6 rounded-full hover:bg-white/10 flex items-center justify-center text-sm cursor-pointer transition-transform hover:scale-125"
+                          >
+                            {emoji}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -502,15 +674,16 @@ export const CommunityChat: React.FC<CommunityChatProps> = ({
         </div>
       )}
 
-      {/* Quick Suggestion Chips para envíos rápidos continuos */}
+      {/* Quick Suggestion Chips para interacción rápida */}
       <div className="px-3 py-1.5 bg-[#080b12] border-t border-white/5 flex items-center gap-1.5 overflow-x-auto scrollbar-none">
         <span className="text-[10px] text-slate-400 uppercase font-bold shrink-0">Atajos:</span>
         {[
-          '¿Cómo viene el 228?',
-          '🏍️ Moto Taxi disponible',
-          '🚕 Auto Taxi disponible',
-          'Tránsito normal en Colectora',
-          'Pasando por Plaza Eduardo Costa',
+          '¿A qué hora pasa el próximo 228?',
+          '🏍️ Moto Taxi disponible ya',
+          '🚕 Auto Taxi con baúl disponible',
+          'Tránsito normal en Panamericana',
+          '¿Cómo está el puente Zárate?',
+          '🙋 Necesito viaje hacia Zárate',
         ].map((chip) => (
           <button
             key={chip}
@@ -523,33 +696,34 @@ export const CommunityChat: React.FC<CommunityChatProps> = ({
         ))}
       </div>
 
-      {/* Indicador de Usuario y Envío Ilimitado */}
+      {/* Indicador de Identidad y Envío Libre */}
       <div className="px-3 pt-1.5 pb-0.5 bg-[#0b0e17] flex items-center justify-between text-[11px] text-slate-400">
         <div className="flex items-center gap-1.5 truncate">
           <span>Publicarás como:</span>
           <strong className="text-white font-bold">{currentUser.name}</strong>
           <span className="text-purple-300">({userRoleBadge.label})</span>
         </div>
-        <span className="text-[10px] text-slate-400 hidden sm:inline">
-          Envíos ilimitados • 15 min en memoria
+        <span className="text-[10px] text-emerald-400 font-medium hidden sm:inline flex items-center gap-1">
+          <Radio className="w-2.5 h-2.5 text-emerald-400 animate-pulse" />
+          <span>Visible para toda la comunidad</span>
         </span>
       </div>
 
-      {/* Input Bar (Permite envíos continuos e ilimitados de mensajes sin bloqueo) */}
+      {/* Input Bar */}
       <form onSubmit={handleSendMessage} className="p-3 bg-[#0b0e17] flex items-center gap-2 shrink-0">
         <input
           ref={inputRef}
           type="text"
           value={inputText}
           onChange={(e) => setInputText(e.target.value)}
-          placeholder={`Escribí un mensaje como ${currentUser.name}... (Presioná Enter)`}
+          placeholder={`Escribí un mensaje visible para toda la comunidad como ${currentUser.name}...`}
           className="flex-1 h-11 px-4 rounded-xl bg-slate-900 border border-white/10 text-xs text-white focus:outline-none focus:border-purple-400 placeholder:text-slate-500"
         />
         <button
           type="submit"
-          disabled={!inputText.trim()}
+          disabled={!inputText.trim() || isSending}
           className="h-11 px-4.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-lg shadow-purple-600/25 transition-all disabled:opacity-40 cursor-pointer active:scale-95"
-          title="Enviar mensaje a todos los usuarios de la comunidad"
+          title="Publicar en el chat comunitario"
         >
           <Send className="w-4 h-4" />
           <span className="hidden sm:inline">Enviar</span>

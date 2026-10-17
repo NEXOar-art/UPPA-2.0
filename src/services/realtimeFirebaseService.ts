@@ -488,8 +488,8 @@ export async function eliminarReporte(reporteId: string): Promise<void> {
 // ---------------------------------------------------------------------------
 // 3. CHAT COMUNITARIO: salas_chat/{salaId}/mensajes/{mensajeId}
 // ---------------------------------------------------------------------------
-// Tiempo de permanencia estricto en memoria: 15 minutos (luego se borran automáticamente)
-export const CHAT_MESSAGE_TTL_MS = 15 * 60 * 1000;
+// Retención comunitaria amplia: los mensajes se conservan para que toda la comunidad pueda leer e interactuar
+export const CHAT_MESSAGE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 días de retención comunitaria
 
 export function getMessageTimestampMs(enviadoEn: any): number {
   if (!enviadoEn) return Date.now();
@@ -513,88 +513,68 @@ const chatBroadcastChannel = typeof window !== 'undefined' && 'BroadcastChannel'
   ? new BroadcastChannel('uppa_community_chat')
   : null;
 
-const MOCK_INITIAL_CHAT: Record<string, MensajeChatFirestore[]> = {
-  'todos': [
+export function getInitialMockChat(salaId: string): MensajeChatFirestore[] {
+  const now = Date.now();
+  const allInitial: MensajeChatFirestore[] = [
     {
       id: 'msg-init-1',
       salaId: 'todos',
       usuarioId: 'usr-1',
       nombreUsuario: 'Lucas Pasajero',
-      texto: '¿Alguien sabe si el 228 pasó por Justo Vigalondo?',
+      texto: '¿Alguien sabe si el 228 pasó por Justo Vigalondo hacia Campana Centro?',
       rol: 'pasajero',
-      enviadoEn: Date.now() - 4 * 60 * 1000,
+      enviadoEn: now - 18 * 60 * 1000,
     },
     {
       id: 'msg-init-2',
-      salaId: 'todos',
+      salaId: 'campana-zarate',
       usuarioId: 'usr-2',
       nombreUsuario: 'Esteban Chofer',
-      texto: 'Viene saliendo de Barrio Malvinas hacia McDonald\'s por Colectora Sur, viene en horario.',
+      texto: 'Viene saliendo de Barrio Malvinas hacia McDonald\'s por Colectora Sur, viene en horario sin demoras.',
       rol: 'chofer_micro',
-      enviadoEn: Date.now() - 2 * 60 * 1000,
+      enviadoEn: now - 14 * 60 * 1000,
     },
     {
       id: 'msg-init-3',
       salaId: 'todos',
       usuarioId: 'usr-3',
       nombreUsuario: 'Lucia Moto Taxi',
-      texto: 'Tengo moto disponible en Colectora y Grassi por si alguien necesita viaje directo.',
+      texto: 'Tengo moto disponible en Colectora y Grassi por si alguien necesita viaje directo hacia Zárate.',
       rol: 'chofer_moto',
-      enviadoEn: Date.now() - 1 * 60 * 1000,
-    },
-  ],
-  'campana-zarate': [
-    {
-      id: 'msg-1',
-      salaId: 'campana-zarate',
-      usuarioId: 'usr-1',
-      nombreUsuario: 'Lucas Pasajero',
-      texto: '¿Alguien sabe si el 228 pasó por Justo Vigalondo?',
-      rol: 'pasajero',
-      enviadoEn: Date.now() - 4 * 60 * 1000,
+      enviadoEn: now - 9 * 60 * 1000,
     },
     {
-      id: 'msg-2',
-      salaId: 'campana-zarate',
-      usuarioId: 'usr-2',
-      nombreUsuario: 'Esteban Chofer',
-      texto: 'Viene saliendo de Barrio Malvinas hacia McDonald\'s por Colectora Sur, viene en horario.',
-      rol: 'chofer_micro',
-      enviadoEn: Date.now() - 2 * 60 * 1000,
-    },
-    {
-      id: 'msg-3',
-      salaId: 'campana-zarate',
-      usuarioId: 'usr-3',
-      nombreUsuario: 'Lucia Moto Taxi',
-      texto: 'Tengo moto disponible en Colectora y Grassi por si alguien necesita viaje directo.',
-      rol: 'chofer_moto',
-      enviadoEn: Date.now() - 1 * 60 * 1000,
-    },
-  ],
-  'zarate-campana': [
-    {
-      id: 'msg-zc-1',
+      id: 'msg-init-4',
       salaId: 'zarate-campana',
       usuarioId: 'usr-zc-1',
       nombreUsuario: 'Mariano Zárate',
-      texto: 'Saliendo servicio desde Terminal de Zárate hacia Campana.',
+      texto: 'Saliendo servicio desde Terminal de Zárate hacia Campana por Av. Anta y Mitre.',
       rol: 'chofer_micro',
-      enviadoEn: Date.now() - 3 * 60 * 1000,
+      enviadoEn: now - 5 * 60 * 1000,
     },
-  ],
-  'general': [
     {
-      id: 'msg-gen-1',
+      id: 'msg-init-5',
+      salaId: 'todos',
+      usuarioId: 'usr-4',
+      nombreUsuario: 'Carlos Auto Taxi',
+      texto: 'Auto Taxi disponible en Plaza Eduardo Costa con baúl amplio para equipaje.',
+      rol: 'chofer_auto',
+      enviadoEn: now - 2 * 60 * 1000,
+    },
+    {
+      id: 'msg-init-6',
       salaId: 'general',
       usuarioId: 'usr-gen-1',
       nombreUsuario: 'Comunidad UPPA',
-      texto: '¡Bienvenidos al Chat Comunitario en tiempo real de Campana y Zárate!',
+      texto: '¡Bienvenidos al Chat Comunitario en tiempo real de Campana y Zárate! Toda la comunidad puede ver los mensajes y responder.',
       rol: 'administrador',
-      enviadoEn: Date.now() - 5 * 60 * 1000,
+      enviadoEn: now - 25 * 60 * 1000,
     },
-  ],
-};
+  ];
+
+  if (salaId === 'todos') return allInitial;
+  return allInitial.filter((m) => m.salaId === salaId || m.salaId === 'todos');
+}
 
 export function subscribeToChat(
   salaId: string,
@@ -603,11 +583,11 @@ export function subscribeToChat(
 ) {
   const safeSala = salaId || 'todos';
   const subcolRef = collection(db, COL_SALAS_CHAT, safeSala, COL_MENSAJES);
-  const q = query(subcolRef, orderBy('enviadoEn', 'asc'), limitToLast(150));
+  const q = query(subcolRef, orderBy('enviadoEn', 'asc'), limitToLast(200));
 
   let currentMessages: MensajeChatFirestore[] = [];
 
-  // Helper para filtrar y emitir sólo mensajes que tienen menos de 15 minutos exactos de permanencia
+  // Helper para filtrar y emitir mensajes comunitarios activos
   const emitActiveMessages = (msgs: MensajeChatFirestore[]) => {
     const seen = new Set<string>();
     const valid: MensajeChatFirestore[] = [];
@@ -632,16 +612,6 @@ export function subscribeToChat(
     callback(valid);
   };
 
-  // Limpieza periódica en la memoria cada 2 segundos: elimina automáticamente los que superan 15 min
-  const pruneInterval = setInterval(() => {
-    if (currentMessages.length > 0) {
-      const remaining = currentMessages.filter((m) => isChatMessageValid(m.enviadoEn));
-      if (remaining.length !== currentMessages.length) {
-        emitActiveMessages(remaining);
-      }
-    }
-  }, 2000);
-
   // Escuchar eventos en tiempo real entre pestañas y ventanas
   const handleBroadcast = (event: MessageEvent) => {
     if (event.data?.type === 'NEW_CHAT_MESSAGE') {
@@ -660,8 +630,9 @@ export function subscribeToChat(
     chatBroadcastChannel.addEventListener('message', handleBroadcast);
   }
 
-  // Cargar estado inicial desde caché local de inmediato (0ms de latencia)
-  const initialCache = getCached<MensajeChatFirestore[]>(`chat_${safeSala}`, MOCK_INITIAL_CHAT[safeSala] || MOCK_INITIAL_CHAT['todos'] || []);
+  // Cargar estado inicial desde caché local o mensajes iniciales de la comunidad de inmediato
+  const rawCache = getCached<MensajeChatFirestore[]>(`chat_${safeSala}`, []);
+  const initialCache = rawCache && rawCache.length > 0 ? rawCache : getInitialMockChat(safeSala);
   emitActiveMessages(initialCache);
 
   // Suscripción reactiva en tiempo real a Firebase Firestore
@@ -707,7 +678,6 @@ export function subscribeToChat(
   );
 
   return () => {
-    clearInterval(pruneInterval);
     if (chatBroadcastChannel) {
       chatBroadcastChannel.removeEventListener('message', handleBroadcast);
     }

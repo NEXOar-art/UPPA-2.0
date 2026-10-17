@@ -16,6 +16,7 @@ import {
   TaxiListing,
   PaymentProof,
   ChatMessage,
+  MensajeChatFirestore,
   AdListing,
   User,
   PushNotificationPayload,
@@ -47,6 +48,7 @@ import {
 import {
   subscribeToReportes,
   subscribeToHabilitacionesChofer,
+  subscribeToChat,
   onPushNotification,
   triggerInAppPushNotification,
 } from './services/realtimeFirebaseService';
@@ -197,6 +199,7 @@ export default function App() {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [contextEventForChat, setContextEventForChat] = useState<MapEvent | null>(null);
+  const [communityChatList, setCommunityChatList] = useState<MensajeChatFirestore[]>([]);
 
   // Eventos Push en Pantalla (Deduplicación & Exposición de 15 Minutos)
   const [screenPushEvents, setScreenPushEvents] = useState<PushNotificationPayload[]>([]);
@@ -305,10 +308,15 @@ export default function App() {
       });
     });
 
+    const unsubChat = subscribeToChat('todos', (msgs) => {
+      setCommunityChatList(msgs);
+    });
+
     return () => {
       unsubReportes();
       unsubHabs();
       unsubNotif();
+      unsubChat();
     };
   }, []);
 
@@ -318,6 +326,8 @@ export default function App() {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3000);
   };
+
+  const latestCommunityMessage = communityChatList.length > 0 ? communityChatList[communityChatList.length - 1] : null;
 
   const sentiment = computeLineSentiment(messages, events);
 
@@ -764,7 +774,7 @@ export default function App() {
 
           <button
             onClick={() => setActiveTab('chat')}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5 ${
+            className={`px-3 py-1.5 text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5 relative ${
               activeTab === 'chat'
                 ? 'bg-purple-400/20 text-purple-200 border border-purple-400/35 shadow-sm'
                 : 'text-slate-400 hover:text-white'
@@ -772,6 +782,11 @@ export default function App() {
           >
             <MessageSquare className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Chat</span>
+            {communityChatList.length > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full bg-purple-500 text-white font-extrabold text-[9.5px] min-w-4 text-center animate-pulse">
+                {communityChatList.length}
+              </span>
+            )}
           </button>
 
           <button
@@ -962,6 +977,42 @@ export default function App() {
           />
         )}
       </main>
+
+      {/* Barra Flotante de Acceso Rápido al Chat Comunitario para interacción continua */}
+      {activeTab !== 'chat' && latestCommunityMessage && (
+        <div className="fixed bottom-14 left-3 right-3 sm:left-auto sm:right-5 sm:max-w-md z-30 animate-in slide-in-from-bottom-2 duration-300">
+          <div className="p-2 sm:p-2.5 rounded-2xl bg-[#090d16]/95 backdrop-blur-xl border border-purple-500/40 shadow-2xl flex items-center justify-between gap-3 text-xs">
+            <button
+              onClick={() => setActiveTab('chat')}
+              className="flex items-center gap-2.5 flex-1 min-w-0 text-left cursor-pointer group"
+            >
+              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-purple-500/20 text-purple-300 flex items-center justify-center shrink-0 border border-purple-400/30">
+                <MessageSquare className="w-3.5 h-3.5" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5">
+                  <span className="font-extrabold text-white text-[11px] truncate group-hover:text-purple-300">
+                    {latestCommunityMessage.nombreUsuario}
+                  </span>
+                  <span className="px-1.5 py-0.2 rounded text-[8.5px] font-bold bg-purple-500/20 text-purple-300 border border-purple-400/30 shrink-0">
+                    Comunidad
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-300 truncate">
+                  {latestCommunityMessage.texto}
+                </p>
+              </div>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('chat')}
+              className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs shrink-0 cursor-pointer shadow-md shadow-purple-600/30 active:scale-95 transition-all flex items-center gap-1"
+            >
+              <span>Ver Chat</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Footer Advertising Banner */}
       <AdBanner ads={ads} onOpenContactModal={() => setIsContactAdOpen(true)} />
