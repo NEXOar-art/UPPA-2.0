@@ -28,6 +28,7 @@ import {
   MessageCircle,
   Zap,
   Bike,
+  ExternalLink,
 } from 'lucide-react';
 
 export const CARTOGRAPHY_API_KEY = '0a49b2d34b5b7e8b65a6bd7da25e4bd8';
@@ -323,6 +324,17 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
     const etaWalkMin = Math.max(1, Math.round((distKm / 4.5) * 60));
     const etaTransitMin = Math.max(1, Math.round((distKm / 32) * 60));
 
+    // Anuncio de voz amigable para guía GPS
+    try {
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(`Iniciando guía GPS hacia la parada ${stop.name}`);
+        utterance.lang = 'es-AR';
+        utterance.rate = 1.05;
+        window.speechSynthesis.speak(utterance);
+      }
+    } catch {}
+
     setStopTrajectoryInfo({
       stop,
       route,
@@ -503,7 +515,15 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
 
           const stopMarker = L.marker([stop.lat, stop.lng], { icon: stopTitilandoIcon });
           stopMarker.on('click', () => {
-            handleCalculateStopTrajectory(stop, route);
+            // Mostrar la tarjeta con la información de la parada y el botón "IR"
+            setSelectedStop({ stop, route });
+            if (stopTrajectoryLayerRef.current) {
+              stopTrajectoryLayerRef.current.clearLayers();
+            }
+            setStopTrajectoryInfo(null);
+            if (mapInstanceRef.current) {
+              mapInstanceRef.current.panTo([stop.lat, stop.lng], { animate: true });
+            }
           });
           stopMarker.addTo(layer);
         });
@@ -958,7 +978,32 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
         </div>
       </div>
 
-      {/* Top-Right: Mapa despejado con Cartografía OpenStreetMap */}
+      {/* Top-Right: Ubicación Inteligente para Pedir Transporte Alternativo (Sin superponer tarjetas) */}
+      {onOpenPedirTransporte && (
+        <div className="absolute top-4 right-4 z-20 pointer-events-auto animate-in fade-in slide-in-from-top-2 duration-300">
+          <button
+            onClick={onOpenPedirTransporte}
+            className="group relative h-11 px-4 rounded-2xl bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black text-xs flex items-center gap-2 shadow-2xl shadow-amber-500/35 active:scale-95 transition-all cursor-pointer ring-2 ring-amber-300/70 hover:ring-amber-200"
+            title="Pedir Transporte Alternativo (Aviso inmediato a Choferes de Moto y Auto Taxi)"
+          >
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-slate-950 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-slate-950"></span>
+            </span>
+            <Zap className="w-4 h-4 fill-slate-950" />
+            <span className="hidden sm:inline tracking-tight font-extrabold">
+              Pedir Transporte Alternativo
+            </span>
+            <span className="sm:hidden font-extrabold">
+              Pedir Transporte
+            </span>
+            <span className="hidden md:flex items-center gap-1 pl-1.5 border-l border-slate-950/25 text-[10px] font-mono font-bold text-slate-900">
+              <span>🏍️</span>
+              <span>🚕</span>
+            </span>
+          </button>
+        </div>
+      )}
 
       {/* =========================================================================
           ACTIVE DRIVER TRAYECTORY HUD (When a taxi is selected in Taxis & Motos)
@@ -1057,25 +1102,29 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
       )}
 
       {/* =========================================================================
-          ACTIVE STOP TRAJECTORY HUD (Punto A Usuario -> Punto B Parada Titilando)
+          ACTIVE STOP TRAJECTORY HUD (Guía GPS Activa a Parada)
          ========================================================================= */}
       {stopTrajectoryInfo && (
-        <div className="absolute top-18 left-4 right-4 sm:right-auto sm:w-[380px] z-30 pointer-events-auto animate-in slide-in-from-top-4 duration-300">
-          <div className="glass-panel p-4 rounded-3xl shadow-2xl border border-cyan-400/40 relative overflow-hidden bg-[#070b14]/90 backdrop-blur-2xl">
-            {/* Top ambient cyan gradient */}
-            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-cyan-400 via-sky-400 to-teal-300 animate-pulse" />
+        <div className="absolute top-18 left-4 right-4 sm:right-auto sm:w-[390px] z-30 pointer-events-auto animate-in slide-in-from-top-4 duration-300">
+          <div className="glass-panel p-4 rounded-3xl shadow-2xl border border-cyan-400/50 relative overflow-hidden bg-[#070b14]/95 backdrop-blur-2xl">
+            {/* Top ambient electric cyan gradient */}
+            <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 animate-pulse" />
 
-            <div className="flex items-start justify-between gap-2 pb-2 border-b border-white/5">
+            <div className="flex items-start justify-between gap-2 pb-2.5 border-b border-white/5">
               <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-ping shrink-0" />
-                <span className="text-xs font-bold text-cyan-300 uppercase tracking-wider font-mono">
-                  Trazabilidad a Parada · Titilando
+                <span className="relative flex h-3 w-3">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+                </span>
+                <span className="text-xs font-black text-emerald-300 uppercase tracking-wider font-mono flex items-center gap-1.5">
+                  <Navigation className="w-3.5 h-3.5 text-emerald-400 fill-emerald-400" />
+                  <span>Guía GPS Activa · Hacia Parada</span>
                 </span>
               </div>
               <button
                 onClick={handleClearStopTrajectory}
-                className="w-6 h-6 rounded-full bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white flex items-center justify-center transition-colors"
-                title="Cerrar trazabilidad"
+                className="w-7 h-7 rounded-full bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white flex items-center justify-center transition-colors"
+                title="Finalizar guía GPS"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -1083,12 +1132,12 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
 
             <div className="pt-3 space-y-3">
               {/* Distance and ETA calculations */}
-              <div className="p-3.5 rounded-2xl bg-cyan-500/10 border border-cyan-400/25 flex items-center justify-between">
+              <div className="p-3.5 rounded-2xl bg-gradient-to-br from-emerald-500/15 via-teal-500/10 to-cyan-500/15 border border-emerald-400/30 flex items-center justify-between">
                 <div>
-                  <div className="text-[10px] text-cyan-300 font-mono uppercase tracking-wider">
-                    Distancia y Llegada Estimada
+                  <div className="text-[10px] text-emerald-300 font-mono uppercase tracking-wider font-bold">
+                    Distancia Restante
                   </div>
-                  <div className="text-2xl font-extrabold text-white font-display flex items-baseline gap-1.5 mt-0.5">
+                  <div className="text-2xl font-black text-white font-display flex items-baseline gap-1.5 mt-0.5">
                     <span>
                       {stopTrajectoryInfo.distKm < 1
                         ? `${Math.round(stopTrajectoryInfo.distKm * 1000)} m`
@@ -1097,14 +1146,14 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
                   </div>
                 </div>
 
-                <div className="text-right space-y-0.5">
-                  <div className="text-[11px] font-mono text-emerald-300 font-bold flex items-center justify-end gap-1">
+                <div className="text-right space-y-1">
+                  <div className="text-xs font-mono text-emerald-300 font-extrabold flex items-center justify-end gap-1.5 bg-emerald-500/20 px-2 py-0.5 rounded-md border border-emerald-400/30">
                     <span>🚶</span>
                     <span>~{stopTrajectoryInfo.etaWalkMin} min</span>
                   </div>
-                  <div className="text-[10px] font-mono text-sky-300 flex items-center justify-end gap-1">
+                  <div className="text-[10.5px] font-mono text-sky-300 flex items-center justify-end gap-1">
                     <span>🚌</span>
-                    <span>~{stopTrajectoryInfo.etaTransitMin} min</span>
+                    <span>En micro: ~{stopTrajectoryInfo.etaTransitMin} min</span>
                   </div>
                 </div>
               </div>
@@ -1113,21 +1162,21 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
               <div className="space-y-1.5 text-xs bg-white/[0.03] p-2.5 rounded-2xl border border-white/5">
                 <div className="flex items-center gap-2 text-slate-200">
                   <span className="w-2.5 h-2.5 rounded-full bg-sky-400 shrink-0 shadow-[0_0_8px_#38bdf8]" />
-                  <span className="font-semibold text-slate-300">Punto A:</span>
-                  <span className="text-white truncate">
-                    {userLocation?.address || 'Tu Ubicación GPS'}
+                  <span className="font-semibold text-slate-400 text-[11px]">Origen:</span>
+                  <span className="text-white truncate font-medium">
+                    {userLocation?.address || 'Tu Ubicación GPS Actual'}
                   </span>
                 </div>
                 <div className="flex items-center gap-2 text-slate-200">
                   <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 shrink-0 shadow-[0_0_8px_#06b6d4]" />
-                  <span className="font-semibold text-slate-300">Punto B:</span>
-                  <span className="text-cyan-200 font-semibold truncate">
+                  <span className="font-semibold text-cyan-300 text-[11px]">Destino:</span>
+                  <span className="text-cyan-200 font-bold truncate">
                     {stopTrajectoryInfo.stop.name} (Parada #{stopTrajectoryInfo.stop.sequence})
                   </span>
                 </div>
               </div>
 
-              {/* Action Buttons */}
+              {/* Action Buttons: Centrar Recorrido + Google Maps Walking GPS + Finalizar */}
               <div className="flex items-center gap-2 pt-1">
                 <button
                   onClick={() => {
@@ -1141,17 +1190,30 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
                       );
                     }
                   }}
-                  className="flex-1 h-9 rounded-2xl bg-gradient-to-r from-cyan-400 to-sky-400 hover:from-cyan-300 hover:to-sky-300 text-slate-950 font-bold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-cyan-500/20 active:scale-95 transition-all"
+                  className="flex-1 h-9.5 rounded-2xl bg-gradient-to-r from-cyan-400 to-sky-400 hover:from-cyan-300 hover:to-sky-300 text-slate-950 font-black text-xs flex items-center justify-center gap-1.5 shadow-md shadow-cyan-500/20 active:scale-95 transition-all"
+                  title="Centrar mapa en la ruta a la parada"
                 >
                   <Maximize2 className="w-3.5 h-3.5" />
-                  <span>Centrar Recorrido</span>
+                  <span>Centrar</span>
                 </button>
+
+                <a
+                  href={`https://www.google.com/maps/dir/?api=1&destination=${stopTrajectoryInfo.stop.lat},${stopTrajectoryInfo.stop.lng}&travelmode=walking`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="h-9.5 px-3 rounded-2xl glass-button text-xs font-bold text-slate-200 hover:text-white flex items-center justify-center gap-1.5 shadow-sm shrink-0"
+                  title="Abrir en Google Maps con navegación por voz paso a paso"
+                >
+                  <ExternalLink className="w-3.5 h-3.5 text-emerald-300" />
+                  <span>GPS Externo</span>
+                </a>
 
                 <button
                   onClick={handleClearStopTrajectory}
-                  className="px-3 h-9 rounded-2xl glass-button text-xs text-slate-300 hover:text-white"
+                  className="px-3 h-9.5 rounded-2xl glass-button text-xs font-medium text-slate-300 hover:text-white"
+                  title="Finalizar guía"
                 >
-                  Cerrar
+                  Finalizar
                 </button>
               </div>
             </div>
@@ -1160,9 +1222,9 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
       )}
 
       {/* Tesla Navigation HUD Card for Bus Corridor (Bottom-Left) */}
-      {!activeTrackingTaxi && !stopTrajectoryInfo && (
-        <div className="absolute bottom-6 left-4 z-20 pointer-events-auto">
-          <div className="glass-panel p-3.5 rounded-2xl shadow-2xl flex items-center gap-3 max-w-xs">
+      {!activeTrackingTaxi && !stopTrajectoryInfo && !selectedStop && (
+        <div className="absolute bottom-6 left-4 z-20 pointer-events-auto max-w-[calc(100vw-150px)] sm:max-w-xs">
+          <div className="glass-panel p-3.5 rounded-2xl shadow-2xl flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-sky-400/15 border border-sky-400/30 flex items-center justify-center text-sky-300 shrink-0">
               <Compass className="w-4 h-4" />
             </div>
@@ -1187,20 +1249,12 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
         </div>
       )}
 
-      {/* Floating Bottom Quick Action Pills (Center-Right) */}
-      <div className="absolute bottom-6 right-4 z-20 flex items-center gap-2">
-        {onOpenPedirTransporte && (
-          <button
-            onClick={onOpenPedirTransporte}
-            className="h-11 px-3.5 rounded-2xl bg-gradient-to-r from-amber-500 via-orange-500 to-yellow-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black text-xs flex items-center gap-1.5 shadow-xl shadow-amber-500/25 active:scale-95 transition-all cursor-pointer ring-1 ring-amber-300"
-            title="Pedir Transporte Alternativo (Aviso a Moto Taxi y Auto Taxi)"
-          >
-            <Zap className="w-4 h-4 fill-slate-950" />
-            <span className="hidden sm:inline">Pedir Transporte Alternativo</span>
-            <span className="sm:hidden">Pedir Transporte</span>
-          </button>
-        )}
-
+      {/* Floating Bottom Quick Action Pills (Center-Right) con desplazamiento inteligente anti-superposición */}
+      <div
+        className={`absolute right-4 z-20 flex items-center gap-2 transition-all duration-300 pointer-events-auto ${
+          selectedStop ? 'bottom-32 sm:bottom-28' : 'bottom-6'
+        }`}
+      >
         <button
           onClick={handleLocateMe}
           className="w-11 h-11 rounded-2xl glass-button text-slate-200 hover:text-sky-300 flex items-center justify-center shadow-lg"
@@ -1227,31 +1281,120 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
         )}
       </div>
 
-      {/* Stop Inspector Bottom Drawer (Minimal Glass Drawer) */}
+      {/* Stop Inspector Bottom Drawer (Minimal Glass Drawer) con Información Completa y Botón IR (Guía GPS) */}
       {!stopTrajectoryInfo && selectedStop && (
-        <div className="absolute bottom-20 left-4 right-4 sm:left-auto sm:right-auto sm:left-4 sm:w-80 z-30 pointer-events-auto animate-in slide-in-from-bottom duration-200">
-          <div className="glass-panel p-4 rounded-3xl shadow-2xl space-y-2 border-white/10">
+        <div className="absolute bottom-6 left-4 right-4 sm:left-auto sm:right-auto sm:left-4 sm:w-92 z-30 pointer-events-auto animate-in slide-in-from-bottom duration-200">
+          <div className="glass-panel p-4 rounded-3xl shadow-2xl space-y-3 border border-white/10 bg-[#080c16]/95 backdrop-blur-2xl">
+            {/* Top Accent Line with Route Color */}
+            <div
+              className="h-1 rounded-full w-full"
+              style={{ backgroundColor: selectedStop.route.color || '#38bdf8' }}
+            />
+
+            {/* Header: Stop Name & Route */}
             <div className="flex items-start justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: selectedStop.route.color }} />
+              <div className="flex items-start gap-2.5">
+                <div
+                  className="w-8 h-8 rounded-2xl flex items-center justify-center shrink-0 text-white font-bold text-xs shadow-md mt-0.5"
+                  style={{
+                    backgroundColor: `${selectedStop.route.color}30`,
+                    border: `1.5px solid ${selectedStop.route.color}`,
+                  }}
+                >
+                  🚏
+                </div>
                 <div>
-                  <h4 className="text-xs font-bold text-white">{selectedStop.stop.name}</h4>
-                  <span className="text-[10px] text-slate-400">{selectedStop.route.name}</span>
+                  <h4 className="text-xs font-black text-white leading-tight">
+                    {selectedStop.stop.name}
+                  </h4>
+                  <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                    <span
+                      className="w-2 h-2 rounded-full shrink-0"
+                      style={{ backgroundColor: selectedStop.route.color }}
+                    />
+                    <span className="text-[10px] text-slate-300 font-medium">
+                      {selectedStop.route.name}
+                    </span>
+                    <span className="text-[9.5px] font-mono text-cyan-300 bg-cyan-500/10 px-1.5 py-0.2 rounded border border-cyan-400/20">
+                      Parada #{selectedStop.stop.sequence}
+                    </span>
+                  </div>
                 </div>
               </div>
-              <button onClick={() => setSelectedStop(null)} className="p-1 text-slate-400 hover:text-white">
+              <button
+                onClick={() => setSelectedStop(null)}
+                className="w-7 h-7 rounded-full bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white flex items-center justify-center transition-colors shrink-0"
+                title="Cerrar"
+              >
                 <X className="w-3.5 h-3.5" />
               </button>
             </div>
 
-            <div className="flex items-center justify-between text-[11px] text-slate-300 bg-white/[0.04] p-2 rounded-xl">
-              <span>Cada {selectedStop.route.frequencyMinutes} min</span>
-              {userLocation && (
-                <span className="text-sky-300 font-mono">
-                  {getDistanceKm(userLocation.lat, userLocation.lng, selectedStop.stop.lat, selectedStop.stop.lng)} km
-                </span>
-              )}
+            {/* Metrics: Distance, Walking ETA, Frequency */}
+            {(() => {
+              const uLat = userLocation?.lat || -34.195;
+              const uLng = userLocation?.lng || -58.972;
+              const dKm = getDistanceKm(uLat, uLng, selectedStop.stop.lat, selectedStop.stop.lng);
+              const walkMin = Math.max(1, Math.round((dKm / 4.5) * 60));
+              const distText = dKm < 1 ? `${Math.round(dKm * 1000)} m` : `${dKm.toFixed(1)} km`;
+
+              return (
+                <div className="grid grid-cols-3 gap-1.5 text-center bg-white/[0.03] p-2 rounded-2xl border border-white/5">
+                  <div className="space-y-0.5">
+                    <div className="text-[9px] font-mono text-slate-400 uppercase">Distancia</div>
+                    <div className="text-xs font-black text-cyan-300 font-mono">{distText}</div>
+                  </div>
+                  <div className="space-y-0.5 border-x border-white/5">
+                    <div className="text-[9px] font-mono text-slate-400 uppercase">Caminando</div>
+                    <div className="text-xs font-black text-emerald-300 font-mono">~{walkMin} min</div>
+                  </div>
+                  <div className="space-y-0.5">
+                    <div className="text-[9px] font-mono text-slate-400 uppercase">Frecuencia</div>
+                    <div className="text-xs font-black text-amber-300 font-mono">c/{selectedStop.route.frequencyMinutes}m</div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* BOTÓN "IR" (GUÍA GPS) PROMINENTE */}
+            <div className="flex items-center gap-2 pt-0.5">
+              <button
+                onClick={() => {
+                  handleCalculateStopTrajectory(selectedStop.stop, selectedStop.route);
+                  setSelectedStop(null);
+                }}
+                className="flex-1 h-11 rounded-2xl bg-gradient-to-r from-emerald-400 via-teal-400 to-cyan-400 hover:from-emerald-300 hover:to-cyan-300 text-slate-950 font-black text-xs flex items-center justify-center gap-2 shadow-xl shadow-emerald-500/25 active:scale-95 transition-all cursor-pointer ring-1 ring-emerald-300"
+                title="Iniciar Guía GPS en tiempo real hacia esta parada"
+              >
+                <Navigation className="w-4 h-4 fill-slate-950 text-slate-950" />
+                <span className="tracking-tight text-xs uppercase font-black">IR · Iniciar Guía GPS</span>
+              </button>
+
+              <a
+                href={`https://www.google.com/maps/dir/?api=1&destination=${selectedStop.stop.lat},${selectedStop.stop.lng}&travelmode=walking`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="h-11 px-3 rounded-2xl glass-button text-xs font-bold text-slate-200 hover:text-white flex items-center justify-center gap-1 shadow-sm shrink-0"
+                title="Abrir en Google Maps con navegación por voz"
+              >
+                <ExternalLink className="w-3.5 h-3.5 text-sky-300" />
+                <span className="hidden sm:inline text-[11px]">Maps</span>
+              </a>
             </div>
+
+            {/* Opción Alternativa: Pedir Transporte si el colectivo demora */}
+            {onOpenPedirTransporte && (
+              <button
+                onClick={() => {
+                  onOpenPedirTransporte();
+                  setSelectedStop(null);
+                }}
+                className="w-full h-8.5 rounded-xl bg-gradient-to-r from-amber-500/20 via-orange-500/20 to-amber-600/20 hover:from-amber-500/30 hover:to-orange-500/30 border border-amber-400/35 text-amber-200 font-extrabold text-[10.5px] flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-sm"
+              >
+                <Zap className="w-3.5 h-3.5 fill-amber-300 text-amber-300" />
+                <span>Pedir Transporte Alternativo en esta parada</span>
+              </button>
+            )}
           </div>
         </div>
       )}

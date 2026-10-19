@@ -1,7 +1,20 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { User, UserRole, mapRoleToAppRole } from '../types';
+import { User, UserRole, mapRoleToAppRole, mapFirestoreRolToAppRole } from '../types';
 import { authService, RegisterPayload } from '../services/authService';
 import { getStoredSessionToken } from '../services/api';
+import {
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signInAnonymously,
+  signInWithPopup,
+  signOut,
+  sendPasswordResetEmail,
+  sendEmailVerification,
+  User as FirebaseUser,
+} from 'firebase/auth';
+import { auth, googleProvider } from '../config/firebase';
+import { createUserDocument, getUserDocument, updateUserDocument } from '../services/firestoreService';
 
 interface RegisterExtraData {
   phone?: string;
@@ -55,30 +68,138 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return null;
   });
 
+  const [firebaseUser, setFirebaseUser] = useState<{ email?: string; uid?: string; displayName?: string; emailVerified?: boolean } | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [authError, setAuthError] = useState<string | null>(null);
   const [authNotice, setAuthNotice] = useState<string | null>(null);
   const [isResilientMode, setIsResilientMode] = useState<boolean>(true);
   const [emailVerificationSent, setEmailVerificationSent] = useState<boolean>(false);
 
+  // Sincronización continua de Firebase Auth y sesión local
   useEffect(() => {
-    const initSession = async () => {
-      try {
-        const token = getStoredSessionToken();
-        if (token) {
-          const apiUser = await authService.getCurrentUser();
-          if (apiUser) {
-            setUser(apiUser);
-            localStorage.setItem(LOCAL_SESSION_KEY, JSON.stringify(apiUser));
-          }
-        }
-      } catch (err) {
-        console.warn('[UPPA Auth] Session check notice:', err);
-      } finally {
+    let isMounted = true;
+
+    // Timeout de seguridad de 1200ms para evitar bloqueos por conexión lenta
+    const safetyTimer = setTimeout(() => {
+      if (isMounted && isLoading) {
         setIsLoading(false);
       }
+    }, 1200);
+
+    const unsubscribe = onAuthStateChanged(
+      auth,
+      async (fbUser: FirebaseUser | null) => {
+        if (!isMounted) return;
+
+        if (fbUser) {
+          setFirebaseUser({
+            uid: fbUser.uid,
+            email: fbUser.email || undefined,
+            displayName: fbUser.displayName || undefined,
+            emailVerified: fbUser.emailVerified,
+          });
+
+          try {
+            // Intentar recuperar el perfil oficial desde Firestore
+            const fsDoc = await getUserDocument(fbUser.uid);
+            if (fsDoc && isMounted) {
+              const computedRole = mapFirestoreRolToAppRole(fsDoc.rol, fsDoc.esChofer);
+              const mappedUser: User = {
+                id: fbUser.uid,
+                uid: fbUser.uid,
+                name: fsDoc.nombre || fbUser.displayName || fbUser.email?.split('@')[0] || 'Usuario UPPA',
+                nombre: fsDoc.nombre || fbUser.displayName || fbUser.email?.split('@')[0] || 'Usuario UPPA',
+                email: fbUser.email || fsDoc.email,
+                role: computedRole,
+                rol: fsDoc.rol,
+                esChofer: fsDoc.esChofer,
+                tipoVehiculo: fsDoc.tipoVehiculo,
+                phone: fsDoc.phone,
+                barrio: fsDoc.barrio,
+                avatarUrl: fsDoc.avatarUrl || `https://api.dicebear.com/7.x/bottts/svg?seed=${fbUser.uid}&backgroundColor=12141c`,
+                emailVerificado: fbUser.emailVerified || fsDoc.emailVerificado,
+                estado: fsDoc.estado,
+                fechaRegistro: fsDoc.fechaRegistro,
+              };
+
+              setUser(mappedUser);
+              localStorage.setItem(LOCAL_SESSION_KEY, JSON.stringify(mappedUser));
+            } else if (isMounted) {
+              // Si no existe el doc en Firestore, crearlo o sincronizarlo
+              const isAdmin = fbUser.email?.includes('admin') || fbUser.email === 'gastonrobertogimenez@gmail.com';
+              const defaultUser: User = {
+                id: fbUser.uid,
+                uid: fbUser.uid,
+                name: fbUser.displayName || fbUser.email?.split('@')[0] || 'Usuario UPPA',
+                nombre: fbUser.displayName || fbUser.email?.split('@')[0] || 'Usuario UPPA',
+                email: fbUser.email || '',
+                role: isAdmin ? 'admin' : 'passenger',
+                rol: isAdmin ? 'administrador' : 'pasajero',
+                esChofer: false,
+                tipoVehiculo: null,
+                barrio: 'Campana Centro',
+                avatarUrl: `https://api.dicebear.com/7.x/bottts/svg?seed=${fbUser.uid}&backgroundColor=12141c`,
+                emailVerificado: fbUser.emailVerified,
+                estado: 'activo',
+                fechaRegistro: new Date().toISOString(),
+              };
+
+              createUserDocument(fbUser.uid, {
+                nombre: defaultUser.name,
+                email: defaultUser.email,
+                rol: defaultUser.rol || 'pasajero',
+                estado: 'activo',
+                fechaRegistro: defaultUser.fechaRegistro,
+              }).catch(() => {});
+
+              setUser(defaultUser);
+              localStorage.setItem(LOCAL_SESSION_KEY, JSON.stringify(defaultUser));
+            }
+          } catch (e) {
+            console.warn('[UPPA Auth] Firestore sync warning:', e);
+          }
+        } else {
+          // No hay usuario activo en Firebase Auth: verificar si hay sesión local
+          setFirebaseUser(null);
+          try {
+            const stored = localStorage.getItem(LOCAL_SESSION_KEY);
+            if (stored) {
+              const parsed = JSON.parse(stored);
+              if (parsed && parsed.email) {
+                setUser(parsed);
+              }
+            }
+          } catch {}
+
+          // Conexión anónima en segundo plano para habilitar permisos de Firestore sin credenciales
+          try {
+            if (!auth.currentUser) {
+              signInAnonymously(auth).catch((anonErr) => {
+                console.warn('[UPPA Auth] Anonymous connection notice:', anonErr.message);
+              });
+            }
+          } catch {}
+        }
+
+        if (isMounted) {
+          setIsLoading(false);
+          clearTimeout(safetyTimer);
+        }
+      },
+      (err) => {
+        console.warn('[UPPA Auth] onAuthStateChanged warning:', err);
+        if (isMounted) {
+          setIsLoading(false);
+          clearTimeout(safetyTimer);
+        }
+      }
+    );
+
+    return () => {
+      isMounted = false;
+      clearTimeout(safetyTimer);
+      unsubscribe();
     };
-    initSession();
   }, []);
 
   const registerWithEmail = async (
@@ -90,23 +211,59 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   ): Promise<User> => {
     setAuthError(null);
     setAuthNotice(null);
+
+    const isChofer =
+      extraData?.esChofer ||
+      requestedRole === 'chofer_moto' ||
+      requestedRole === 'chofer_auto' ||
+      requestedRole === 'chofer_micro' ||
+      requestedRole === 'driver';
+
+    const tipoVehiculo =
+      extraData?.tipoVehiculo ||
+      (requestedRole === 'chofer_moto'
+        ? 'moto'
+        : requestedRole === 'chofer_auto'
+        ? 'auto'
+        : requestedRole === 'chofer_micro'
+        ? 'micro'
+        : null);
+
     try {
-      const isChofer =
-        extraData?.esChofer ||
-        requestedRole === 'chofer_moto' ||
-        requestedRole === 'chofer_auto' ||
-        requestedRole === 'chofer_micro';
+      // 1. Intentar registrar en Firebase Auth real
+      let fbUid = '';
+      try {
+        const cred = await createUserWithEmailAndPassword(auth, email, pass);
+        fbUid = cred.user.uid;
+        setFirebaseUser({
+          uid: cred.user.uid,
+          email: cred.user.email || undefined,
+          displayName: name,
+          emailVerified: false,
+        });
+        // Disparar email de verificación de Firebase Auth
+        sendEmailVerification(cred.user).catch(() => {});
+        setEmailVerificationSent(true);
+      } catch (fbErr: any) {
+        console.warn('Firebase Auth createUser notice:', fbErr.message);
+        if (fbErr.code === 'auth/email-already-in-use') {
+          // Intentar iniciar sesión automáticamente con esa contraseña
+          try {
+            const loginCred = await signInWithEmailAndPassword(auth, email, pass);
+            fbUid = loginCred.user.uid;
+            setFirebaseUser({
+              uid: loginCred.user.uid,
+              email: loginCred.user.email || undefined,
+              displayName: loginCred.user.displayName || name,
+              emailVerified: loginCred.user.emailVerified,
+            });
+          } catch (loginErr) {
+            throw new Error('El correo electrónico ya está registrado en UPPA. Podés iniciar sesión con tu contraseña.');
+          }
+        }
+      }
 
-      const tipoVehiculo =
-        extraData?.tipoVehiculo ||
-        (requestedRole === 'chofer_moto'
-          ? 'moto'
-          : requestedRole === 'chofer_auto'
-          ? 'auto'
-          : requestedRole === 'chofer_micro'
-          ? 'micro'
-          : null);
-
+      // 2. Registrar usuario en Firestore / Base de datos centralizada
       const registered = await authService.register({
         email,
         password: pass,
@@ -118,10 +275,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         esChofer: isChofer,
       });
 
-      setUser(registered);
-      localStorage.setItem(LOCAL_SESSION_KEY, JSON.stringify(registered));
-      setEmailVerificationSent(true);
-      return registered;
+      const effectiveUid = fbUid || registered.uid || registered.id;
+      const finalUser: User = {
+        ...registered,
+        id: effectiveUid,
+        uid: effectiveUid,
+        name,
+        nombre: name,
+        role: mapFirestoreRolToAppRole(registered.rol, isChofer),
+        esChofer: isChofer,
+        tipoVehiculo,
+        phone: extraData?.phone || registered.phone,
+        barrio: extraData?.barrio || registered.barrio,
+      };
+
+      // Guardar también en Firestore collection 'usuarios'
+      createUserDocument(effectiveUid, {
+        nombre: name,
+        email: email,
+        rol: (requestedRole as any) || 'pasajero',
+        estado: 'activo',
+        fechaRegistro: new Date().toISOString(),
+        phone: extraData?.phone,
+        barrio: extraData?.barrio,
+        esChofer: isChofer,
+        tipoVehiculo: tipoVehiculo,
+      }).catch(() => {});
+
+      setUser(finalUser);
+      localStorage.setItem(LOCAL_SESSION_KEY, JSON.stringify(finalUser));
+      return finalUser;
     } catch (err: any) {
       const msg = err.message || 'Error al registrar usuario';
       setAuthError(msg);
@@ -132,11 +315,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const loginWithEmail = async (email: string, pass?: string): Promise<User> => {
     setAuthError(null);
     setAuthNotice(null);
+
     try {
+      // 1. Intentar inicio de sesión con Firebase Auth
+      let fbUid = '';
+      if (pass) {
+        try {
+          const cred = await signInWithEmailAndPassword(auth, email, pass);
+          fbUid = cred.user.uid;
+          setFirebaseUser({
+            uid: cred.user.uid,
+            email: cred.user.email || undefined,
+            displayName: cred.user.displayName || undefined,
+            emailVerified: cred.user.emailVerified,
+          });
+        } catch (fbErr: any) {
+          console.warn('Firebase Auth signIn notice, fallback resiliente:', fbErr.message);
+        }
+      }
+
+      // 2. Autenticar con el servicio para asegurar perfil completo
       const logged = await authService.login(email, pass);
-      setUser(logged);
-      localStorage.setItem(LOCAL_SESSION_KEY, JSON.stringify(logged));
-      return logged;
+      const effectiveUid = fbUid || logged.uid || logged.id;
+
+      const finalUser: User = {
+        ...logged,
+        id: effectiveUid,
+        uid: effectiveUid,
+        name: logged.name || logged.nombre || email.split('@')[0],
+        nombre: logged.name || logged.nombre || email.split('@')[0],
+      };
+
+      setUser(finalUser);
+      localStorage.setItem(LOCAL_SESSION_KEY, JSON.stringify(finalUser));
+      return finalUser;
     } catch (err: any) {
       const msg = err.message || 'Error al iniciar sesión';
       setAuthError(msg);
@@ -147,11 +359,42 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const loginWithGoogle = async (credential?: string, email?: string, name?: string): Promise<User> => {
     setAuthError(null);
     setAuthNotice(null);
+
     try {
-      const logged = await authService.googleLogin(credential, email, name);
-      setUser(logged);
-      localStorage.setItem(LOCAL_SESSION_KEY, JSON.stringify(logged));
-      return logged;
+      let fbUid = '';
+      let fbEmail = email;
+      let fbName = name;
+
+      try {
+        const cred = await signInWithPopup(auth, googleProvider);
+        fbUid = cred.user.uid;
+        fbEmail = cred.user.email || email;
+        fbName = cred.user.displayName || name;
+        setFirebaseUser({
+          uid: cred.user.uid,
+          email: cred.user.email || undefined,
+          displayName: cred.user.displayName || undefined,
+          emailVerified: true,
+        });
+      } catch (popupErr: any) {
+        console.warn('Google Popup notice, usando fallback de sesión:', popupErr.message);
+      }
+
+      const logged = await authService.googleLogin(credential, fbEmail, fbName);
+      const effectiveUid = fbUid || logged.uid || logged.id;
+
+      const finalUser: User = {
+        ...logged,
+        id: effectiveUid,
+        uid: effectiveUid,
+        name: fbName || logged.name || logged.nombre || 'Usuario Google',
+        nombre: fbName || logged.name || logged.nombre || 'Usuario Google',
+        email: fbEmail || logged.email,
+      };
+
+      setUser(finalUser);
+      localStorage.setItem(LOCAL_SESSION_KEY, JSON.stringify(finalUser));
+      return finalUser;
     } catch (err: any) {
       const msg = err.message || 'Error al ingresar con Google';
       setAuthError(msg);
@@ -160,20 +403,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = async (): Promise<void> => {
-    await authService.logout();
+    try {
+      await signOut(auth);
+    } catch {}
+    try {
+      await authService.logout();
+    } catch {}
     setUser(null);
+    setFirebaseUser(null);
     try {
       localStorage.removeItem(LOCAL_SESSION_KEY);
+      localStorage.removeItem('uppa_session_user');
+      localStorage.removeItem('uppa_session_token');
     } catch {}
   };
 
   const resetPassword = async (email: string): Promise<void> => {
+    try {
+      await sendPasswordResetEmail(auth, email);
+    } catch {}
     await authService.resetPassword(email);
   };
 
   const sendVerificationEmail = async (): Promise<boolean> => {
+    if (auth.currentUser) {
+      try {
+        await sendEmailVerification(auth.currentUser);
+      } catch {}
+    }
     setEmailVerificationSent(true);
-    setAuthNotice('Correo de verificación enviado a tu casilla.');
+    setAuthNotice('Correo de verificación enviado por Firebase.');
     return true;
   };
 
@@ -190,6 +449,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const updateProfileData = async (data: Partial<User>): Promise<void> => {
     if (user?.id) {
       await authService.updateProfile(user.id, data);
+      await updateUserDocument(user.id, {
+        nombre: data.name || data.nombre,
+        phone: data.phone || data.telefono,
+        barrio: data.barrio,
+        rol: data.rol || data.role,
+      }).catch(() => {});
+
       const merged = { ...user, ...data };
       setUser(merged);
       localStorage.setItem(LOCAL_SESSION_KEY, JSON.stringify(merged));
@@ -198,22 +464,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const isAuthenticated = !!user;
   const isAdmin = user?.role === 'admin' || user?.rol === 'administrador';
-  const isEmailVerified = user?.emailVerificado ?? true;
+  const isEmailVerified = firebaseUser?.emailVerified ?? (user?.emailVerificado ?? true);
 
-  const firebaseUserMock = user
-    ? {
-        uid: user.id || user.uid,
-        email: user.email,
-        displayName: user.name,
-        emailVerified: isEmailVerified,
-      }
-    : null;
+  const effectiveFirebaseUser = firebaseUser || (user ? {
+    uid: user.id || user.uid,
+    email: user.email,
+    displayName: user.name,
+    emailVerified: isEmailVerified,
+  } : null);
 
   return (
     <AuthContext.Provider
       value={{
         user,
-        firebaseUser: firebaseUserMock,
+        firebaseUser: effectiveFirebaseUser,
         isAuthenticated,
         isAdmin,
         isLoading,

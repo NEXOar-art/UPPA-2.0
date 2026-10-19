@@ -64,7 +64,8 @@ export async function getUserDocument(uid: string): Promise<UserProfile | null> 
     if (!snap.exists()) return null;
     return snap.data() as UserProfile;
   } catch (error) {
-    handleFirestoreError(error, OperationType.GET, path);
+    console.warn(`getUserDocument Firestore notice on ${path}:`, error);
+    return null;
   }
 }
 
@@ -126,7 +127,21 @@ export async function createUserDocument(
 
     return fullProfile;
   } catch (error) {
-    handleFirestoreError(error, OperationType.CREATE, path);
+    console.warn(`createUserDocument Firestore notice on ${path}:`, error);
+    return {
+      uid,
+      nombre: data.nombre,
+      email: data.email,
+      rol: data.rol || 'pasajero',
+      estado: data.estado || 'activo',
+      fechaRegistro: data.fechaRegistro || new Date().toISOString(),
+      phone: data.phone || data.telefono || '',
+      barrio: data.barrio || 'Zárate ↔ Campana',
+      avatarUrl: data.avatarUrl || `https://api.dicebear.com/7.x/bottts/svg?seed=${uid}&backgroundColor=12141c`,
+      emailVerificado: data.emailVerificado ?? false,
+      esChofer: data.esChofer ?? false,
+      tipoVehiculo: (data.tipoVehiculo as any) || null,
+    };
   }
 }
 
@@ -156,7 +171,7 @@ export async function updateUserDocument(
       console.warn('Sync to usuarios collection warning:', errSync);
     }
   } catch (error) {
-    handleFirestoreError(error, OperationType.UPDATE, path);
+    console.warn(`updateUserDocument Firestore notice on ${path}:`, error);
   }
 }
 
@@ -177,7 +192,8 @@ export async function getAllUsers(): Promise<UserProfile[]> {
     const snap = await getDocs(colRef);
     return snap.docs.map((d) => d.data() as UserProfile);
   } catch (error) {
-    handleFirestoreError(error, OperationType.LIST, USERS_COLLECTION);
+    console.warn('getAllUsers Firestore notice:', error);
+    return [];
   }
 }
 

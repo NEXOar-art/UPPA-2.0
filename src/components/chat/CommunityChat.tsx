@@ -3,6 +3,7 @@ import { User, MapEvent, MensajeChatFirestore } from '../../types';
 import {
   subscribeToChat,
   enviarMensajeChat,
+  reaccionarMensajeChat,
   eliminarMensajeChat,
   reportarMensajeChat,
   getMessageTimestampMs,
@@ -118,9 +119,14 @@ export const CommunityChat: React.FC<CommunityChatProps> = ({
     }
   }, [activeContextEvent]);
 
-  // Filtrado de mensajes por rol y búsqueda
+  // Filtrado de mensajes por canal, rol y búsqueda
   const filteredMessages = useMemo(() => {
     let list = messages;
+
+    // Si hay un canal específico seleccionado, mostrar mensajes de ese canal y también los avisos comunitarios de 'todos'
+    if (selectedChannel !== 'todos') {
+      list = list.filter((m) => !m.salaId || m.salaId === selectedChannel || m.salaId === 'todos');
+    }
 
     // Filtro por rol
     if (roleFilter === 'choferes') {
@@ -143,7 +149,7 @@ export const CommunityChat: React.FC<CommunityChatProps> = ({
     }
 
     return list;
-  }, [messages, roleFilter, searchQuery]);
+  }, [messages, selectedChannel, roleFilter, searchQuery]);
 
   // Envío sin límites: el usuario puede enviar la cantidad de mensajes que quiera
   const handleSendMessage = async (e?: React.FormEvent) => {
@@ -208,7 +214,7 @@ export const CommunityChat: React.FC<CommunityChatProps> = ({
     }
   };
 
-  // Reacción con emojis para interacción instantánea
+  // Reacción con emojis para interacción instantánea compartida con toda la comunidad
   const handleToggleReaction = (msgId: string, emoji: string) => {
     setMessages((prev) =>
       prev.map((m) => {
@@ -224,6 +230,9 @@ export const CommunityChat: React.FC<CommunityChatProps> = ({
     );
     setShowReactionPickerForId(null);
     showNotice(`Reaccionaste con ${emoji}`);
+
+    // Persistir y propagar reacción a toda la comunidad en Firestore y Broadcast
+    reaccionarMensajeChat(selectedChannel, msgId, emoji).catch(() => {});
   };
 
   const handleMention = (userName: string) => {

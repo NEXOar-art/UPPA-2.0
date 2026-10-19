@@ -13,6 +13,7 @@ import {
   onSnapshot,
   serverTimestamp,
   Timestamp,
+  increment,
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../config/firebase';
 import {
@@ -34,6 +35,7 @@ export const COL_USUARIOS = 'usuarios';
 export const COL_REPORTES = 'reportes';
 export const COL_SALAS_CHAT = 'salas_chat';
 export const COL_MENSAJES = 'mensajes';
+export const COL_MENSAJES_GLOBAL = 'mensajes_comunitarios';
 export const COL_SOLICITUDES = 'solicitudes_transporte';
 export const COL_HABILITACIONES = 'habilitaciones_chofer';
 export const COL_CODIGOS_HABILITACION = 'codigos_habilitacion';
@@ -583,7 +585,7 @@ export function subscribeToChat(
 ) {
   const safeSala = salaId || 'todos';
   const subcolRef = collection(db, COL_SALAS_CHAT, safeSala, COL_MENSAJES);
-  const q = query(subcolRef, orderBy('enviadoEn', 'asc'), limitToLast(200));
+  const q = query(subcolRef, orderBy('enviadoEn', 'asc'), limitToLast(250));
 
   let currentMessages: MensajeChatFirestore[] = [];
 
@@ -599,6 +601,7 @@ export function subscribeToChat(
         valid.push({
           ...m,
           enviadoEn: getMessageTimestampMs(m.enviadoEn),
+          reacciones: m.reacciones || {},
         });
       }
     }
@@ -623,6 +626,16 @@ export function subscribeToChat(
     } else if (event.data?.type === 'DELETE_CHAT_MESSAGE') {
       const deletedId = event.data.messageId;
       emitActiveMessages(currentMessages.filter((m) => m.id !== deletedId));
+    } else if (event.data?.type === 'REACT_CHAT_MESSAGE') {
+      const { mensajeId, emoji } = event.data;
+      emitActiveMessages(
+        currentMessages.map((m) => {
+          if (m.id !== mensajeId) return m;
+          const currentReactions = { ...(m.reacciones || {}) };
+          currentReactions[emoji] = (currentReactions[emoji] || 0) + 1;
+          return { ...m, reacciones: currentReactions };
+        })
+      );
     }
   };
 
@@ -635,7 +648,7 @@ export function subscribeToChat(
   const initialCache = rawCache && rawCache.length > 0 ? rawCache : getInitialMockChat(safeSala);
   emitActiveMessages(initialCache);
 
-  // Suscripción reactiva en tiempo real a Firebase Firestore
+  // 1. Suscripción a la subcolección principal
   const unsubFirestore = onSnapshot(
     q,
     (snapshot) => {
@@ -652,10 +665,11 @@ export function subscribeToChat(
           enviadoEn: getMessageTimestampMs(dData.enviadoEn || dData.timestampMs),
           replyTo: dData.replyTo,
           reportado: dData.reportado,
+          reacciones: dData.reacciones || {},
         };
       });
 
-      // Fusionar mensajes de Firestore con mensajes locales pendientes para no perder ningún envío
+      // Fusionar mensajes de Firestore con locales sin perder nada
       const mergedMap = new Map<string, MensajeChatFirestore>();
       for (const m of currentMessages) {
         if (isChatMessageValid(m.enviadoEn)) {
@@ -677,11 +691,51 @@ export function subscribeToChat(
     }
   );
 
+  // 2. Si estamos en 'todos', también nos suscribimos a la colección unificada comunitaria
+  let unsubGlobal = () => {};
+  if (safeSala === 'todos') {
+    try {
+      const globalColRef = collection(db, COL_MENSAJES_GLOBAL);
+      const qGlobal = query(globalColRef, orderBy('enviadoEn', 'asc'), limitToLast(250));
+      unsubGlobal = onSnapshot(
+        qGlobal,
+        (snap) => {
+          const list: MensajeChatFirestore[] = snap.docs.map((d) => {
+            const data = d.data();
+            return {
+              id: d.id,
+              salaId: data.salaId || 'todos',
+              usuarioId: data.usuarioId || 'usr',
+              nombreUsuario: data.nombreUsuario || 'Vecino UPPA',
+              texto: data.texto || '',
+              rol: data.rol || 'pasajero',
+              avatarUrl: data.avatarUrl,
+              enviadoEn: getMessageTimestampMs(data.enviadoEn || data.timestampMs),
+              replyTo: data.replyTo,
+              reportado: data.reportado,
+              reacciones: data.reacciones || {},
+            };
+          });
+          const mergedMap = new Map<string, MensajeChatFirestore>();
+          for (const m of currentMessages) {
+            if (isChatMessageValid(m.enviadoEn)) mergedMap.set(m.id, m);
+          }
+          for (const m of list) {
+            if (isChatMessageValid(m.enviadoEn)) mergedMap.set(m.id, m);
+          }
+          emitActiveMessages(Array.from(mergedMap.values()));
+        },
+        () => {}
+      );
+    } catch {}
+  }
+
   return () => {
     if (chatBroadcastChannel) {
       chatBroadcastChannel.removeEventListener('message', handleBroadcast);
     }
     unsubFirestore();
+    unsubGlobal();
   };
 }
 
@@ -711,6 +765,7 @@ export async function enviarMensajeChat(
     avatarUrl: data.avatarUrl || `https://api.dicebear.com/7.x/bottts/svg?seed=${data.usuarioId}&backgroundColor=12141c`,
     enviadoEn: now,
     replyTo: data.replyTo,
+    reacciones: {},
   };
 
   // 1. Guardar de inmediato en la memoria local (cache) para todos los canales
@@ -747,7 +802,7 @@ export async function enviarMensajeChat(
     );
   } catch (e) {}
 
-  // 4. Guardar en Firestore tanto en la sala como en 'todos' para que todos lo vean
+  // 4. Guardar en Firestore: en 'todos', en la sala específica y en la colección raíz 'mensajes_comunitarios'
   try {
     const firestorePayload: any = {
       id: generatedId,
@@ -759,13 +814,14 @@ export async function enviarMensajeChat(
       enviadoEn: now,
       timestampMs: now,
       avatarUrl: localMessage.avatarUrl,
+      reacciones: {},
     };
 
     if (data.replyTo) {
       firestorePayload.replyTo = data.replyTo;
     }
 
-    // Guardar en la colección global 'todos' (alimenta el stream de todos los que entran a la app)
+    // Colección global en salas_chat
     const globalRef = doc(db, COL_SALAS_CHAT, 'todos', COL_MENSAJES, generatedId);
     setDoc(globalRef, firestorePayload).catch((fsErr) => {
       console.warn('Firestore setDoc global chat notice:', fsErr);
@@ -777,11 +833,63 @@ export async function enviarMensajeChat(
         console.warn('Firestore setDoc specific chat notice:', fsErr);
       });
     }
+
+    // Colección raíz para acceso de toda la comunidad sin filtros
+    const rootRef = doc(db, COL_MENSAJES_GLOBAL, generatedId);
+    setDoc(rootRef, firestorePayload).catch(() => {});
   } catch (fsErr) {
     console.warn('Firestore setDoc notice:', fsErr);
   }
 
   return localMessage;
+}
+
+export async function reaccionarMensajeChat(
+  salaId: string,
+  mensajeId: string,
+  emoji: string
+): Promise<void> {
+  const safeSala = salaId || 'todos';
+
+  // Broadcast entre pestañas
+  try {
+    chatBroadcastChannel?.postMessage({
+      type: 'REACT_CHAT_MESSAGE',
+      mensajeId,
+      emoji,
+    });
+  } catch {}
+
+  // Actualizar caché local
+  try {
+    const updateCache = (key: string) => {
+      const cached = getCached<MensajeChatFirestore[]>(key, []);
+      const updated = cached.map((m) => {
+        if (m.id !== mensajeId) return m;
+        const currentReactions = { ...(m.reacciones || {}) };
+        currentReactions[emoji] = (currentReactions[emoji] || 0) + 1;
+        return { ...m, reacciones: currentReactions };
+      });
+      setCached(key, updated);
+    };
+    updateCache(`chat_${safeSala}`);
+    updateCache('chat_todos');
+  } catch {}
+
+  // Actualizar en Firestore en las tres colecciones
+  try {
+    const fieldKey = `reacciones.${emoji}`;
+    const todosDocRef = doc(db, COL_SALAS_CHAT, 'todos', COL_MENSAJES, mensajeId);
+    updateDoc(todosDocRef, { [fieldKey]: increment(1) }).catch(() => {});
+
+    if (safeSala !== 'todos') {
+      const specificDocRef = doc(db, COL_SALAS_CHAT, safeSala, COL_MENSAJES, mensajeId);
+      updateDoc(specificDocRef, { [fieldKey]: increment(1) }).catch(() => {});
+    }
+
+    const rootDocRef = doc(db, COL_MENSAJES_GLOBAL, mensajeId);
+    updateDoc(rootDocRef, { [fieldKey]: increment(1) }).catch(() => {});
+  } catch {}
 }
 
 export async function eliminarMensajeChat(salaId: string, mensajeId: string): Promise<void> {
@@ -849,29 +957,69 @@ const MOCK_INITIAL_SOLICITUDES: SolicitudTransporteFirestore[] = [
   },
 ];
 
+// In-Memory Cross-Tab Broadcast Channel para solicitudes de transporte
+const solicitudesBroadcastChannel = typeof window !== 'undefined' && 'BroadcastChannel' in window
+  ? new BroadcastChannel('uppa_solicitudes_transporte')
+  : null;
+
 export function subscribeToSolicitudesTransporte(
   callback: (solicitudes: SolicitudTransporteFirestore[]) => void,
   onError?: (error: any) => void
 ) {
+  let currentSolicitudes: SolicitudTransporteFirestore[] = getCached<SolicitudTransporteFirestore[]>(
+    'solicitudes',
+    MOCK_INITIAL_SOLICITUDES
+  );
+
+  callback(currentSolicitudes);
+
+  const handleBroadcast = (event: MessageEvent) => {
+    if (event.data?.type === 'NEW_SOLICITUD') {
+      const sol = event.data.solicitud as SolicitudTransporteFirestore;
+      if (sol) {
+        currentSolicitudes = [sol, ...currentSolicitudes.filter((s) => s.id !== sol.id)];
+        setCached('solicitudes', currentSolicitudes);
+        callback(currentSolicitudes);
+      }
+    } else if (event.data?.type === 'UPDATE_SOLICITUD') {
+      const { solicitudId, patch } = event.data;
+      currentSolicitudes = currentSolicitudes.map((s) => (s.id === solicitudId ? { ...s, ...patch } : s));
+      setCached('solicitudes', currentSolicitudes);
+      callback(currentSolicitudes);
+    }
+  };
+
+  if (solicitudesBroadcastChannel) {
+    solicitudesBroadcastChannel.addEventListener('message', handleBroadcast);
+  }
+
   const colRef = collection(db, COL_SOLICITUDES);
   const q = query(colRef, orderBy('fechaSolicitud', 'desc'));
 
-  return onSnapshot(
+  const unsubFirestore = onSnapshot(
     q,
     (snapshot) => {
       const list: SolicitudTransporteFirestore[] = snapshot.docs.map((d) => ({
         id: d.id,
         ...(d.data() as Omit<SolicitudTransporteFirestore, 'id'>),
       }));
+      currentSolicitudes = list;
       setCached('solicitudes', list);
       callback(list);
     },
     (err) => {
       console.warn('Firestore solicitudes onSnapshot error/offline fallback:', err);
       if (onError) onError(err);
-      callback(getCached<SolicitudTransporteFirestore[]>('solicitudes', MOCK_INITIAL_SOLICITUDES));
+      callback(getCached<SolicitudTransporteFirestore[]>('solicitudes', currentSolicitudes));
     }
   );
+
+  return () => {
+    if (solicitudesBroadcastChannel) {
+      solicitudesBroadcastChannel.removeEventListener('message', handleBroadcast);
+    }
+    unsubFirestore();
+  };
 }
 
 export async function crearSolicitudTransporte(data: {
@@ -886,74 +1034,64 @@ export async function crearSolicitudTransporte(data: {
   precioEstimado?: number;
   distanciaKm?: number;
 }): Promise<SolicitudTransporteFirestore> {
-  const path = COL_SOLICITUDES;
+  const localId = `sol-${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+  const now = Date.now();
+
+  const nuevaSolicitud: SolicitudTransporteFirestore = {
+    id: localId,
+    pasajeroId: data.pasajeroId,
+    nombrePasajero: data.nombrePasajero,
+    telefonoPasajero: data.telefonoPasajero || '',
+    origen: data.origen,
+    destino: data.destino,
+    origenCoords: data.origenCoords || { lat: -34.2096, lng: -58.9426 },
+    destinoCoords: data.destinoCoords || { lat: -34.1914, lng: -58.9447 },
+    estado: 'pendiente',
+    tipoVehiculoRequerido: data.tipoVehiculoRequerido,
+    choferId: null,
+    choferNombre: null,
+    choferTelefono: null,
+    fechaSolicitud: now,
+    precioEstimado: data.precioEstimado || (data.tipoVehiculoRequerido === 'moto' ? 2200 : 3800),
+    distanciaKm: data.distanciaKm || 4.5,
+  };
+
+  // 1. Guardar de inmediato en caché local
   try {
-    const colRef = collection(db, COL_SOLICITUDES);
-    const newDoc = doc(colRef);
-
-    const payload: any = {
-      pasajeroId: data.pasajeroId,
-      nombrePasajero: data.nombrePasajero,
-      telefonoPasajero: data.telefonoPasajero || '',
-      origen: data.origen,
-      destino: data.destino,
-      origenCoords: data.origenCoords || { lat: -34.2096, lng: -58.9426 },
-      destinoCoords: data.destinoCoords || { lat: -34.1914, lng: -58.9447 },
-      estado: 'pendiente',
-      tipoVehiculoRequerido: data.tipoVehiculoRequerido,
-      choferId: null,
-      choferNombre: null,
-      choferTelefono: null,
-      fechaSolicitud: serverTimestamp(),
-      precioEstimado: data.precioEstimado || (data.tipoVehiculoRequerido === 'moto' ? 2200 : 3800),
-      distanciaKm: data.distanciaKm || 4.5,
-    };
-
-    await setDoc(newDoc, payload);
-
-    // Notify nearby drivers via push notification
-    triggerInAppPushNotification(
-      `🚕 Nueva solicitud de transporte (${data.tipoVehiculoRequerido === 'moto' ? 'Moto' : 'Auto'})`,
-      `${data.nombrePasajero} necesita viaje: ${data.origen} ➔ ${data.destino}`,
-      'transporte',
-      { solicitudId: newDoc.id }
-    );
-
-    return { id: newDoc.id, ...payload, fechaSolicitud: Date.now() };
-  } catch (error) {
-    console.warn('Firestore crearSolicitudTransporte notice (fallback local):', error);
-    const localId = `sol-local-${Date.now()}`;
-    const fallbackSolicitud: SolicitudTransporteFirestore = {
-      id: localId,
-      pasajeroId: data.pasajeroId,
-      nombrePasajero: data.nombrePasajero,
-      telefonoPasajero: data.telefonoPasajero || '',
-      origen: data.origen,
-      destino: data.destino,
-      origenCoords: data.origenCoords || { lat: -34.2096, lng: -58.9426 },
-      destinoCoords: data.destinoCoords || { lat: -34.1914, lng: -58.9447 },
-      estado: 'pendiente',
-      tipoVehiculoRequerido: data.tipoVehiculoRequerido,
-      choferId: null,
-      choferNombre: null,
-      choferTelefono: null,
-      fechaSolicitud: Date.now(),
-      precioEstimado: data.precioEstimado || (data.tipoVehiculoRequerido === 'moto' ? 2200 : 3800),
-      distanciaKm: data.distanciaKm || 4.5,
-    };
-
     const cached = getCached<SolicitudTransporteFirestore[]>('solicitudes', MOCK_INITIAL_SOLICITUDES);
-    setCached('solicitudes', [fallbackSolicitud, ...cached]);
+    setCached('solicitudes', [nuevaSolicitud, ...cached.filter((s) => s.id !== localId)]);
+  } catch {}
 
+  // 2. Broadcast a otras pestañas
+  try {
+    solicitudesBroadcastChannel?.postMessage({
+      type: 'NEW_SOLICITUD',
+      solicitud: nuevaSolicitud,
+    });
+  } catch {}
+
+  // 3. Notificación push interna
+  try {
     triggerInAppPushNotification(
       `🚕 Nueva solicitud de transporte (${data.tipoVehiculoRequerido === 'moto' ? 'Moto' : 'Auto'})`,
       `${data.nombrePasajero} necesita viaje: ${data.origen} ➔ ${data.destino}`,
       'transporte',
       { solicitudId: localId }
     );
+  } catch {}
 
-    return fallbackSolicitud;
+  // 4. Escribir en Firestore
+  try {
+    const docRef = doc(db, COL_SOLICITUDES, localId);
+    await setDoc(docRef, {
+      ...nuevaSolicitud,
+      fechaSolicitud: serverTimestamp(),
+    });
+  } catch (error) {
+    console.warn('Firestore crearSolicitudTransporte notice (resilient write active):', error);
   }
+
+  return nuevaSolicitud;
 }
 
 export async function aceptarSolicitudTransporte(
@@ -962,25 +1100,46 @@ export async function aceptarSolicitudTransporte(
   choferNombre: string,
   choferTelefono: string
 ): Promise<void> {
-  const path = `${COL_SOLICITUDES}/${solicitudId}`;
+  const patch = {
+    estado: 'aceptado' as const,
+    choferId,
+    choferNombre,
+    choferTelefono,
+  };
+
+  // Actualizar caché local
+  try {
+    const cached = getCached<SolicitudTransporteFirestore[]>('solicitudes', MOCK_INITIAL_SOLICITUDES);
+    setCached(
+      'solicitudes',
+      cached.map((s) => (s.id === solicitudId ? { ...s, ...patch } : s))
+    );
+  } catch {}
+
+  // Broadcast entre pestañas
+  try {
+    solicitudesBroadcastChannel?.postMessage({
+      type: 'UPDATE_SOLICITUD',
+      solicitudId,
+      patch,
+    });
+  } catch {}
+
+  triggerInAppPushNotification(
+    '✅ ¡Viaje Aceptado!',
+    `${choferNombre} aceptó el viaje y está en camino a tu ubicación.`,
+    'transporte',
+    { solicitudId, choferId }
+  );
+
   try {
     const docRef = doc(db, COL_SOLICITUDES, solicitudId);
     await updateDoc(docRef, {
-      estado: 'aceptado',
-      choferId,
-      choferNombre,
-      choferTelefono,
+      ...patch,
       actualizadoEn: serverTimestamp(),
     });
-
-    triggerInAppPushNotification(
-      '✅ ¡Viaje Aceptado!',
-      `${choferNombre} aceptó el viaje y está en camino a tu ubicación.`,
-      'transporte',
-      { solicitudId, choferId }
-    );
   } catch (error) {
-    handleFirestoreError(error, OperationType.UPDATE, path);
+    console.warn('Firestore aceptarSolicitud notice (resilient mode active):', error);
   }
 }
 
