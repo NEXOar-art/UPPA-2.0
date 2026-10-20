@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   MOCK_ROUTES,
   MOCK_EVENTS,
@@ -141,6 +141,7 @@ export default function App() {
         role: computedRole,
         rol: authUser.rol,
         esChofer: authUser.esChofer || computedRole === 'driver',
+        tipoVehiculo: authUser.tipoVehiculo ?? currentUser.tipoVehiculo ?? (authUser.rol === 'chofer_moto' ? 'moto' : authUser.rol === 'chofer_auto' ? 'auto' : null),
         estado: authUser.estado,
         fechaRegistro: authUser.fechaRegistro,
         barrio: authUser.barrio || currentUser.barrio,
@@ -182,6 +183,29 @@ export default function App() {
   const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
   const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
   const [isDriverOnline, setIsDriverOnline] = useState(true);
+
+  // Solo colocar el botón de "conductor en línea" si está prestando servicio de moto taxi o auto taxi
+  const isPrestandoServicioTaxi = useMemo(() => {
+    // 1. Determinar el tipo de vehículo (estrictamente moto o auto)
+    const vehicle =
+      driverSession?.vehicleType ||
+      currentUser.tipoVehiculo ||
+      (currentUser.rol === 'chofer_moto' ? 'moto' : currentUser.rol === 'chofer_auto' ? 'auto' : null);
+
+    const isMotoOrAuto = vehicle === 'moto' || vehicle === 'auto';
+    if (!isMotoOrAuto) return false;
+
+    // 2. Determinar si está prestando servicio activamente
+    const tieneSesionChofer = Boolean(driverSession && driverSession.endsAt > Date.now());
+    const esChoferActivo = Boolean(
+      currentUser.esChofer ||
+      currentUser.rol === 'chofer_moto' ||
+      currentUser.rol === 'chofer_auto' ||
+      (currentUser.role === 'driver' && isMotoOrAuto)
+    );
+
+    return tieneSesionChofer || esChoferActivo;
+  }, [driverSession, currentUser]);
 
   // Active View / Tabs
   const [activeTab, setActiveTab] = useState<'map' | 'taxi' | 'chat' | 'admin'>('map');
@@ -385,13 +409,10 @@ export default function App() {
 
   // Sync Driver GPS to Marketplace with activation code and countdown timer
   useEffect(() => {
-    const isDriverSessionActive = driverSession && driverSession.endsAt > Date.now();
-    const isDriver = isDriverSessionActive || currentUser.role === 'driver';
-
-    if (isDriver && isDriverOnline) {
+    if (isPrestandoServicioTaxi && isDriverOnline) {
       const activeId = driverSession?.driverId || `tx-driver-${currentUser.id}`;
-      const activeName = driverSession?.driverName || currentUser.name;
-      const activeType = driverSession?.vehicleType || 'auto';
+      const activeName = driverSession?.driverName || currentUser.nombre || currentUser.name;
+      const activeType = ((driverSession?.vehicleType || currentUser.tipoVehiculo || (currentUser.rol === 'chofer_moto' ? 'moto' : 'auto')) === 'moto' ? 'moto' : 'auto') as 'auto' | 'moto';
       const activeModel =
         driverSession?.vehicleModel ||
         (activeType === 'moto' ? 'Moto Taxi en Línea' : 'Auto Taxi en Línea');
@@ -879,8 +900,8 @@ export default function App() {
         </div>
       </header>
 
-      {/* Driver GPS Status Bar with Real-time Countdown Timer */}
-      {((driverSession && driverSession.endsAt > Date.now()) || currentUser.role === 'driver') && (
+      {/* Driver GPS Status Bar with Real-time Countdown Timer - SOLO si está prestando servicio de moto taxi o auto taxi */}
+      {isPrestandoServicioTaxi && (
         <DriverConnectionBar
           isOnline={isDriverOnline}
           onToggleOnline={() => {
@@ -889,8 +910,8 @@ export default function App() {
             showToast(next ? 'Conductor en línea transmitiendo GPS' : 'Modo conductor pausado');
           }}
           location={userLocation}
-          driverName={driverSession?.driverName || currentUser.name}
-          vehicleType={driverSession?.vehicleType || 'auto'}
+          driverName={driverSession?.driverName || currentUser.nombre || currentUser.name}
+          vehicleType={((driverSession?.vehicleType || currentUser.tipoVehiculo || (currentUser.rol === 'chofer_moto' ? 'moto' : 'auto')) === 'moto' ? 'moto' : 'auto')}
           endsAt={driverSession?.endsAt || (Date.now() + 12 * 3600 * 1000)}
           activationCode={driverSession?.activationCode}
           onCenterMap={() => setActiveTab('map')}
@@ -919,7 +940,7 @@ export default function App() {
                 selectedRouteId={selectedRouteId}
                 onSelectRouteId={(routeId) => setSelectedRouteId(routeId)}
                 userLocation={userLocation}
-                isDriverMode={currentUser.role === 'driver'}
+                isDriverMode={isPrestandoServicioTaxi}
                 isDriverOnline={isDriverOnline}
                 activeTrackingTaxi={activeTrackingTaxi}
                 onClearTrackingTaxi={() => setActiveTrackingTaxi(null)}

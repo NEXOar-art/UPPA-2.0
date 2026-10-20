@@ -42,9 +42,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onExploreGuest })
 
   const [authMode, setAuthMode] = useState<'login' | 'register'>('register');
   const [email, setEmail] = useState('gastonrobertogimenez@gmail.com');
-  const [password, setPassword] = useState('uppa2026password');
-  const [name, setName] = useState('Gaston Gimenez');
-  const [role, setRole] = useState<UserRole>('passenger');
+  const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
+  const [role, setRole] = useState<'pasajero' | 'chofer_moto' | 'chofer_auto'>('pasajero');
   const [phone, setPhone] = useState('+54 9 3487 55-2190');
   const [barrio, setBarrio] = useState('Campana Centro (Plaza Eduardo Costa)');
 
@@ -62,7 +62,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onExploreGuest })
 
     const cleanEmail = email.trim().toLowerCase();
     const cleanPassword = password.trim();
-    const cleanName = name.trim() || 'Usuario UPPA';
+    const cleanName = name.trim() || cleanEmail.split('@')[0] || 'Usuario UPPA';
 
     if (!cleanEmail) {
       setAuthError('Por favor ingresá un e-mail válido.');
@@ -79,9 +79,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onExploreGuest })
     try {
       if (authMode === 'register') {
         // 1. Firebase Authentication createUserWithEmailAndPassword
-        // 2. Automáticamente crea el documento en users/{uid} con rol="cliente", estado="activo"
-        const isChofer = role === 'chofer_moto' || role === 'chofer_auto' || role === 'chofer_micro' || role === 'driver';
-        const tipoVehiculo = role === 'chofer_moto' ? 'moto' : role === 'chofer_auto' ? 'auto' : role === 'chofer_micro' ? 'micro' : null;
+        // 2. Registra perfil con nombre, email, contraseña y rol (pasajero, moto taxi o auto taxi)
+        const isChofer = role === 'chofer_moto' || role === 'chofer_auto';
+        const tipoVehiculo = role === 'chofer_moto' ? 'moto' : role === 'chofer_auto' ? 'auto' : null;
         const userProfile = await registerWithEmail(cleanEmail, cleanPassword, cleanName, role, {
           phone: phone.trim(),
           barrio: barrio.trim(),
@@ -89,22 +89,24 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onExploreGuest })
           tipoVehiculo: tipoVehiculo,
         });
 
-        setLocalNotice('¡Perfil creado en Firebase y mail de autenticación enviado!');
+        setLocalNotice('¡Cuenta creada en Firebase correctamente!');
         setTimeout(() => {
           setIsSubmitting(false);
-          const computedRole = mapFirestoreRolToAppRole(userProfile.rol, userProfile.esChofer || role === 'driver' || role === 'chofer_moto' || role === 'chofer_auto');
+          const computedRole = mapFirestoreRolToAppRole(userProfile.rol, isChofer);
           onLogin({
             id: userProfile.uid || userProfile.id || 'usr_' + Date.now(),
             uid: userProfile.uid || userProfile.id,
-            name: userProfile.nombre || userProfile.name || 'Usuario',
-            nombre: userProfile.nombre || userProfile.name || 'Usuario',
+            name: userProfile.nombre || userProfile.name || cleanName,
+            nombre: userProfile.nombre || userProfile.name || cleanName,
             email: userProfile.email,
             role: computedRole,
-            rol: userProfile.rol,
-            estado: userProfile.estado,
-            fechaRegistro: userProfile.fechaRegistro,
-            barrio: userProfile.barrio,
-            phone: userProfile.phone,
+            rol: userProfile.rol || role,
+            esChofer: isChofer,
+            tipoVehiculo: tipoVehiculo,
+            estado: userProfile.estado || 'activo',
+            fechaRegistro: userProfile.fechaRegistro || new Date().toISOString(),
+            barrio: userProfile.barrio || barrio,
+            phone: userProfile.phone || phone,
             avatarUrl: userProfile.avatarUrl,
             emailVerificado: false,
           });
@@ -344,14 +346,14 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onExploreGuest })
               {showFirebaseInfo && (
                 <div className="mb-3 p-3 rounded-2xl bg-black/60 border border-white/10 text-[10.5px] text-slate-300 space-y-1.5 animate-in fade-in font-sans">
                   <p className="font-bold text-white flex items-center gap-1">
-                    <span>⚙️ Configuración Firebase (uppa-comunidad-de-transporte)</span>
+                    <span>⚙️ Configuración Firebase (uppa-22dc3)</span>
                   </p>
                   <p className="text-slate-400 leading-relaxed text-[10px]">
                     Para activar la base en la nube oficial:
                   </p>
                   <ol className="list-decimal pl-4 space-y-0.5 text-[9.5px] text-slate-300">
                     <li>Entrá a <strong>console.firebase.google.com</strong></li>
-                    <li>Seleccioná <strong>uppa-comunidad-de-transporte</strong></li>
+                    <li>Seleccioná <strong>uppa-22dc3</strong></li>
                     <li>En <strong>Authentication &gt; Sign-in method</strong>, activá <strong>Correo/Contraseña</strong></li>
                     <li>En <strong>Firestore Database</strong>, hacé clic en Crear base de datos</li>
                   </ol>
@@ -384,32 +386,34 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onExploreGuest })
                     </div>
 
                     <div>
-                      <label className="block text-[11px] font-semibold text-slate-300 mb-1 uppercase tracking-wider">
-                        Rol en la Comunidad
+                      <label className="block text-[11px] font-bold text-slate-200 mb-1.5 uppercase tracking-wider flex items-center justify-between">
+                        <span>Función en la Comunidad</span>
+                        <span className="text-[10px] text-cyan-400 font-semibold font-mono">Selección obligatoria</span>
                       </label>
-                      <div className="grid grid-cols-2 gap-1.5">
+                      <div className="grid grid-cols-3 gap-2">
                         {[
-                          { id: 'pasajero', label: '🚶 Pasajero' },
-                          { id: 'chofer_moto', label: '🏍️ Chofer Moto' },
-                          { id: 'chofer_auto', label: '🚕 Chofer Auto' },
-                          { id: 'chofer_micro', label: '🚌 Chofer Micro' },
-                        ].map((r) => (
-                          <button
-                            key={r.id}
-                            type="button"
-                            onClick={() => setRole(r.id as UserRole)}
-                            className={`py-1.5 px-2 rounded-xl text-[11px] font-bold border transition-all text-left flex items-center justify-between ${
-                              role === r.id || (role === 'passenger' && r.id === 'pasajero')
-                                ? 'bg-sky-500/20 border-sky-400 text-sky-200'
-                                : 'bg-white/[0.02] border-white/10 text-slate-400 hover:text-white'
-                            }`}
-                          >
-                            <span>{r.label}</span>
-                            {(role === r.id || (role === 'passenger' && r.id === 'pasajero')) && (
-                              <span className="w-1.5 h-1.5 rounded-full bg-sky-400" />
-                            )}
-                          </button>
-                        ))}
+                          { id: 'pasajero' as const, label: 'Pasajero', sub: 'Vecino / Usuario', icon: '🚶', color: 'border-cyan-400 bg-sky-500/25 text-white shadow-cyan-500/20' },
+                          { id: 'chofer_moto' as const, label: 'Moto Taxi', sub: 'Chofer Moto', icon: '🏍️', color: 'border-emerald-400 bg-emerald-500/25 text-white shadow-emerald-500/20' },
+                          { id: 'chofer_auto' as const, label: 'Auto Taxi', sub: 'Chofer Auto', icon: '🚕', color: 'border-amber-400 bg-amber-500/25 text-white shadow-amber-500/20' },
+                        ].map((r) => {
+                          const isSelected = role === r.id;
+                          return (
+                            <button
+                              key={r.id}
+                              type="button"
+                              onClick={() => setRole(r.id)}
+                              className={`p-2.5 rounded-2xl border text-center transition-all cursor-pointer flex flex-col items-center gap-1 shadow-sm ${
+                                isSelected
+                                  ? `${r.color} ring-2 ring-white/20 scale-[1.02]`
+                                  : 'bg-white/[0.03] border-white/10 text-slate-400 hover:text-white hover:bg-white/[0.06]'
+                              }`}
+                            >
+                              <span className="text-xl">{r.icon}</span>
+                              <span className="text-xs font-black tracking-tight">{r.label}</span>
+                              <span className="text-[9.5px] text-slate-400 font-medium leading-tight">{r.sub}</span>
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
 
