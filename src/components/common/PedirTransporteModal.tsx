@@ -31,25 +31,25 @@ export const PedirTransporteModal: React.FC<PedirTransporteModalProps> = ({
   initialOrigin = 'Campana Centro (Plaza Eduardo Costa)',
   onSuccess,
 }) => {
-  const [origen, setOrigen] = useState(initialOrigin);
-  const [destino, setDestino] = useState('Zárate Centro (Terminal de Ómnibus)');
+  const [origen, setOrigen] = useState('');
+  const [destino, setDestino] = useState('');
   const [tipoVehiculo, setTipoVehiculo] = useState<'moto' | 'auto'>('moto');
   const [telefono, setTelefono] = useState('');
-  const [nombre, setNombre] = useState(currentUserName !== 'Pasajero Comunidad UPPA' ? currentUserName : '');
+  const [nombre, setNombre] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   useEffect(() => {
     if (isOpen) {
-      if (initialOrigin) setOrigen(initialOrigin);
-      if (currentUserName && currentUserName !== 'Pasajero Comunidad UPPA') {
-        setNombre(currentUserName);
-      }
+      setOrigen('');
+      setDestino('');
+      setNombre('');
+      setTelefono('');
       setErrorMsg('');
       setSuccessMsg(null);
     }
-  }, [isOpen, initialOrigin, currentUserName]);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 

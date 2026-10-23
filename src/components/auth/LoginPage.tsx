@@ -41,12 +41,12 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onExploreGuest })
   } = useAuth();
 
   const [authMode, setAuthMode] = useState<'login' | 'register'>('register');
-  const [email, setEmail] = useState('gastonrobertogimenez@gmail.com');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [role, setRole] = useState<'pasajero' | 'chofer_moto' | 'chofer_auto'>('pasajero');
-  const [phone, setPhone] = useState('+54 9 3487 55-2190');
-  const [barrio, setBarrio] = useState('Campana Centro (Plaza Eduardo Costa)');
+  const [phone, setPhone] = useState('');
+  const [barrio, setBarrio] = useState('');
 
   const [showPassword, setShowPassword] = useState(false);
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);

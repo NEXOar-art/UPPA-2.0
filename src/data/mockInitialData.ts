@@ -9,13 +9,13 @@ import {
 } from './linea228Stops';
 
 export const INITIAL_USER: User = {
-  id: 'usr-1',
-  name: 'Gaston G.',
-  email: 'gastonrobertogimenez@gmail.com',
+  id: 'usr-comunidad',
+  name: '',
+  email: '',
   role: 'passenger',
-  barrio: 'Barrio Malvinas, Campana',
-  phone: '+54 9 3487 55-2190',
-  avatarUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=gaston&backgroundColor=12141c',
+  barrio: '',
+  phone: '',
+  avatarUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=vecino&backgroundColor=12141c',
 };
 
 export const MOCK_ROUTES: TransitRoute[] = [

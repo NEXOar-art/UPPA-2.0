@@ -70,11 +70,11 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
 
   // Transfer Step Form
   const [selectedHours, setSelectedHours] = useState<number>(12);
-  const [driverName, setDriverName] = useState(currentUserName || '');
-  const [whatsapp, setWhatsapp] = useState(currentUserPhone || '');
+  const [driverName, setDriverName] = useState('');
+  const [whatsapp, setWhatsapp] = useState('');
   const [vehicleType, setVehicleType] = useState<'auto' | 'moto'>('auto');
   const [vehicleModel, setVehicleModel] = useState('');
-  const [zone, setZone] = useState('B° Malvinas ↔ Zárate Centro');
+  const [zone, setZone] = useState('');
   const [proofFileName, setProofFileName] = useState<string>('');
   const [copiedAlias, setCopiedAlias] = useState(false);
   const [copiedCbu, setCopiedCbu] = useState(false);
@@ -83,7 +83,7 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
 
   // Generated code presentation state
   const [generatedCodeResult, setGeneratedCodeResult] = useState<string | null>(null);
-  const [adminPinInput, setAdminPinInput] = useState<string>('0608');
+  const [adminPinInput, setAdminPinInput] = useState<string>('');
   const [pinValidationErr, setPinValidationErr] = useState<string>('');
 
   // Direct Code Entry Form
@@ -92,7 +92,7 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
 
   // Firebase Email Authentication for Service Providers (Moto / Auto Taxi)
   const { firebaseUser, loginWithEmail, registerWithEmail } = useAuth();
-  const [driverEmail, setDriverEmail] = useState(firebaseUser?.email || '');
+  const [driverEmail, setDriverEmail] = useState('');
   const [driverPassword, setDriverPassword] = useState('');
   const [driverAuthMode, setDriverAuthMode] = useState<'login' | 'register'>('login');
   const [isDriverAuthLoading, setIsDriverAuthLoading] = useState(false);
@@ -156,6 +156,14 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
       setErrorMsg('');
       setCodeSuccessMsg(null);
       setPinValidationErr('');
+      setDriverName('');
+      setWhatsapp('');
+      setVehicleModel('');
+      setZone('');
+      setAdminPinInput('');
+      setInputCode('');
+      setDriverEmail('');
+      setDriverPassword('');
     }
   }, [isOpen, initialTab]);
 
@@ -437,7 +445,7 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
               <div>
                 <h3 className="text-base font-bold text-white">¡Solicitud de Chofer Registrada!</h3>
                 <p className="text-xs text-slate-300 mt-1 max-w-sm mx-auto">
-                  Para que tu servicio quede publicado, el administrador verifica el comprobante en WhatsApp y lo habilita con clave <strong className="text-purple-300 font-mono">0608</strong>:
+                  Para que tu servicio quede publicado, el administrador verifica el comprobante en WhatsApp y habilita tu unidad:
                 </p>
               </div>
 
@@ -484,17 +492,17 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
               <div className="p-3 rounded-xl bg-purple-950/40 border border-purple-500/30 text-[11px] text-purple-200 max-w-sm mx-auto text-left space-y-1.5">
                 <div className="flex items-center gap-1.5 font-bold text-white">
                   <KeyRound className="w-3.5 h-3.5 text-purple-400" />
-                  <span>Habilitación por Administrador (Clave 0608)</span>
+                  <span>Habilitación por Administrador</span>
                 </div>
                 <p className="text-slate-300 text-[10px] leading-relaxed">
-                  El código para que quede publicado lo activa el administrador tras corroborar la transferencia a <strong className="text-white">luciaveronicag</strong>. Al ingresar la clave <strong className="text-white">0608</strong>, arranca el temporizador de {selectedHours}h únicamente para tu unidad.
+                  El código para que quede publicado lo activa el administrador tras corroborar la transferencia a <strong className="text-white">luciaveronicag</strong>, iniciando el temporizador en vivo de {selectedHours}h únicamente para tu unidad.
                 </p>
               </div>
 
               {/* Admin Quick Unlock Form */}
               <div className="p-3.5 rounded-2xl bg-black/60 border border-white/10 max-w-sm mx-auto space-y-2 text-left">
                 <label className="block text-[11px] font-bold text-slate-300">
-                  Ingreso de Clave de Administrador (0608)
+                  Ingreso de Clave de Administrador
                 </label>
                 <div className="flex gap-2">
                   <input
@@ -504,7 +512,7 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
                       setAdminPinInput(e.target.value);
                       setPinValidationErr('');
                     }}
-                    placeholder="Clave 0608"
+                    placeholder="Clave autorizada"
                     className="flex-1 h-10 px-3 rounded-xl bg-slate-900 border border-purple-400/40 text-white font-mono text-center text-sm font-bold focus:outline-none focus:border-purple-300"
                   />
                   <button
@@ -512,7 +520,7 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
                     onClick={() => handleAdminPinActivation(generatedCodeResult)}
                     className="h-10 px-4 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs rounded-xl shadow-md transition-all cursor-pointer whitespace-nowrap"
                   >
-                    Habilitar con 0608
+                    Habilitar Servicio
                   </button>
                 </div>
                 {pinValidationErr && (

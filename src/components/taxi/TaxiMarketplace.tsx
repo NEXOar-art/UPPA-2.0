@@ -50,8 +50,8 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
 
   // Alternative transport request modal
   const [isRequestRideOpen, setIsRequestRideOpen] = useState(false);
-  const [reqOrigin, setReqOrigin] = useState('Justo Vigalondo 1419 (B° Malvinas)');
-  const [reqDestination, setReqDestination] = useState("McDonald's Campana / Colectora Km 72.5");
+  const [reqOrigin, setReqOrigin] = useState('');
+  const [reqDestination, setReqDestination] = useState('');
   const [reqType, setReqType] = useState<'moto' | 'auto'>('moto');
   const [isSubmittingRide, setIsSubmittingRide] = useState(false);
   const [rideSuccessNotice, setRideSuccessNotice] = useState<string | null>(null);
@@ -169,7 +169,7 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
               </span>
             </div>
             <p className="text-[11px] text-slate-300 max-w-xl leading-relaxed">
-              Realizá la transferencia a Alias: <strong className="text-emerald-300 font-mono">luciaveronicag</strong> (CVU: <span className="font-mono text-emerald-200">0000003100020253501840</span> - Titular: <strong className="text-white">Lucia Veronica Gimenez</strong>). Adjuntá el comprobante al WhatsApp <strong className="text-emerald-300 font-mono">3489690058</strong>. El administrador lo habilita con clave <strong className="text-white">0608</strong> y arranca el temporizador en vivo.
+              Realizá la transferencia a Alias: <strong className="text-emerald-300 font-mono">luciaveronicag</strong> (CVU: <span className="font-mono text-emerald-200">0000003100020253501840</span> - Titular: <strong className="text-white">Lucia Veronica Gimenez</strong>). Adjuntá el comprobante al WhatsApp <strong className="text-emerald-300 font-mono">3489690058</strong>.
             </p>
           </div>
 

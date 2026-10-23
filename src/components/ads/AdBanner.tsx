@@ -46,18 +46,18 @@ export const AdBanner: React.FC<AdBannerProps> = ({ ads, onOpenContactModal }) =
       title="Auspicios locales en vivo: pasá el cursor para pausar y hacer clic en cualquier comercio"
     >
       <div className="flex items-center h-12 sm:h-13 px-2 sm:px-3 gap-2">
-        {/* Left Sticky Card: "Auspicio Local" abre el formulario para pedir incluir un negocio */}
-        <div className="flex items-center gap-1.5 shrink-0 z-10 bg-[#0a0d14] pr-2 border-r border-slate-800/80">
+        {/* Left Sticky Compact Pill: "Auspicio Local" ultra-compacto hacia la izquierda para dar más lugar al banner */}
+        <div className="flex items-center shrink-0 z-10 bg-[#0a0d14] pr-1.5 border-r border-slate-800/80">
           <button
             type="button"
             onClick={onOpenContactModal}
-            className="flex items-center gap-1.5 text-[10.5px] uppercase font-black tracking-wider px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500/25 via-orange-500/25 to-amber-600/25 hover:from-amber-500/40 hover:to-orange-500/40 text-amber-300 hover:text-white border border-amber-400/40 hover:border-amber-300 shadow-md shadow-amber-500/10 active:scale-95 transition-all cursor-pointer shrink-0 group"
+            className="h-7.5 px-2 rounded-lg bg-gradient-to-r from-amber-500/20 to-orange-500/20 hover:from-amber-500/35 hover:to-orange-500/35 text-amber-300 hover:text-white border border-amber-400/40 hover:border-amber-300 text-[10px] font-black uppercase tracking-tight flex items-center gap-1 shadow-sm active:scale-95 transition-all cursor-pointer shrink-0 group"
             title="Pedir incluir un negocio en el banner publicitario de UPPA"
           >
-            <Megaphone className="w-3.5 h-3.5 text-amber-400 group-hover:scale-110 transition-transform shrink-0" />
-            <span className="font-black">Auspicio Local</span>
-            <span className="hidden sm:inline text-[9px] bg-amber-400/20 px-1.5 py-0.2 rounded text-amber-200 border border-amber-400/30 font-bold">
-              + Sumar negocio
+            <Megaphone className="w-3 h-3 text-amber-400 group-hover:scale-110 transition-transform shrink-0" />
+            <span>Auspicio</span>
+            <span className="hidden sm:inline text-[8.5px] bg-amber-400/20 px-1 py-0.2 rounded text-amber-200 font-extrabold border border-amber-400/30">
+              + Negocio
             </span>
           </button>
         </div>

@@ -121,9 +121,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [actionSuccessMessage, setActionSuccessMessage] = useState<string | null>(null);
   const [actionErrorMessage, setActionErrorMessage] = useState<string | null>(null);
 
-  // Driver Enablement with PIN "0608" State
+  // Driver Enablement State
   const [selectedHabIdForActivation, setSelectedHabIdForActivation] = useState<string | null>(null);
-  const [adminActivationPin, setAdminActivationPin] = useState('0608');
+  const [adminActivationPin, setAdminActivationPin] = useState('');
   const [activationHours, setActivationHours] = useState<number>(12);
   const [isEnablingDriver, setIsEnablingDriver] = useState(false);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
@@ -377,7 +377,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           }`}
         >
           <KeyRound className="w-3.5 h-3.5" />
-          <span>Habilitación Chofer (Clave 0608)</span>
+          <span>Habilitación Choferes</span>
           {pendingHabilitaciones.length > 0 && (
             <span className="w-5 h-5 rounded-full bg-amber-400 text-slate-950 font-black text-[10px] flex items-center justify-center">
               {pendingHabilitaciones.length}
@@ -548,7 +548,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             </div>
 
             <p className="text-[11px] text-slate-400 mt-2.5">
-              💡 <strong>Regla del sistema:</strong> El código no lo pone el conductor. Cuando el chofer envía el comprobante de transferencia al WhatsApp <strong>3489690058</strong>, el administrador ingresa con clave <strong>0608</strong> y le habilita el tiempo pagado. En ese preciso momento comienza el temporizador en vivo solo para ese chofer.
+              💡 <strong>Regla del sistema:</strong> El código no lo pone el conductor. Cuando el chofer envía el comprobante de transferencia al WhatsApp <strong>3489690058</strong>, el administrador le habilita el tiempo pagado una vez verificado. En ese preciso momento comienza el temporizador en vivo solo para ese chofer.
             </p>
           </div>
 

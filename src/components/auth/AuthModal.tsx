@@ -68,7 +68,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [regEmail, setRegEmail] = useState('');
   const [regPassword, setRegPassword] = useState('');
   const [regPhone, setRegPhone] = useState('');
-  const [regBarrio, setRegBarrio] = useState('Campana Centro (Plaza Eduardo Costa)');
+  const [regBarrio, setRegBarrio] = useState('');
   const [regRole, setRegRole] = useState<'pasajero' | 'chofer_moto' | 'chofer_auto'>('pasajero');
   const [showRegPassword, setShowRegPassword] = useState(false);
 
@@ -97,6 +97,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setAuthError(null);
     setSuccessMessage(null);
     setVerificationSentNotice(null);
+    setRegName('');
+    setRegEmail('');
+    setRegPassword('');
+    setRegPhone('');
+    setRegBarrio('');
+    setLoginEmail('');
+    setLoginPassword('');
 
     if (defaultMode) {
       setMode(defaultMode);
@@ -108,12 +115,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
     if (authUser) {
       setEditName(authUser.nombre || currentUser.name || '');
-      setEditBarrio(authUser.barrio || currentUser.barrio || 'Campana Centro');
+      setEditBarrio(authUser.barrio || currentUser.barrio || '');
       setEditPhone(authUser.phone || currentUser.phone || '');
     } else {
-      setEditName(currentUser.name || '');
-      setEditBarrio(currentUser.barrio || 'Campana Centro');
-      setEditPhone(currentUser.phone || '');
+      setEditName('');
+      setEditBarrio('');
+      setEditPhone('');
     }
   }, [isOpen, isAuthenticated, authUser, defaultMode]);
 
