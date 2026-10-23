@@ -224,6 +224,7 @@ export default function App() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [contextEventForChat, setContextEventForChat] = useState<MapEvent | null>(null);
   const [communityChatList, setCommunityChatList] = useState<MensajeChatFirestore[]>([]);
+  const [dismissedChatMsgId, setDismissedChatMsgId] = useState<string | null>(null);
 
   // Eventos Push en Pantalla (Deduplicación & Exposición de 15 Minutos)
   const [screenPushEvents, setScreenPushEvents] = useState<PushNotificationPayload[]>([]);
@@ -999,10 +1000,10 @@ export default function App() {
         )}
       </main>
 
-      {/* Barra Flotante de Acceso Rápido al Chat Comunitario para interacción continua */}
-      {activeTab !== 'chat' && latestCommunityMessage && (
-        <div className="fixed bottom-14 left-3 right-3 sm:left-auto sm:right-5 sm:max-w-md z-30 animate-in slide-in-from-bottom-2 duration-300">
-          <div className="p-2 sm:p-2.5 rounded-2xl bg-[#090d16]/95 backdrop-blur-xl border border-purple-500/40 shadow-2xl flex items-center justify-between gap-3 text-xs">
+      {/* Barra Flotante de Acceso Rápido al Chat Comunitario (Ubicada más arriba para evitar superposiciones) */}
+      {activeTab !== 'chat' && latestCommunityMessage && latestCommunityMessage.id !== dismissedChatMsgId && (
+        <div className="fixed bottom-24 sm:bottom-28 right-3 sm:right-5 max-w-[calc(100vw-24px)] sm:max-w-sm z-30 animate-in slide-in-from-bottom-3 duration-300">
+          <div className="p-2 sm:p-2.5 rounded-2xl bg-[#090d16]/95 backdrop-blur-xl border border-purple-500/40 shadow-2xl flex items-center justify-between gap-2.5 text-xs">
             <button
               onClick={() => setActiveTab('chat')}
               className="flex items-center gap-2.5 flex-1 min-w-0 text-left cursor-pointer group"
@@ -1027,9 +1028,17 @@ export default function App() {
 
             <button
               onClick={() => setActiveTab('chat')}
-              className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs shrink-0 cursor-pointer shadow-md shadow-purple-600/30 active:scale-95 transition-all flex items-center gap-1"
+              className="px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs shrink-0 cursor-pointer shadow-md shadow-purple-600/30 active:scale-95 transition-all flex items-center gap-1"
             >
               <span>Ver Chat</span>
+            </button>
+
+            <button
+              onClick={() => setDismissedChatMsgId(latestCommunityMessage.id)}
+              className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors shrink-0 cursor-pointer"
+              title="Ocultar aviso de chat"
+            >
+              <X className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
@@ -1094,7 +1103,9 @@ export default function App() {
       <ContactAdModal
         isOpen={isContactAdOpen}
         onClose={() => setIsContactAdOpen(false)}
-        onSubmitInquiry={() => showToast('Consulta enviada')}
+        onSubmitInquiry={(data) =>
+          showToast(`Solicitud para "${data.businessName}" registrada. WhatsApp: 3489686939`)
+        }
       />
 
       <PublicApiModal

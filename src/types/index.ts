@@ -297,6 +297,8 @@ export interface AdListing {
   description: string;
   phone: string;
   linkUrl: string;
+  whatsappUrl?: string;
+  imageUrl?: string;
   zone: string;
   discountBadge?: string;
   isActive: boolean;

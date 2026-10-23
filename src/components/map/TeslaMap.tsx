@@ -149,6 +149,56 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
     userLng: number;
   } | null>(null);
 
+  // Auto-hide cards logic: 8 seconds of exposure, waking up on touch/hover, staying while interacting
+  const [areCardsVisible, setAreCardsVisible] = useState(true);
+  const [isHoveringCards, setIsHoveringCards] = useState(false);
+  const hideTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const isHoveringCardsRef = useRef(false);
+  const isRouteDropdownOpenRef = useRef(false);
+  isHoveringCardsRef.current = isHoveringCards;
+  isRouteDropdownOpenRef.current = isRouteDropdownOpen;
+
+  const resetHideTimer = () => {
+    setAreCardsVisible(true);
+
+    if (hideTimerRef.current) {
+      clearTimeout(hideTimerRef.current);
+      hideTimerRef.current = null;
+    }
+
+    hideTimerRef.current = setTimeout(() => {
+      // Don't auto-hide if user is hovering cards or has route dropdown open
+      if (!isHoveringCardsRef.current && !isRouteDropdownOpenRef.current) {
+        setAreCardsVisible(false);
+      }
+    }, 8000);
+  };
+
+  // Re-start 8s exposure timer on mount (e.g. when returning from another section/tab)
+  useEffect(() => {
+    resetHideTimer();
+    return () => {
+      if (hideTimerRef.current) {
+        clearTimeout(hideTimerRef.current);
+      }
+    };
+  }, []);
+
+  const handleCardMouseEnter = () => {
+    setIsHoveringCards(true);
+    setAreCardsVisible(true);
+    if (hideTimerRef.current) {
+      clearTimeout(hideTimerRef.current);
+      hideTimerRef.current = null;
+    }
+  };
+
+  const handleCardMouseLeave = () => {
+    setIsHoveringCards(false);
+    resetHideTimer();
+  };
+
   const activeRoute = routes.find((r) => r.id === selectedRouteId) || routes[0];
   const nearestBus = liveBuses[0];
 
@@ -204,7 +254,17 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
 
     mapInstanceRef.current = map;
 
+    const handleResize = () => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.invalidateSize();
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    const initialResizeTimer = setTimeout(handleResize, 250);
+
     return () => {
+      clearTimeout(initialResizeTimer);
+      window.removeEventListener('resize', handleResize);
       map.remove();
       mapInstanceRef.current = null;
     };
@@ -516,6 +576,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
           const stopMarker = L.marker([stop.lat, stop.lng], { icon: stopTitilandoIcon });
           stopMarker.on('click', () => {
             // Mostrar la tarjeta con la información de la parada y el botón "IR"
+            resetHideTimer();
             setSelectedStop({ stop, route });
             if (stopTrajectoryLayerRef.current) {
               stopTrajectoryLayerRef.current.clearLayers();
@@ -869,12 +930,42 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
   };
 
   return (
-    <div className="relative w-full h-full overflow-hidden bg-[#07090e]">
+    <div
+      onMouseMove={resetHideTimer}
+      onTouchStart={resetHideTimer}
+      onClick={resetHideTimer}
+      className="relative w-full h-full overflow-hidden bg-[#07090e]"
+    >
       {/* Map Container Element */}
       <div ref={mapContainerRef} className="w-full h-full z-0" />
 
-      {/* Top Route Selector Dropdown: Solo Desplegable Elegir Línea / Recorrido sin opciones debajo que tapen el mapa */}
-      <div className="absolute top-4 left-4 z-20 pointer-events-auto">
+      {/* Pill indicador cuando las tarjetas están ocultas en Modo Mapa Libre */}
+      {!areCardsVisible && (
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 pointer-events-auto animate-in fade-in zoom-in-95 duration-300">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              resetHideTimer();
+            }}
+            className="h-8.5 px-4 rounded-full bg-slate-900/90 hover:bg-slate-800 text-sky-300 hover:text-white border border-sky-400/40 shadow-2xl backdrop-blur-md text-xs font-semibold flex items-center gap-2 cursor-pointer transition-all active:scale-95 ring-1 ring-sky-400/20"
+            title="Tocar para mostrar controles y tarjetas"
+          >
+            <span className="w-2 h-2 rounded-full bg-sky-400 animate-pulse" />
+            <span>Modo Mapa Libre · Tocar para ver controles</span>
+          </button>
+        </div>
+      )}
+
+      {/* Top Route Selector Dropdown */}
+      <div
+        onMouseEnter={handleCardMouseEnter}
+        onMouseLeave={handleCardMouseLeave}
+        className={`absolute top-4 left-4 z-20 transition-all duration-500 ease-in-out ${
+          areCardsVisible
+            ? 'opacity-100 translate-y-0 pointer-events-auto'
+            : 'opacity-0 -translate-y-3 pointer-events-none'
+        }`}
+      >
         <div className="relative">
           <button
             onClick={() => setIsRouteDropdownOpen(!isRouteDropdownOpen)}
@@ -978,26 +1069,34 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
         </div>
       </div>
 
-      {/* Top-Right: Ubicación Inteligente para Pedir Transporte Alternativo (Sin superponer tarjetas) */}
+      {/* Top-Right: Botón de Pedir Transporte Alternativo (A la izquierda del zoom +- para no superponerse) */}
       {onOpenPedirTransporte && (
-        <div className="absolute top-4 right-4 z-20 pointer-events-auto animate-in fade-in slide-in-from-top-2 duration-300">
+        <div
+          onMouseEnter={handleCardMouseEnter}
+          onMouseLeave={handleCardMouseLeave}
+          className={`absolute top-4 right-14 sm:right-16 z-20 transition-all duration-500 ease-in-out ${
+            areCardsVisible
+              ? 'opacity-100 translate-y-0 pointer-events-auto'
+              : 'opacity-0 -translate-y-3 pointer-events-none'
+          }`}
+        >
           <button
             onClick={onOpenPedirTransporte}
-            className="group relative h-11 px-4 rounded-2xl bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black text-xs flex items-center gap-2 shadow-2xl shadow-amber-500/35 active:scale-95 transition-all cursor-pointer ring-2 ring-amber-300/70 hover:ring-amber-200"
+            className="group relative h-8.5 sm:h-9 px-3 rounded-xl bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black text-[11px] sm:text-xs flex items-center gap-1.5 shadow-xl shadow-amber-500/25 active:scale-95 transition-all cursor-pointer ring-1 ring-amber-300/80 hover:ring-amber-200"
             title="Pedir Transporte Alternativo (Aviso inmediato a Choferes de Moto y Auto Taxi)"
           >
-            <span className="relative flex h-2.5 w-2.5">
+            <span className="relative flex h-2 w-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-slate-950 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-slate-950"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-slate-950"></span>
             </span>
-            <Zap className="w-4 h-4 fill-slate-950" />
+            <Zap className="w-3.5 h-3.5 fill-slate-950" />
             <span className="hidden sm:inline tracking-tight font-extrabold">
               Pedir Transporte Alternativo
             </span>
             <span className="sm:hidden font-extrabold">
               Pedir Transporte
             </span>
-            <span className="hidden md:flex items-center gap-1 pl-1.5 border-l border-slate-950/25 text-[10px] font-mono font-bold text-slate-900">
+            <span className="hidden md:flex items-center gap-0.5 pl-1.5 border-l border-slate-950/25 text-[9px] font-mono font-bold text-slate-900">
               <span>🏍️</span>
               <span>🚕</span>
             </span>
@@ -1009,7 +1108,15 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
           ACTIVE DRIVER TRAYECTORY HUD (When a taxi is selected in Taxis & Motos)
          ========================================================================= */}
       {activeTrackingTaxi && trajectoryInfo && (
-        <div className="absolute top-18 left-4 right-4 sm:right-auto sm:w-[380px] z-30 pointer-events-auto animate-in slide-in-from-top-4 duration-300">
+        <div
+          onMouseEnter={handleCardMouseEnter}
+          onMouseLeave={handleCardMouseLeave}
+          className={`absolute top-16 sm:top-18 left-4 right-4 sm:right-auto sm:w-[380px] z-30 transition-all duration-500 ease-in-out ${
+            areCardsVisible
+              ? 'opacity-100 translate-y-0 pointer-events-auto'
+              : 'opacity-0 -translate-y-3 pointer-events-none'
+          }`}
+        >
           <div className="glass-panel p-4 rounded-3xl shadow-2xl border border-emerald-400/40 relative overflow-hidden">
             {/* Ambient top green gradient line */}
             <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-400 via-teal-300 to-sky-400" />
@@ -1105,7 +1212,15 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
           ACTIVE STOP TRAJECTORY HUD (Guía GPS Activa a Parada)
          ========================================================================= */}
       {stopTrajectoryInfo && (
-        <div className="absolute top-18 left-4 right-4 sm:right-auto sm:w-[390px] z-30 pointer-events-auto animate-in slide-in-from-top-4 duration-300">
+        <div
+          onMouseEnter={handleCardMouseEnter}
+          onMouseLeave={handleCardMouseLeave}
+          className={`absolute top-16 sm:top-18 left-4 right-4 sm:right-auto sm:w-[390px] z-30 transition-all duration-500 ease-in-out ${
+            areCardsVisible
+              ? 'opacity-100 translate-y-0 pointer-events-auto'
+              : 'opacity-0 -translate-y-3 pointer-events-none'
+          }`}
+        >
           <div className="glass-panel p-4 rounded-3xl shadow-2xl border border-cyan-400/50 relative overflow-hidden bg-[#070b14]/95 backdrop-blur-2xl">
             {/* Top ambient electric cyan gradient */}
             <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 animate-pulse" />
@@ -1223,7 +1338,15 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
 
       {/* Tesla Navigation HUD Card for Bus Corridor (Bottom-Left) */}
       {!activeTrackingTaxi && !stopTrajectoryInfo && !selectedStop && (
-        <div className="absolute bottom-6 left-4 z-20 pointer-events-auto max-w-[calc(100vw-150px)] sm:max-w-xs">
+        <div
+          onMouseEnter={handleCardMouseEnter}
+          onMouseLeave={handleCardMouseLeave}
+          className={`absolute bottom-6 left-4 z-20 max-w-[calc(100vw-150px)] sm:max-w-xs transition-all duration-500 ease-in-out ${
+            areCardsVisible
+              ? 'opacity-100 translate-y-0 pointer-events-auto'
+              : 'opacity-0 translate-y-3 pointer-events-none'
+          }`}
+        >
           <div className="glass-panel p-3.5 rounded-2xl shadow-2xl flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-sky-400/15 border border-sky-400/30 flex items-center justify-center text-sky-300 shrink-0">
               <Compass className="w-4 h-4" />
@@ -1251,8 +1374,14 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
 
       {/* Floating Bottom Quick Action Pills (Center-Right) con desplazamiento inteligente anti-superposición */}
       <div
-        className={`absolute right-4 z-20 flex items-center gap-2 transition-all duration-300 pointer-events-auto ${
+        onMouseEnter={handleCardMouseEnter}
+        onMouseLeave={handleCardMouseLeave}
+        className={`absolute right-4 z-20 flex items-center gap-2 transition-all duration-500 ease-in-out ${
           selectedStop ? 'bottom-32 sm:bottom-28' : 'bottom-6'
+        } ${
+          areCardsVisible
+            ? 'opacity-100 translate-y-0 pointer-events-auto'
+            : 'opacity-0 translate-y-3 pointer-events-none'
         }`}
       >
         <button
@@ -1283,7 +1412,15 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
 
       {/* Stop Inspector Bottom Drawer (Minimal Glass Drawer) con Información Completa y Botón IR (Guía GPS) */}
       {!stopTrajectoryInfo && selectedStop && (
-        <div className="absolute bottom-6 left-4 right-4 sm:left-auto sm:right-auto sm:left-4 sm:w-92 z-30 pointer-events-auto animate-in slide-in-from-bottom duration-200">
+        <div
+          onMouseEnter={handleCardMouseEnter}
+          onMouseLeave={handleCardMouseLeave}
+          className={`absolute bottom-6 left-4 right-4 sm:left-auto sm:right-auto sm:left-4 sm:w-92 z-30 transition-all duration-500 ease-in-out ${
+            areCardsVisible
+              ? 'opacity-100 translate-y-0 pointer-events-auto'
+              : 'opacity-0 translate-y-4 pointer-events-none'
+          }`}
+        >
           <div className="glass-panel p-4 rounded-3xl shadow-2xl space-y-3 border border-white/10 bg-[#080c16]/95 backdrop-blur-2xl">
             {/* Top Accent Line with Route Color */}
             <div
@@ -1401,3 +1538,4 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
     </div>
   );
 };
+

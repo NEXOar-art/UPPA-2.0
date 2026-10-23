@@ -221,6 +221,28 @@
   animation: dash-flow 1.2s linear infinite;
 }
 
+/* Infinite Marquee for Local Sponsors Banner */
+@keyframes marquee-scroll {
+  0% {
+    transform: translateX(0%);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-marquee-infinite {
+  display: flex;
+  width: max-content;
+  will-change: transform;
+  animation: marquee-scroll 34s linear infinite;
+}
+
+.animate-marquee-infinite:hover,
+.marquee-paused {
+  animation-play-state: paused !important;
+}
+
 /* Custom scrollbars */
 ::-webkit-scrollbar {
   width: 4px;

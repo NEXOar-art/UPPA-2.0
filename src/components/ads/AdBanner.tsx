@@ -1,6 +1,11 @@
 import React, { useState } from 'react';
 import { AdListing } from '../../types';
-import { Megaphone, ExternalLink, Sparkles, ChevronRight, X } from 'lucide-react';
+import {
+  ExternalLink,
+  MessageCircle,
+  X,
+  Megaphone,
+} from 'lucide-react';
 
 interface AdBannerProps {
   ads: AdListing[];
@@ -8,73 +13,155 @@ interface AdBannerProps {
 }
 
 export const AdBanner: React.FC<AdBannerProps> = ({ ads, onOpenContactModal }) => {
-  const [currentIndex, setCurrentIndex] = useState(0);
   const [isDismissed, setIsDismissed] = useState(false);
 
   const activeAds = ads.filter((a) => a.isActive);
-  if (activeAds.length === 0 || isDismissed) return null;
 
-  const currentAd = activeAds[currentIndex % activeAds.length];
+  // Botón para habilitar el banner cuando el usuario lo cerró con la "x"
+  if (isDismissed) {
+    return (
+      <div className="fixed bottom-3 left-3 sm:left-4 z-30 animate-in fade-in slide-in-from-bottom-2 duration-200 pointer-events-auto">
+        <button
+          type="button"
+          onClick={() => setIsDismissed(false)}
+          className="h-8.5 px-3.5 rounded-full bg-[#0a0d14]/95 hover:bg-slate-900 text-amber-300 hover:text-white border border-amber-400/40 shadow-2xl backdrop-blur-md text-xs font-bold flex items-center gap-2 cursor-pointer transition-all active:scale-95 ring-1 ring-amber-400/30 group"
+          title="Habilitar banner publicitario de auspicios locales"
+        >
+          <Megaphone className="w-3.5 h-3.5 text-amber-400 group-hover:scale-110 transition-transform shrink-0" />
+          <span>Habilitar Banner Publicitario</span>
+          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse ml-0.5" />
+        </button>
+      </div>
+    );
+  }
 
-  const handleNext = () => {
-    setCurrentIndex((prev) => (prev + 1) % activeAds.length);
-  };
+  if (activeAds.length === 0) return null;
+
+  // Cloned list to achieve smooth infinite looping without visual seams
+  const marqueeItems = [...activeAds, ...activeAds, ...activeAds];
 
   return (
-    <div className="w-full bg-[#0c0e15] border-t border-slate-800/80 px-4 py-2.5 flex items-center justify-between gap-3 text-xs text-slate-300">
-      {/* Ad content */}
-      <div className="flex items-center gap-3 min-w-0 flex-1">
-        <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700/60 shrink-0">
-          Auspicio Local
-        </span>
-
-        <div className="flex items-center gap-2 truncate">
-          <strong className="text-white font-semibold truncate">{currentAd.businessName}:</strong>
-          <span className="text-slate-400 truncate">{currentAd.title}</span>
-          {currentAd.discountBadge && (
-            <span className="hidden sm:inline text-[10px] font-mono font-bold text-amber-400 bg-amber-950/60 border border-amber-600/40 px-1.5 py-0.2 rounded">
-              {currentAd.discountBadge}
-            </span>
-          )}
-        </div>
-      </div>
-
-      {/* Action buttons */}
-      <div className="flex items-center gap-2 shrink-0">
-        <a
-          href={currentAd.linkUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="px-2.5 py-1 rounded-lg bg-cyan-950/50 hover:bg-cyan-900/60 text-cyan-300 border border-cyan-800/60 text-xs font-medium flex items-center gap-1 transition-colors"
-        >
-          <span>Ver promo</span>
-          <ExternalLink className="w-3 h-3" />
-        </a>
-
-        {activeAds.length > 1 && (
+    <div
+      className="w-full bg-[#0a0d14]/95 border-t border-slate-800/80 backdrop-blur-xl relative overflow-hidden z-20 transition-all select-none"
+      title="Auspicios locales en vivo: pasá el cursor para pausar y hacer clic en cualquier comercio"
+    >
+      <div className="flex items-center h-12 sm:h-13 px-2 sm:px-3 gap-2">
+        {/* Left Sticky Card: "Auspicio Local" abre el formulario para pedir incluir un negocio */}
+        <div className="flex items-center gap-1.5 shrink-0 z-10 bg-[#0a0d14] pr-2 border-r border-slate-800/80">
           <button
-            onClick={handleNext}
-            className="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
-            title="Siguiente anuncio"
+            type="button"
+            onClick={onOpenContactModal}
+            className="flex items-center gap-1.5 text-[10.5px] uppercase font-black tracking-wider px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500/25 via-orange-500/25 to-amber-600/25 hover:from-amber-500/40 hover:to-orange-500/40 text-amber-300 hover:text-white border border-amber-400/40 hover:border-amber-300 shadow-md shadow-amber-500/10 active:scale-95 transition-all cursor-pointer shrink-0 group"
+            title="Pedir incluir un negocio en el banner publicitario de UPPA"
           >
-            <ChevronRight className="w-3.5 h-3.5" />
+            <Megaphone className="w-3.5 h-3.5 text-amber-400 group-hover:scale-110 transition-transform shrink-0" />
+            <span className="font-black">Auspicio Local</span>
+            <span className="hidden sm:inline text-[9px] bg-amber-400/20 px-1.5 py-0.2 rounded text-amber-200 border border-amber-400/30 font-bold">
+              + Sumar negocio
+            </span>
           </button>
-        )}
+        </div>
 
-        <button
-          onClick={onOpenContactModal}
-          className="hidden md:inline px-2 py-1 text-[11px] text-slate-400 hover:text-slate-200 transition-colors"
-        >
-          Anunciar acá
-        </button>
+        {/* Infinite Moving Marquee Track (Auto-pausa suavemente al pasar el mouse encima) */}
+        <div className="flex-1 overflow-hidden relative">
+          <div className="animate-marquee-infinite flex items-center gap-3">
+            {marqueeItems.map((ad, idx) => (
+              <div
+                key={`${ad.id}-${idx}`}
+                className="flex items-center gap-2.5 px-3 py-1 rounded-xl bg-white/[0.03] hover:bg-white/[0.08] border border-white/5 hover:border-sky-400/40 transition-all shrink-0 group"
+              >
+                {/* Image */}
+                <a
+                  href={ad.linkUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="relative w-8 h-8 rounded-lg overflow-hidden shrink-0 border border-white/10 group-hover:border-sky-400 transition-colors"
+                  title={`Visitar ${ad.businessName}`}
+                >
+                  <img
+                    src={ad.imageUrl || 'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=300&q=80'}
+                    alt={ad.businessName}
+                    referrerPolicy="no-referrer"
+                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                  />
+                </a>
 
-        <button
-          onClick={() => setIsDismissed(true)}
-          className="p-1 text-slate-500 hover:text-slate-400"
-          title="Ocultar"
-        >
-          <X className="w-3.5 h-3.5" />
-        </button>
+                {/* Information Text */}
+                <a
+                  href={ad.linkUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 min-w-0"
+                  title={`Ingresar a ${ad.businessName}: ${ad.linkUrl}`}
+                >
+                  <div className="flex flex-col text-left">
+                    <div className="flex items-center gap-1.5">
+                      <strong className="text-white font-bold text-xs group-hover:text-sky-300 transition-colors truncate">
+                        {ad.businessName}
+                      </strong>
+                      {ad.discountBadge && (
+                        <span className="text-[9.5px] font-mono font-extrabold text-amber-300 bg-amber-400/15 border border-amber-400/30 px-1.5 py-0.2 rounded shrink-0">
+                          {ad.discountBadge}
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-[10.5px] text-slate-400 group-hover:text-slate-200 transition-colors truncate max-w-[190px] sm:max-w-xs">
+                      {ad.title}
+                    </span>
+                  </div>
+                </a>
+
+                {/* Direct Action Buttons: Web and WhatsApp */}
+                <div className="flex items-center gap-1.5 ml-1 shrink-0">
+                  <a
+                    href={ad.linkUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="h-7 px-2.5 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-400/40 text-cyan-200 hover:text-white text-[11px] font-extrabold flex items-center gap-1 transition-all active:scale-95"
+                    title={`Abrir sitio web oficial: ${ad.linkUrl}`}
+                  >
+                    <span>Web</span>
+                    <ExternalLink className="w-2.5 h-2.5 text-cyan-300" />
+                  </a>
+
+                  {ad.whatsappUrl && (
+                    <a
+                      href={ad.whatsappUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="h-7 px-2.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-400/40 text-emerald-300 hover:text-emerald-200 text-[11px] font-extrabold flex items-center gap-1 transition-all active:scale-95"
+                      title="Contactar o pedir por WhatsApp"
+                    >
+                      <MessageCircle className="w-3 h-3 fill-emerald-400/30 text-emerald-400" />
+                      <span className="hidden sm:inline">WhatsApp</span>
+                    </a>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Right Actions: Anunciar Acá & Botón Cruz "X" para cerrar banner */}
+        <div className="flex items-center gap-1.5 shrink-0 z-10 bg-[#0a0d14] pl-2 border-l border-slate-800/80">
+          <button
+            type="button"
+            onClick={onOpenContactModal}
+            className="hidden lg:flex px-2 py-1 rounded-lg text-[10.5px] font-semibold text-slate-400 hover:text-amber-300 hover:bg-white/[0.04] transition-colors cursor-pointer"
+            title="Pedir incluir mi negocio en el banner"
+          >
+            Anunciar
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setIsDismissed(true)}
+            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+            title="Cerrar banner publicitario (podrás habilitarlo nuevamente en cualquier momento)"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
       </div>
     </div>
   );

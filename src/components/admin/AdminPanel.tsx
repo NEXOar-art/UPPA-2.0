@@ -205,9 +205,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       try {
         localStorage.setItem('UPPA_ADMIN_UNLOCKED', 'true');
       } catch {}
-      showSuccessBanner('Acceso administrativo concedido con clave 0608');
+      showSuccessBanner('Acceso administrativo concedido');
     } else {
-      setPinError('Clave incorrecta. La clave de administración autorizada es 0608.');
+      setPinError('Clave incorrecta. Por favor verificá el código e intentá nuevamente.');
     }
   };
 
@@ -222,7 +222,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   // Handle Enable Driver with PIN "0608"
   const handleHabilitarChofer = async (habId: string) => {
     if (adminActivationPin.trim() !== ADMIN_MASTER_PIN) {
-      showErrorBanner('Clave de administrador incorrecta. Debe ingresar 0608.');
+      showErrorBanner('Clave de administrador incorrecta.');
       return;
     }
 
