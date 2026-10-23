@@ -264,14 +264,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           </div>
 
           <form onSubmit={handleUnlockWithPin} className="space-y-5">
-            <div className="p-3.5 rounded-2xl bg-purple-950/40 border border-purple-500/25 text-xs text-slate-300 leading-relaxed">
-              <div className="flex items-center gap-2 text-purple-300 font-bold mb-1">
-                <KeyRound className="w-4 h-4 text-purple-400" />
-                <span>Control de Seguridad & Habilitación</span>
-              </div>
-              El administrador ingresa con clave autorizada <strong className="text-white bg-purple-900/80 px-1.5 py-0.5 rounded border border-purple-400/50">0608</strong> para verificar pagos y habilitar el temporizador de choferes.
-            </div>
-
             <div>
               <label className="block text-xs font-bold text-slate-300 mb-2">
                 Ingresá la Clave de Administrador
@@ -284,7 +276,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     setPinInput(e.target.value);
                     if (pinError) setPinError(null);
                   }}
-                  placeholder="Clave (ej: 0608)"
+                  placeholder="••••"
                   className="w-full h-12 px-4 rounded-xl bg-slate-900/90 border border-purple-400/40 text-white font-mono text-center text-lg tracking-widest focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent transition-all"
                   autoFocus
                 />
@@ -292,23 +284,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               {pinError && <p className="text-xs text-rose-400 font-semibold mt-2">{pinError}</p>}
             </div>
 
-            <div className="flex items-center gap-2 pt-2">
+            <div className="pt-2">
               <button
                 type="submit"
-                className="flex-1 h-12 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-purple-600/30 transition-all cursor-pointer active:scale-98"
+                className="w-full h-12 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-purple-600/30 transition-all cursor-pointer active:scale-98"
               >
                 <Unlock className="w-4 h-4" />
-                <span>Ingresar con Clave 0608</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setPinInput('0608');
-                }}
-                className="h-12 px-3 rounded-xl bg-purple-950/60 border border-purple-400/30 text-purple-300 hover:text-white text-xs font-mono font-bold transition-all"
-                title="Autocompletar clave 0608"
-              >
-                0608
+                <span>Ingresar al Panel</span>
               </button>
             </div>
           </form>
