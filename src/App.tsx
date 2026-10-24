@@ -51,6 +51,7 @@ import {
   subscribeToChat,
   onPushNotification,
   triggerInAppPushNotification,
+  crearReporte,
 } from './services/realtimeFirebaseService';
 
 import {
@@ -74,8 +75,6 @@ import {
   Mail,
   MoreVertical,
   Zap,
-  Sun,
-  Moon,
 } from 'lucide-react';
 
 export default function App() {
@@ -218,24 +217,6 @@ export default function App() {
   const [activeTrackingTaxi, setActiveTrackingTaxi] = useState<TaxiListing | null>(null);
   const [isHeaderMenuOpen, setIsHeaderMenuOpen] = useState(false);
   const headerMenuRef = useRef<HTMLDivElement>(null);
-
-  // Escenario Inteligente de App Claro / Oscuro
-  const [themeMode, setThemeMode] = useState<'dark' | 'light'>(() => {
-    try {
-      const stored = localStorage.getItem('uppa_theme_mode');
-      if (stored === 'light' || stored === 'dark') return stored;
-    } catch {}
-    return 'dark';
-  });
-
-  const toggleThemeMode = () => {
-    const next = themeMode === 'dark' ? 'light' : 'dark';
-    setThemeMode(next);
-    try {
-      localStorage.setItem('uppa_theme_mode', next);
-    } catch {}
-    showToast(next === 'light' ? 'Modo Claro activado' : 'Modo Oscuro activado');
-  };
 
   // Modals
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
@@ -389,15 +370,7 @@ export default function App() {
     setTimeout(() => setToastMessage(null), 3000);
   };
 
-  const latestCommunityMessage = useMemo(() => {
-    const twentyMinMs = 20 * 60 * 1000;
-    const now = Date.now();
-    const active = communityChatList.filter((m) => {
-      const ts = m.enviadoEn ? Number(m.enviadoEn) : now;
-      return (now - ts) < twentyMinMs;
-    });
-    return active.length > 0 ? active[active.length - 1] : null;
-  }, [communityChatList]);
+  const latestCommunityMessage = communityChatList.length > 0 ? communityChatList[communityChatList.length - 1] : null;
 
   const sentiment = computeLineSentiment(messages, events);
 
@@ -560,10 +533,32 @@ export default function App() {
       confirmedByUserIds: [currentUser.id],
       reportedAt: 'Recién',
     };
-    setEvents([created, ...events]);
+    setEvents((prev) => [created, ...prev]);
     setSelectedEvent(created);
     setActiveTab('map');
-    showToast('Alerta publicada en el mapa');
+    showToast(`✅ ${created.title} registrado en el mapa`);
+
+    const firestoreType: any =
+      newEventData.type === 'accident'
+        ? 'accidente'
+        : newEventData.type === 'late'
+        ? 'demora'
+        : newEventData.type === 'traffic'
+        ? 'congestion'
+        : newEventData.type === 'control'
+        ? 'control'
+        : newEventData.type === 'corte' || newEventData.type === 'danger'
+        ? 'corte'
+        : 'alerta';
+
+    crearReporte({
+      usuarioId: currentUser.id || 'usr-anon',
+      nombreUsuario: currentUser.name || 'Vecino UPPA',
+      tipo: firestoreType,
+      descripcion: newEventData.description || newEventData.title,
+      ubicacion: { lat: newEventData.lat, lng: newEventData.lng },
+      ruta: newEventData.routeId === 'route-vigalondo-mcdonalds' ? 'vigalondo-mcdonalds' : 'campana-zarate',
+    }).catch((err) => console.warn('Firestore report write notice:', err));
   };
 
   const handlePublishTaxi = (
@@ -708,9 +703,7 @@ export default function App() {
   }
 
   return (
-    <div className={`flex flex-col h-screen w-screen overflow-hidden font-sans transition-colors duration-300 ${
-      themeMode === 'light' ? 'bg-[#f4f6fb] text-slate-800' : 'bg-[#07090e] text-slate-100'
-    }`}>
+    <div className="flex flex-col h-screen w-screen bg-[#07090e] text-slate-100 overflow-hidden font-sans">
       {/* Toast Notification */}
       {toastMessage && (
         <div className="fixed top-14 left-1/2 -translate-x-1/2 z-50 glass-panel px-4 py-2 rounded-2xl shadow-2xl text-xs flex items-center gap-2 border-sky-400/40 text-sky-200 animate-in fade-in duration-200">
@@ -802,17 +795,11 @@ export default function App() {
       )}
 
       {/* Floating Glass Top Bar (Tesla / Uber Style) */}
-      <header className={`h-14 px-4 backdrop-blur-2xl border-b flex items-center justify-between shrink-0 z-30 transition-colors duration-300 ${
-        themeMode === 'light'
-          ? 'bg-white/85 border-slate-200/90 text-slate-900 shadow-sm'
-          : 'bg-[#0a0d14]/75 border-white/5 text-white'
-      }`}>
+      <header className="h-14 px-4 bg-[#0a0d14]/75 backdrop-blur-2xl border-b border-white/5 flex items-center justify-between shrink-0 z-30">
         {/* Brand: Solo el texto UPPA sin icono */}
         <div className="flex items-center gap-2">
           <button onClick={() => setActiveTab('map')} className="flex items-center">
-            <span className={`text-lg font-black tracking-wider font-display transition-colors ${
-              themeMode === 'light' ? 'text-slate-950' : 'text-white'
-            }`}>
+            <span className="text-lg font-black tracking-wider text-white font-display">
               UPPA
             </span>
           </button>
@@ -879,23 +866,6 @@ export default function App() {
 
         {/* Right Actions */}
         <div className="flex items-center gap-1.5">
-          {/* Botón Inteligente de Escenario Claro / Oscuro */}
-          <button
-            onClick={toggleThemeMode}
-            className={`h-8 w-8 rounded-xl flex items-center justify-center transition-all cursor-pointer active:scale-95 ${
-              themeMode === 'light'
-                ? 'bg-amber-100/90 text-amber-700 hover:bg-amber-200/90 border border-amber-300/60 shadow-sm'
-                : 'glass-button text-amber-300 hover:text-white'
-            }`}
-            title={themeMode === 'dark' ? 'Cambiar a Modo Claro (Día)' : 'Cambiar a Modo Oscuro (Noche)'}
-          >
-            {themeMode === 'dark' ? (
-              <Sun className="w-4 h-4 text-amber-400 hover:rotate-90 transition-transform" />
-            ) : (
-              <Moon className="w-4 h-4 text-slate-800 hover:-rotate-12 transition-transform" />
-            )}
-          </button>
-
           {/* Menú de 3 puntos: Prestar Servicio / Pedir Transporte Alternativo */}
           <div className="relative" ref={headerMenuRef}>
             <button
@@ -1035,7 +1005,9 @@ export default function App() {
                 activeTrackingTaxi={activeTrackingTaxi}
                 onClearTrackingTaxi={() => setActiveTrackingTaxi(null)}
                 onOpenPedirTransporte={() => setIsPedirTransporteOpen(true)}
-                themeMode={themeMode}
+                onAddEvent={handleCreateEvent}
+                currentUserName={currentUser.name}
+                currentUserId={currentUser.id}
               />
             </div>
 

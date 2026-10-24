@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
-import { TransitRoute, MapEvent, LiveBus, TaxiListing, BusStop } from '../../types';
+import { TransitRoute, MapEvent, LiveBus, TaxiListing, BusStop, EventType } from '../../types';
 import { UserLocation, getDistanceKm } from '../../utils/geolocation';
 import { MAP_CONFIG } from '../../config/api';
 import {
@@ -91,8 +91,111 @@ interface TeslaMapProps {
   activeTrackingTaxi?: TaxiListing | null;
   onClearTrackingTaxi?: () => void;
   onOpenPedirTransporte?: () => void;
-  themeMode?: 'dark' | 'light';
+  onAddEvent?: (event: Omit<MapEvent, 'id' | 'confirmations' | 'confirmedByUserIds' | 'reportedAt'>) => void;
+  currentUserName?: string;
+  currentUserId?: string;
 }
+
+export const TRANSIT_EVENT_TYPES: {
+  id: string;
+  type: EventType;
+  icon: string;
+  label: string;
+  subtitle: string;
+  defaultTitle: string;
+  colorClass: string;
+}[] = [
+  {
+    id: 'accidente',
+    type: 'accident',
+    icon: '💥',
+    label: 'Accidente en Ruta / Calle',
+    subtitle: 'Choque o siniestro vial que obstruye la calzada',
+    defaultTitle: 'Accidente vial',
+    colorClass: 'bg-red-500/10 hover:bg-red-500/20 border-red-500/30 text-red-200',
+  },
+  {
+    id: 'demora',
+    type: 'late',
+    icon: '⏳',
+    label: 'Demora Prolongada',
+    subtitle: 'Colectivo con atraso mayor a 20 minutos',
+    defaultTitle: 'Demora en servicio',
+    colorClass: 'bg-yellow-500/10 hover:bg-yellow-500/20 border-yellow-500/30 text-yellow-200',
+  },
+  {
+    id: 'congestion',
+    type: 'traffic',
+    icon: '🚗',
+    label: 'Congestión / Tránsito Lento',
+    subtitle: 'Tránsito a paso de hombre en rotonda o colectora',
+    defaultTitle: 'Tránsito lento',
+    colorClass: 'bg-orange-500/10 hover:bg-orange-500/20 border-orange-500/30 text-orange-200',
+  },
+  {
+    id: 'corte',
+    type: 'corte',
+    icon: '🚧',
+    label: 'Corte de Calle / Desvío',
+    subtitle: 'Calle cerrada por obras, baches o piquete con desvío',
+    defaultTitle: 'Corte y desvío',
+    colorClass: 'bg-purple-500/10 hover:bg-purple-500/20 border-purple-500/30 text-purple-200',
+  },
+  {
+    id: 'averia',
+    type: 'breakdown',
+    icon: '🔧',
+    label: 'Unidad Averiada',
+    subtitle: 'Colectivo detenido por desperfecto mecánico o neumático',
+    defaultTitle: 'Micro averiado',
+    colorClass: 'bg-rose-500/10 hover:bg-rose-500/20 border-rose-500/30 text-rose-200',
+  },
+  {
+    id: 'salteo',
+    type: 'missed',
+    icon: '❌',
+    label: 'No Paró / Colectivo Lleno',
+    subtitle: 'El chofer no se detuvo en la parada o venía colmado',
+    defaultTitle: 'No frenó en parada',
+    colorClass: 'bg-amber-500/10 hover:bg-amber-500/20 border-amber-500/30 text-amber-200',
+  },
+  {
+    id: 'control',
+    type: 'control',
+    icon: '👮',
+    label: 'Control Policial / Tránsito',
+    subtitle: 'Operativo de control o fiscalización en la traza',
+    defaultTitle: 'Control vehicular',
+    colorClass: 'bg-indigo-500/10 hover:bg-indigo-500/20 border-indigo-500/30 text-indigo-200',
+  },
+  {
+    id: 'inundacion',
+    type: 'danger',
+    icon: '🌧️',
+    label: 'Calle Anegada / Inundada',
+    subtitle: 'Acumulación de agua de lluvia o pozo profundo',
+    defaultTitle: 'Calle anegada',
+    colorClass: 'bg-cyan-500/10 hover:bg-cyan-500/20 border-cyan-500/30 text-cyan-200',
+  },
+  {
+    id: 'normal',
+    type: 'moving',
+    icon: '⚡',
+    label: 'Servicio Normal / Con Asiento',
+    subtitle: 'Colectivo circulando a horario y con lugares disponibles',
+    defaultTitle: 'Recorrido fluido',
+    colorClass: 'bg-emerald-500/10 hover:bg-emerald-500/20 border-emerald-500/30 text-emerald-200',
+  },
+  {
+    id: 'alerta',
+    type: 'danger',
+    icon: '⚠️',
+    label: 'Alerta General / Peligro',
+    subtitle: 'Semáforo fuera de servicio o peligro en calzada',
+    defaultTitle: 'Alerta de tránsito',
+    colorClass: 'bg-amber-400/10 hover:bg-amber-400/20 border-amber-400/30 text-amber-200',
+  },
+];
 
 interface TrajectoryResult {
   coordinates: [number, number][];
@@ -120,7 +223,9 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
   activeTrackingTaxi,
   onClearTrackingTaxi,
   onOpenPedirTransporte,
-  themeMode = 'dark',
+  onAddEvent,
+  currentUserName,
+  currentUserId,
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
@@ -138,14 +243,16 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
   const gasStationsLayerRef = useRef<L.LayerGroup | null>(null);
   const schoolsLayerRef = useRef<L.LayerGroup | null>(null);
 
-  // Map state (Cartografía original de Calles & Rutas HD)
-  const [activeTileStyle, setActiveTileStyle] = useState<'streets' | 'tesla-dark' | 'osm'>('streets');
+  // Map state
+  const [activeTileStyle, setActiveTileStyle] = useState<'streets' | 'tesla-dark' | 'osm'>('osm');
   const [showWeatherRadar, setShowWeatherRadar] = useState(false);
   const [showGasStations, setShowGasStations] = useState(false);
   const [showSchools, setShowSchools] = useState(false);
   const [isStopsPanelOpen, setIsStopsPanelOpen] = useState(false);
   const [isEventsPanelOpen, setIsEventsPanelOpen] = useState(false);
   const [stopSearchQuery, setStopSearchQuery] = useState('');
+  const [eventCustomNote, setEventCustomNote] = useState('');
+  const [eventRegisteredToast, setEventRegisteredToast] = useState<string | null>(null);
   const [selectedStop, setSelectedStop] = useState<{ stop: BusStop; route: TransitRoute } | null>(null);
 
   // Trajectory state for driver tracking
@@ -183,11 +290,79 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
     }
 
     hideTimerRef.current = setTimeout(() => {
-      // Don't auto-hide if user is hovering cards or interacting with stops or events panels
+      // Don't auto-hide if user is hovering cards or interacting with stops or events panel
       if (!isHoveringCardsRef.current && !isStopsPanelOpenRef.current && !isEventsPanelOpenRef.current) {
         setAreCardsVisible(false);
       }
     }, 8000);
+  };
+
+  const handleRegisterEventFromDropdown = (evOpt: {
+    id: string;
+    type: EventType;
+    icon: string;
+    label: string;
+    subtitle: string;
+    defaultTitle: string;
+    colorClass: string;
+  }) => {
+    let lat = userLocation?.lat;
+    let lng = userLocation?.lng;
+
+    if (!lat || !lng) {
+      if (mapInstanceRef.current) {
+        const center = mapInstanceRef.current.getCenter();
+        lat = center.lat;
+        lng = center.lng;
+      } else {
+        lat = -34.1683;
+        lng = -58.9592;
+      }
+    }
+
+    const note = eventCustomNote.trim() || evOpt.subtitle;
+    const title = evOpt.label;
+
+    const newEvent: Omit<MapEvent, 'id' | 'confirmations' | 'confirmedByUserIds' | 'reportedAt'> = {
+      routeId: selectedRouteId || 'route-zarate-malvinas',
+      type: evOpt.type,
+      title,
+      description: note,
+      lat,
+      lng,
+      reportedBy: currentUserName || 'Vecino UPPA',
+      reportedByUserId: currentUserId || 'usr-vecino',
+      direction: 'hacia_malvinas',
+      isVerified: true,
+      estado: 'activo',
+    };
+
+    if (onAddEvent) {
+      onAddEvent(newEvent);
+    }
+
+    if (mapInstanceRef.current) {
+      mapInstanceRef.current.flyTo([lat, lng], 15, { animate: true });
+    }
+
+    try {
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(`Inconveniente registrado: ${evOpt.label}`);
+        utterance.lang = 'es-AR';
+        utterance.rate = 1.05;
+        window.speechSynthesis.speak(utterance);
+      }
+    } catch {}
+
+    setEventRegisteredToast(`¡${evOpt.icon} ${evOpt.label} registrado en el mapa!`);
+    setTimeout(() => {
+      setEventRegisteredToast(null);
+    }, 3500);
+
+    setEventCustomNote('');
+    setIsEventsPanelOpen(false);
+    resetHideTimer();
   };
 
   // Re-start 8s exposure timer on mount (e.g. when returning from another section/tab)
@@ -1062,6 +1237,16 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
       {/* Map Container Element */}
       <div ref={mapContainerRef} className="w-full h-full z-0" />
 
+      {/* Toast de confirmación de evento registrado en el mapa */}
+      {eventRegisteredToast && (
+        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-50 pointer-events-none animate-in fade-in slide-in-from-top-3 duration-200">
+          <div className="glass-panel px-4 py-2.5 rounded-2xl bg-[#090d18]/95 border border-rose-400/50 shadow-2xl flex items-center gap-2.5 text-xs font-bold text-white backdrop-blur-xl">
+            <span className="w-2.5 h-2.5 rounded-full bg-rose-400 animate-ping" />
+            <span>{eventRegisteredToast}</span>
+          </div>
+        </div>
+      )}
+
       {/* Pill indicador cuando las tarjetas están ocultas en Modo Mapa Libre */}
       {!areCardsVisible && (
         <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 pointer-events-auto animate-in fade-in zoom-in-95 duration-300">
@@ -1079,7 +1264,26 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
         </div>
       )}
 
-
+      {/* Top-Left: Recorrido Total Malvinas ↔ Zárate (Sin desplegable) */}
+      <div
+        onMouseEnter={handleCardMouseEnter}
+        onMouseLeave={handleCardMouseLeave}
+        className={`absolute top-4 left-4 z-20 transition-all duration-500 ease-in-out ${
+          areCardsVisible
+            ? 'opacity-100 translate-y-0 pointer-events-auto'
+            : 'opacity-0 -translate-y-3 pointer-events-none'
+        }`}
+      >
+        <div className="glass-panel px-3 py-2 rounded-2xl flex items-center gap-2.5 text-xs shadow-xl border border-white/10 backdrop-blur-2xl bg-[#070b14]/90">
+          <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 shadow-[0_0_8px_#22d3ee] animate-pulse" />
+          <span className="font-extrabold text-white text-xs">
+            B° Malvinas ↔ Zárate Terminal
+          </span>
+          <span className="text-[10px] text-cyan-300 font-mono font-bold bg-cyan-500/15 px-1.5 py-0.5 rounded-full border border-cyan-400/30">
+            64 Paradas
+          </span>
+        </div>
+      </div>
 
       {/* Top-Right: Botón pequeño de Pedir Transporte Alternativo */}
       {onOpenPedirTransporte && (
@@ -1117,24 +1321,23 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
             : 'opacity-0 -translate-y-3 pointer-events-none'
         }`}
       >
-        {/* Botón 1: Paradas (con desplegable e info de ubicación + llevarme a esta ubicación) */}
+        {/* Botón 1: Paradas (solo icono 🚏 con desplegable de paradas) */}
         <div className="relative">
           <button
             onClick={() => {
               resetHideTimer();
-              setIsStopsPanelOpen(!isStopsPanelOpen);
+              const next = !isStopsPanelOpen;
+              setIsStopsPanelOpen(next);
+              if (next) setIsEventsPanelOpen(false);
             }}
-            className={`w-10 h-10 rounded-2xl flex flex-col items-center justify-center text-xs shadow-xl backdrop-blur-xl border transition-all active:scale-95 cursor-pointer ${
+            className={`w-10 h-10 rounded-2xl flex items-center justify-center text-lg shadow-xl backdrop-blur-xl border transition-all active:scale-95 cursor-pointer ${
               isStopsPanelOpen
-                ? 'bg-cyan-500 text-slate-950 border-cyan-300 ring-2 ring-cyan-400/40 shadow-cyan-500/30'
+                ? 'bg-cyan-500 text-slate-950 border-cyan-300 ring-2 ring-cyan-400/40 shadow-cyan-500/30 scale-105'
                 : 'glass-panel text-cyan-300 hover:text-white border-white/10 hover:bg-white/10'
             }`}
-            title="Ver Paradas del Recorrido"
+            title="Paradas del recorrido (Línea 228)"
           >
-            <span className="text-base leading-none">🚏</span>
-            <span className={`text-[8px] font-black tracking-tight leading-none mt-0.5 ${isStopsPanelOpen ? 'text-slate-950' : 'text-cyan-300'}`}>
-              Paradas
-            </span>
+            <span className="leading-none select-none">🚏</span>
           </button>
 
           {/* Desplegable de Paradas con información y botón 'Llevarme a esta ubicación' */}
@@ -1152,7 +1355,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
                 </div>
                 <button
                   onClick={() => setIsStopsPanelOpen(false)}
-                  className="w-6 h-6 rounded-full bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white flex items-center justify-center cursor-pointer"
+                  className="w-6 h-6 rounded-full bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white flex items-center justify-center cursor-pointer transition-colors"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
@@ -1250,7 +1453,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
           )}
         </div>
 
-        {/* Botón 2: Estación de Servicio (Toggle) */}
+        {/* Botón 2: Estación de Servicio (solo icono ⛽) */}
         <button
           onClick={() => {
             resetHideTimer();
@@ -1260,20 +1463,17 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
               mapInstanceRef.current.panTo([-34.1683, -58.9592]);
             }
           }}
-          className={`w-10 h-10 rounded-2xl flex flex-col items-center justify-center text-xs shadow-xl backdrop-blur-xl border transition-all active:scale-95 cursor-pointer ${
+          className={`w-10 h-10 rounded-2xl flex items-center justify-center text-lg shadow-xl backdrop-blur-xl border transition-all active:scale-95 cursor-pointer ${
             showGasStations
-              ? 'bg-amber-500 text-slate-950 border-amber-300 ring-2 ring-amber-400/40 shadow-amber-500/30'
+              ? 'bg-amber-500 text-slate-950 border-amber-300 ring-2 ring-amber-400/40 shadow-amber-500/30 scale-105'
               : 'glass-panel text-amber-300 hover:text-white border-white/10 hover:bg-white/10'
           }`}
           title={showGasStations ? 'Ocultar Estaciones de Servicio' : 'Mostrar Estaciones de Servicio (YPF, Axion, Shell)'}
         >
-          <span className="text-base leading-none">⛽</span>
-          <span className={`text-[8px] font-black tracking-tight leading-none mt-0.5 ${showGasStations ? 'text-slate-950' : 'text-amber-300'}`}>
-            {showGasStations ? 'Activo' : 'Nafta'}
-          </span>
+          <span className="leading-none select-none">⛽</span>
         </button>
 
-        {/* Botón 3: Escuelas (Toggle) */}
+        {/* Botón 3: Escuelas (solo icono 🏫) */}
         <button
           onClick={() => {
             resetHideTimer();
@@ -1283,137 +1483,112 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
               mapInstanceRef.current.panTo([-34.1800, -58.9500]);
             }
           }}
-          className={`w-10 h-10 rounded-2xl flex flex-col items-center justify-center text-xs shadow-xl backdrop-blur-xl border transition-all active:scale-95 cursor-pointer ${
+          className={`w-10 h-10 rounded-2xl flex items-center justify-center text-lg shadow-xl backdrop-blur-xl border transition-all active:scale-95 cursor-pointer ${
             showSchools
-              ? 'bg-indigo-500 text-white border-indigo-300 ring-2 ring-indigo-400/40 shadow-indigo-500/30'
+              ? 'bg-indigo-500 text-white border-indigo-300 ring-2 ring-indigo-400/40 shadow-indigo-500/30 scale-105'
               : 'glass-panel text-indigo-300 hover:text-white border-white/10 hover:bg-white/10'
           }`}
           title={showSchools ? 'Ocultar Escuelas' : 'Mostrar Escuelas e Instituciones Educativas'}
         >
-          <span className="text-base leading-none">🏫</span>
-          <span className={`text-[8px] font-black tracking-tight leading-none mt-0.5 ${showSchools ? 'text-white' : 'text-indigo-300'}`}>
-            {showSchools ? 'Activo' : 'Colegios'}
-          </span>
+          <span className="leading-none select-none">🏫</span>
         </button>
 
-        {/* Botón 4: Eventos del Recorrido del Micro (Habilitado con panel desplegable) */}
+        {/* Botón 4: Eventos e Inconvenientes del Transporte (solo icono ⚠️ con desplegable) */}
         <div className="relative">
           <button
             onClick={() => {
               resetHideTimer();
-              setIsEventsPanelOpen(!isEventsPanelOpen);
+              const next = !isEventsPanelOpen;
+              setIsEventsPanelOpen(next);
+              if (next) setIsStopsPanelOpen(false);
             }}
-            className={`w-10 h-10 rounded-2xl flex flex-col items-center justify-center text-xs shadow-xl backdrop-blur-xl border transition-all active:scale-95 cursor-pointer relative ${
+            className={`w-10 h-10 rounded-2xl flex items-center justify-center text-lg shadow-xl backdrop-blur-xl border transition-all active:scale-95 cursor-pointer ${
               isEventsPanelOpen
-                ? 'bg-rose-500 text-white border-rose-300 ring-2 ring-rose-400/40 shadow-rose-500/30'
-                : events.length > 0
-                ? 'glass-panel text-amber-300 hover:text-white border-amber-400/40 hover:bg-white/10'
-                : 'glass-panel text-slate-400 hover:text-white border-white/10 hover:bg-white/10'
+                ? 'bg-rose-500 text-white border-rose-300 ring-2 ring-rose-400/40 shadow-rose-500/30 scale-105'
+                : 'glass-panel text-rose-300 hover:text-white border-white/10 hover:bg-white/10'
             }`}
-            title="Ver Eventos y Alertas del Recorrido del Micro"
+            title="Reportar eventos e inconvenientes del transporte"
           >
-            <span className="text-base leading-none">⚠️</span>
-            <span className={`text-[8px] font-black tracking-tight leading-none mt-0.5 ${isEventsPanelOpen ? 'text-white' : 'text-amber-300'}`}>
-              Eventos
-            </span>
-            {events.length > 0 && (
-              <span className="absolute -top-1 -right-1 px-1 py-0.2 rounded-full bg-rose-500 text-white font-mono text-[8.5px] font-extrabold border border-black animate-pulse">
-                {events.length}
-              </span>
-            )}
+            <span className="leading-none select-none animate-pulse">⚠️</span>
           </button>
 
-          {/* Desplegable de Eventos del Recorrido */}
+          {/* Desplegable de Eventos e Inconvenientes del Transporte */}
           {isEventsPanelOpen && (
             <div
-              className="absolute top-0 right-12 w-80 sm:w-92 max-h-[70vh] rounded-3xl bg-[#090d18]/95 backdrop-blur-2xl border border-white/10 shadow-2xl p-3 z-40 flex flex-col animate-in fade-in slide-in-from-right-2 duration-150"
+              className="absolute top-0 right-12 w-80 sm:w-96 max-h-[75vh] rounded-3xl bg-[#090d18]/95 backdrop-blur-2xl border border-white/10 shadow-2xl p-3.5 z-40 flex flex-col animate-in fade-in slide-in-from-right-2 duration-150"
             >
-              <div className="flex items-center justify-between pb-2 border-b border-white/10 shrink-0">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-sm">⚠️</span>
-                  <h3 className="text-xs font-black text-white">Eventos del Recorrido</h3>
-                  <span className="px-1.5 py-0.2 rounded-full bg-rose-500/20 text-rose-300 text-[10px] font-mono font-bold">
-                    {events.length} {events.length === 1 ? 'alerta' : 'alertas'}
-                  </span>
+              <div className="flex items-center justify-between pb-2.5 border-b border-white/10 shrink-0">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-xl bg-rose-500/20 text-rose-300 flex items-center justify-center text-sm border border-rose-400/30">
+                    ⚠️
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-black text-white">Eventos e Inconvenientes</h3>
+                    <p className="text-[10px] text-slate-400 leading-tight">
+                      Tocá un inconveniente para registrarlo en el mapa
+                    </p>
+                  </div>
                 </div>
                 <button
                   onClick={() => setIsEventsPanelOpen(false)}
-                  className="w-6 h-6 rounded-full bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white flex items-center justify-center cursor-pointer"
+                  className="w-6 h-6 rounded-full bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white flex items-center justify-center cursor-pointer transition-colors"
+                  title="Cerrar"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
               </div>
 
-              {/* Lista scrollable de eventos y demoras en el trazado */}
-              <div className="overflow-y-auto space-y-2 pr-1 pt-2 flex-1 max-h-[50vh]">
-                {events.length === 0 ? (
-                  <div className="py-6 text-center text-xs text-slate-400">
-                    <span className="text-2xl block mb-1">✅</span>
-                    Sin cortes, demoras ni alertas reportadas en el recorrido.
-                  </div>
-                ) : (
-                  events.map((ev) => {
-                    const isAccident = ev.type === 'accident' || (ev.type as any) === 'accidente';
-                    const isCongestion = ev.type === 'traffic' || (ev.type as any) === 'congestion' || (ev.type as any) === 'corte';
-                    const isDelay = ev.type === 'late' || (ev.type as any) === 'demora';
+              {/* Nota o Detalle opcional */}
+              <div className="pt-2 pb-2 shrink-0">
+                <input
+                  type="text"
+                  placeholder="Nota o detalle opcional (ej: Frente a Tenaris...)"
+                  value={eventCustomNote}
+                  onChange={(e) => setEventCustomNote(e.target.value)}
+                  className="w-full px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-xs text-white placeholder-slate-400 focus:outline-none focus:border-rose-400 transition-colors"
+                />
+              </div>
 
-                    const badgeColor = isAccident
-                      ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
-                      : isCongestion
-                      ? 'bg-orange-500/20 text-orange-300 border-orange-500/40'
-                      : isDelay
-                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-                      : 'bg-sky-500/20 text-sky-300 border-sky-500/40';
+              {/* Indicador de ubicación de registro */}
+              <div className="mb-2 px-2.5 py-1.5 rounded-xl bg-white/[0.03] border border-white/5 text-[10px] text-slate-400 flex items-center justify-between shrink-0">
+                <span className="flex items-center gap-1.5 truncate">
+                  <MapPin className="w-3 h-3 text-rose-400 shrink-0" />
+                  <span className="truncate">
+                    {userLocation?.address ? `Ubicación: ${userLocation.address}` : 'Ubicación actual en el corredor'}
+                  </span>
+                </span>
+                <span className="text-[9px] font-mono font-bold text-rose-300 bg-rose-500/15 px-1.5 py-0.5 rounded-md border border-rose-500/30 shrink-0">
+                  En vivo
+                </span>
+              </div>
 
-                    const iconEmoji = isAccident ? '💥' : isCongestion ? '🚗' : isDelay ? '⏳' : '⚠️';
-
-                    return (
-                      <div
-                        key={ev.id}
-                        className="p-2.5 rounded-2xl bg-white/[0.03] hover:bg-white/[0.07] border border-white/10 transition-all text-xs"
-                      >
-                        <div className="flex items-start justify-between gap-1.5">
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className={`px-1.5 py-0.2 rounded text-[9.5px] font-bold border uppercase ${badgeColor}`}>
-                                {iconEmoji} {ev.type}
-                              </span>
-                              <span className="text-[10px] text-slate-400 font-mono">
-                                {ev.reportedAt || 'En vivo'}
-                              </span>
-                              <span className="text-[9.5px] text-cyan-300 bg-cyan-500/10 px-1 py-0.2 rounded font-mono">
-                                +{ev.confirmations || 1}
-                              </span>
-                            </div>
-                            <h4 className="font-bold text-white text-[11.5px] mt-1 leading-snug">
-                              {ev.title}
-                            </h4>
-                            <p className="text-[10.5px] text-slate-300 mt-0.5 leading-relaxed">
-                              {ev.description}
-                            </p>
-                          </div>
-                        </div>
-
-                        {/* Botón Ver en el mapa */}
-                        <div className="mt-2 flex items-center gap-2">
-                          <button
-                            onClick={() => {
-                              if (mapInstanceRef.current) {
-                                mapInstanceRef.current.flyTo([ev.lat, ev.lng], 16, { animate: true });
-                              }
-                              onSelectEvent(ev);
-                              setIsEventsPanelOpen(false);
-                            }}
-                            className="flex-1 py-1.5 px-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black text-[10.5px] flex items-center justify-center gap-1.5 shadow-md active:scale-95 transition-all cursor-pointer"
-                          >
-                            <MapPin className="w-3 h-3 fill-slate-950" />
-                            <span>Ver en el Mapa</span>
-                          </button>
-                        </div>
+              {/* Lista scrollable de eventos para registrar con 1 toque */}
+              <div className="overflow-y-auto space-y-1.5 pr-1 flex-1 max-h-[50vh]">
+                {TRANSIT_EVENT_TYPES.map((evOpt) => (
+                  <button
+                    key={evOpt.id}
+                    onClick={() => handleRegisterEventFromDropdown(evOpt)}
+                    className={`w-full p-2.5 rounded-2xl border text-left transition-all cursor-pointer group active:scale-98 flex items-center gap-3 ${evOpt.colorClass}`}
+                    title={`Registrar ${evOpt.label} en el mapa`}
+                  >
+                    <div className="w-9 h-9 rounded-xl flex items-center justify-center text-lg shrink-0 bg-black/35 border border-white/10 group-hover:scale-110 transition-transform">
+                      {evOpt.icon}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-1">
+                        <h4 className="font-bold text-white text-[11.5px] group-hover:text-rose-200 transition-colors">
+                          {evOpt.label}
+                        </h4>
+                        <span className="text-[9px] font-mono font-bold text-slate-400 group-hover:text-white transition-colors">
+                          Registrar ➔
+                        </span>
                       </div>
-                    );
-                  })
-                )}
+                      <p className="text-[10px] text-slate-300 mt-0.5 leading-snug line-clamp-1">
+                        {evOpt.subtitle}
+                      </p>
+                    </div>
+                  </button>
+                ))}
               </div>
             </div>
           )}
@@ -1652,7 +1827,41 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
         </div>
       )}
 
+      {/* Tesla Navigation HUD Card for Bus Corridor (Bottom-Left) */}
+      {!activeTrackingTaxi && !stopTrajectoryInfo && !selectedStop && (
+        <div
+          onMouseEnter={handleCardMouseEnter}
+          onMouseLeave={handleCardMouseLeave}
+          className={`absolute bottom-6 left-4 z-20 max-w-[calc(100vw-150px)] sm:max-w-xs transition-all duration-500 ease-in-out ${
+            areCardsVisible
+              ? 'opacity-100 translate-y-0 pointer-events-auto'
+              : 'opacity-0 translate-y-3 pointer-events-none'
+          }`}
+        >
+          <div className="glass-panel p-3.5 rounded-2xl shadow-2xl flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-sky-400/15 border border-sky-400/30 flex items-center justify-center text-sky-300 shrink-0">
+              <Compass className="w-4 h-4" />
+            </div>
 
+            <div className="space-y-0.5 min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-white truncate">
+                  {activeRoute.shortName}
+                </span>
+                <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-md bg-amber-400/15 text-amber-300 border border-amber-400/30 font-semibold">
+                  +18m
+                </span>
+              </div>
+
+              <div className="text-[11px] text-slate-400 font-mono flex items-center gap-2">
+                <span>{nearestBus ? `${nearestBus.speedKmH} km/h` : 'En ruta'}</span>
+                <span>·</span>
+                <span className="text-sky-300">ETA {nearestBus?.etaMinutes || 4}m</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Floating Bottom Quick Action Pills (Center-Right) con desplazamiento inteligente anti-superposición */}
       <div
