@@ -32,6 +32,11 @@ import {
   Search,
   Fuel,
   GraduationCap,
+  Plus,
+  SlidersHorizontal,
+  EyeOff,
+  RotateCcw,
+  Filter,
 } from 'lucide-react';
 import { GAS_STATIONS_DATA, SCHOOLS_DATA, PointOfInterest } from '../../data/poiCorredorData';
 import { LINEA_228_STOPS, LINEA_228_COORDINATES } from '../../data/linea228Stops';
@@ -197,6 +202,25 @@ export const TRANSIT_EVENT_TYPES: {
   },
 ];
 
+export const EVENT_FILTER_CATEGORIES: {
+  key: string;
+  icon: string;
+  tooltip: string;
+  ring: string;
+  bg: string;
+}[] = [
+  { key: 'accident', icon: '💥', tooltip: 'Accidentes en calzada', ring: 'ring-red-400/60', bg: 'bg-red-500/25 text-red-200 border-red-500/50 shadow-red-500/30' },
+  { key: 'late', icon: '⏳', tooltip: 'Demoras prolongadas', ring: 'ring-yellow-400/60', bg: 'bg-yellow-500/25 text-yellow-200 border-yellow-500/50 shadow-yellow-500/30' },
+  { key: 'traffic', icon: '🚗', tooltip: 'Congestión y tránsito lento', ring: 'ring-orange-400/60', bg: 'bg-orange-500/25 text-orange-200 border-orange-500/50 shadow-orange-500/30' },
+  { key: 'corte', icon: '🚧', tooltip: 'Cortes de calle y desvíos', ring: 'ring-purple-400/60', bg: 'bg-purple-500/25 text-purple-200 border-purple-500/50 shadow-purple-500/30' },
+  { key: 'control', icon: '👮', tooltip: 'Controles policiales o de tránsito', ring: 'ring-indigo-400/60', bg: 'bg-indigo-500/25 text-indigo-200 border-indigo-500/50 shadow-indigo-500/30' },
+  { key: 'breakdown', icon: '🔧', tooltip: 'Unidades averiadas', ring: 'ring-rose-400/60', bg: 'bg-rose-500/25 text-rose-200 border-rose-500/50 shadow-rose-500/30' },
+  { key: 'missed', icon: '❌', tooltip: 'No paró / Colectivo lleno', ring: 'ring-amber-400/60', bg: 'bg-amber-500/25 text-amber-200 border-amber-500/50 shadow-amber-500/30' },
+  { key: 'inundacion', icon: '🌧️', tooltip: 'Calles anegadas o pozos', ring: 'ring-cyan-400/60', bg: 'bg-cyan-500/25 text-cyan-200 border-cyan-500/50 shadow-cyan-500/30' },
+  { key: 'moving', icon: '⚡', tooltip: 'Servicio normal y fluido', ring: 'ring-emerald-400/60', bg: 'bg-emerald-500/25 text-emerald-200 border-emerald-500/50 shadow-emerald-500/30' },
+  { key: 'other', icon: '⚠️', tooltip: 'Alertas generales y otros', ring: 'ring-amber-400/60', bg: 'bg-amber-500/25 text-amber-200 border-amber-500/50 shadow-amber-500/30' },
+];
+
 interface TrajectoryResult {
   coordinates: [number, number][];
   distKm: number;
@@ -234,6 +258,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
   const tileLayerRef = useRef<L.TileLayer | null>(null);
   const weatherLayerRef = useRef<L.TileLayer | null>(null);
   const polylinesLayerRef = useRef<L.LayerGroup | null>(null);
+  const stopsLayerRef = useRef<L.LayerGroup | null>(null);
   const eventsLayerRef = useRef<L.LayerGroup | null>(null);
   const busesLayerRef = useRef<L.LayerGroup | null>(null);
   const taxisLayerRef = useRef<L.LayerGroup | null>(null);
@@ -246,8 +271,23 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
   // Map state
   const [activeTileStyle, setActiveTileStyle] = useState<'streets' | 'tesla-dark' | 'osm'>('osm');
   const [showWeatherRadar, setShowWeatherRadar] = useState(false);
+  const [showStops, setShowStops] = useState(true);
   const [showGasStations, setShowGasStations] = useState(false);
   const [showSchools, setShowSchools] = useState(false);
+  const [showEvents, setShowEvents] = useState(true);
+  const [isEventFilterPanelOpen, setIsEventFilterPanelOpen] = useState(false);
+  const [activeEventCategories, setActiveEventCategories] = useState<Record<string, boolean>>({
+    accident: true,
+    late: true,
+    traffic: true,
+    corte: true,
+    control: true,
+    breakdown: true,
+    missed: true,
+    inundacion: true,
+    moving: true,
+    other: true,
+  });
   const [isStopsPanelOpen, setIsStopsPanelOpen] = useState(false);
   const [isEventsPanelOpen, setIsEventsPanelOpen] = useState(false);
   const [stopSearchQuery, setStopSearchQuery] = useState('');
@@ -277,9 +317,11 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
   const isHoveringCardsRef = useRef(false);
   const isStopsPanelOpenRef = useRef(false);
   const isEventsPanelOpenRef = useRef(false);
+  const isEventFilterPanelOpenRef = useRef(false);
   isHoveringCardsRef.current = isHoveringCards;
   isStopsPanelOpenRef.current = isStopsPanelOpen;
   isEventsPanelOpenRef.current = isEventsPanelOpen;
+  isEventFilterPanelOpenRef.current = isEventFilterPanelOpen;
 
   const resetHideTimer = () => {
     setAreCardsVisible(true);
@@ -291,10 +333,49 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
 
     hideTimerRef.current = setTimeout(() => {
       // Don't auto-hide if user is hovering cards or interacting with stops or events panel
-      if (!isHoveringCardsRef.current && !isStopsPanelOpenRef.current && !isEventsPanelOpenRef.current) {
+      if (
+        !isHoveringCardsRef.current &&
+        !isStopsPanelOpenRef.current &&
+        !isEventsPanelOpenRef.current &&
+        !isEventFilterPanelOpenRef.current
+      ) {
         setAreCardsVisible(false);
       }
     }, 8000);
+  };
+
+  const getEventCategoryKey = (type: any): string => {
+    switch (type) {
+      case 'accident':
+      case 'accidente':
+        return 'accident';
+      case 'late':
+      case 'demora':
+        return 'late';
+      case 'traffic':
+      case 'congestion':
+        return 'traffic';
+      case 'corte':
+      case 'desvio':
+      case 'danger':
+        return 'corte';
+      case 'control':
+      case 'control_policial':
+        return 'control';
+      case 'breakdown':
+      case 'averia':
+        return 'breakdown';
+      case 'missed':
+      case 'salteo':
+        return 'missed';
+      case 'inundacion':
+        return 'inundacion';
+      case 'moving':
+      case 'normal':
+        return 'moving';
+      default:
+        return 'other';
+    }
   };
 
   const handleRegisterEventFromDropdown = (evOpt: {
@@ -449,6 +530,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
     tileLayerRef.current = baseTile;
 
     polylinesLayerRef.current = L.layerGroup().addTo(map);
+    stopsLayerRef.current = L.layerGroup().addTo(map);
     eventsLayerRef.current = L.layerGroup().addTo(map);
     busesLayerRef.current = L.layerGroup().addTo(map);
     taxisLayerRef.current = L.layerGroup().addTo(map);
@@ -811,7 +893,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
     } catch {}
   };
 
-  // Cartografía del Recorrido Total Malvinas ↔ Zárate (Pastel Electric Colors)
+  // Cartografía del Trazado Troncal Malvinas ↔ Zárate (Polylines)
   useEffect(() => {
     if (!mapInstanceRef.current || !polylinesLayerRef.current) return;
     const layer = polylinesLayerRef.current;
@@ -834,8 +916,16 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
       lineCap: 'round',
       lineJoin: 'round',
     }).addTo(layer);
+  }, [totalRoute]);
 
-    // 3. Paradas del recorrido total B° Malvinas ↔ Zárate Terminal
+  // Paradas del recorrido total B° Malvinas ↔ Zárate Terminal (Toggleable con showStops)
+  useEffect(() => {
+    if (!mapInstanceRef.current || !stopsLayerRef.current) return;
+    const layer = stopsLayerRef.current;
+    layer.clearLayers();
+
+    if (!showStops) return;
+
     totalRoute.stops.forEach((stop) => {
       const isMcDonalds = stop.name.toLowerCase().includes('mcdonald');
       const isVigalondo = stop.name.toLowerCase().includes('vigalondo');
@@ -888,13 +978,15 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
       });
       stopMarker.addTo(layer);
     });
-  }, [totalRoute]);
+  }, [totalRoute, showStops]);
 
-  // Events Markers (Waze Style with Pastel Tones)
+  // Events Markers (Waze Style with Pastel Tones & Category Filtering)
   useEffect(() => {
     if (!mapInstanceRef.current || !eventsLayerRef.current) return;
     const layer = eventsLayerRef.current;
     layer.clearLayers();
+
+    if (!showEvents) return;
 
     const getEventBadge = (type: any) => {
       switch (type) {
@@ -926,15 +1018,22 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
           // VERDE: Recorrido normal
           return { icon: '⚡', bg: 'bg-emerald-500', ring: 'ring-emerald-400/50', border: 'border-emerald-400' };
         case 'breakdown':
+        case 'averia':
           return { icon: '🔧', bg: 'bg-rose-600', ring: 'ring-rose-400/50', border: 'border-rose-400' };
         case 'missed':
+        case 'salteo':
           return { icon: '❌', bg: 'bg-amber-600', ring: 'ring-amber-400/50', border: 'border-amber-400' };
+        case 'inundacion':
+          return { icon: '🌧️', bg: 'bg-cyan-600', ring: 'ring-cyan-400/50', border: 'border-cyan-400' };
         default:
           return { icon: '⚠️', bg: 'bg-amber-500', ring: 'ring-amber-400/50', border: 'border-amber-400' };
       }
     };
 
     events.forEach((ev) => {
+      const catKey = getEventCategoryKey(ev.type);
+      if (activeEventCategories[catKey] === false) return;
+
       const badge = getEventBadge(ev.type);
       const isSelected = selectedEvent?.id === ev.id;
 
@@ -962,7 +1061,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
       });
       marker.addTo(layer);
     });
-  }, [events, selectedEvent, onSelectEvent]);
+  }, [events, selectedEvent, onSelectEvent, showEvents, activeEventCategories]);
 
   // Live Buses Markers (Tesla Minimalist Style)
   useEffect(() => {
@@ -1321,26 +1420,25 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
             : 'opacity-0 -translate-y-3 pointer-events-none'
         }`}
       >
-        {/* Botón 1: Paradas (solo icono 🚏 con desplegable de paradas) */}
+        {/* Botón 1: Paradas (solo icono 🚏 con alternancia de visibilidad) */}
         <div className="relative">
           <button
             onClick={() => {
               resetHideTimer();
-              const next = !isStopsPanelOpen;
-              setIsStopsPanelOpen(next);
-              if (next) setIsEventsPanelOpen(false);
+              const next = !showStops;
+              setShowStops(next);
             }}
             className={`w-10 h-10 rounded-2xl flex items-center justify-center text-lg shadow-xl backdrop-blur-xl border transition-all active:scale-95 cursor-pointer ${
-              isStopsPanelOpen
-                ? 'bg-cyan-500 text-slate-950 border-cyan-300 ring-2 ring-cyan-400/40 shadow-cyan-500/30 scale-105'
-                : 'glass-panel text-cyan-300 hover:text-white border-white/10 hover:bg-white/10'
+              showStops
+                ? 'bg-cyan-500/25 text-cyan-200 border-cyan-400 ring-2 ring-cyan-400/40 shadow-[0_0_15px_rgba(6,182,212,0.35)] scale-105'
+                : 'glass-panel text-slate-500 border-white/5 opacity-40 hover:opacity-75 grayscale'
             }`}
-            title="Paradas del recorrido (Línea 228)"
+            title={showStops ? 'Ocultar Paradas (🚏)' : 'Mostrar Paradas (🚏)'}
           >
             <span className="leading-none select-none">🚏</span>
           </button>
 
-          {/* Desplegable de Paradas con información y botón 'Llevarme a esta ubicación' */}
+          {/* Desplegable de Paradas con información y buscador */}
           {isStopsPanelOpen && (
             <div
               className="absolute top-0 right-12 w-80 sm:w-92 max-h-[70vh] rounded-3xl bg-[#090d18]/95 backdrop-blur-2xl border border-white/10 shadow-2xl p-3 z-40 flex flex-col animate-in fade-in slide-in-from-right-2 duration-150"
@@ -1465,10 +1563,10 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
           }}
           className={`w-10 h-10 rounded-2xl flex items-center justify-center text-lg shadow-xl backdrop-blur-xl border transition-all active:scale-95 cursor-pointer ${
             showGasStations
-              ? 'bg-amber-500 text-slate-950 border-amber-300 ring-2 ring-amber-400/40 shadow-amber-500/30 scale-105'
-              : 'glass-panel text-amber-300 hover:text-white border-white/10 hover:bg-white/10'
+              ? 'bg-amber-500/25 text-amber-200 border-amber-400 ring-2 ring-amber-400/40 shadow-[0_0_15px_rgba(245,158,11,0.35)] scale-105'
+              : 'glass-panel text-slate-500 border-white/5 opacity-40 hover:opacity-75 grayscale'
           }`}
-          title={showGasStations ? 'Ocultar Estaciones de Servicio' : 'Mostrar Estaciones de Servicio (YPF, Axion, Shell)'}
+          title={showGasStations ? 'Ocultar Estaciones de Servicio (⛽)' : 'Mostrar Estaciones de Servicio (⛽)'}
         >
           <span className="leading-none select-none">⛽</span>
         </button>
@@ -1485,22 +1583,222 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
           }}
           className={`w-10 h-10 rounded-2xl flex items-center justify-center text-lg shadow-xl backdrop-blur-xl border transition-all active:scale-95 cursor-pointer ${
             showSchools
-              ? 'bg-indigo-500 text-white border-indigo-300 ring-2 ring-indigo-400/40 shadow-indigo-500/30 scale-105'
-              : 'glass-panel text-indigo-300 hover:text-white border-white/10 hover:bg-white/10'
+              ? 'bg-indigo-500/25 text-indigo-200 border-indigo-400 ring-2 ring-indigo-400/40 shadow-[0_0_15px_rgba(99,102,241,0.35)] scale-105'
+              : 'glass-panel text-slate-500 border-white/5 opacity-40 hover:opacity-75 grayscale'
           }`}
-          title={showSchools ? 'Ocultar Escuelas' : 'Mostrar Escuelas e Instituciones Educativas'}
+          title={showSchools ? 'Ocultar Colegios (🏫)' : 'Mostrar Colegios (🏫)'}
         >
           <span className="leading-none select-none">🏫</span>
         </button>
 
-        {/* Botón 4: Eventos e Inconvenientes del Transporte (solo icono ⚠️ con desplegable) */}
+        {/* Botón 4: Filtro de Eventos y Capas por Categoría (solo icono 🎛️ sin texto) */}
+        <div className="relative">
+          <button
+            onClick={() => {
+              resetHideTimer();
+              const next = !isEventFilterPanelOpen;
+              setIsEventFilterPanelOpen(next);
+              if (next) {
+                setIsEventsPanelOpen(false);
+                setIsStopsPanelOpen(false);
+              }
+            }}
+            className={`w-10 h-10 rounded-2xl flex items-center justify-center text-lg shadow-xl backdrop-blur-xl border transition-all active:scale-95 cursor-pointer ${
+              isEventFilterPanelOpen
+                ? 'bg-sky-500/30 text-sky-200 border-sky-400 ring-2 ring-sky-400/40 shadow-[0_0_15px_rgba(56,189,248,0.4)] scale-105'
+                : 'glass-panel text-sky-300 hover:text-white border-white/10 hover:bg-white/10'
+            }`}
+            title="Filtro de capas y eventos por categorías"
+          >
+            <SlidersHorizontal className="w-4 h-4" />
+          </button>
+
+          {/* Desplegable de Filtro de Eventos y Capas por Categoría (100% Icon-Only, Sin Etiquetas de Texto) */}
+          {isEventFilterPanelOpen && (
+            <div className="absolute top-0 right-12 w-72 sm:w-80 rounded-3xl bg-[#090d18]/95 backdrop-blur-2xl border border-white/10 shadow-2xl p-3 z-40 flex flex-col animate-in fade-in slide-in-from-right-2 duration-150">
+              {/* Barra superior de control (Icon-only) */}
+              <div className="flex items-center justify-between pb-2.5 border-b border-white/10 shrink-0">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-7 h-7 rounded-xl bg-sky-500/20 text-sky-300 flex items-center justify-center text-xs border border-sky-400/30">
+                    <SlidersHorizontal className="w-3.5 h-3.5" />
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  {/* Visibilidad general de eventos */}
+                  <button
+                    onClick={() => {
+                      resetHideTimer();
+                      setShowEvents(!showEvents);
+                    }}
+                    className={`w-7 h-7 rounded-xl flex items-center justify-center text-xs border transition-all cursor-pointer ${
+                      showEvents
+                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-400/40'
+                        : 'bg-white/5 text-slate-500 border-white/5 opacity-50'
+                    }`}
+                    title={showEvents ? 'Ocultar todos los eventos' : 'Mostrar todos los eventos'}
+                  >
+                    {showEvents ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+                  </button>
+
+                  {/* Restablecer todas las categorías */}
+                  <button
+                    onClick={() => {
+                      resetHideTimer();
+                      setShowStops(true);
+                      setShowGasStations(true);
+                      setShowSchools(true);
+                      setShowEvents(true);
+                      setActiveEventCategories({
+                        accident: true,
+                        late: true,
+                        traffic: true,
+                        corte: true,
+                        control: true,
+                        breakdown: true,
+                        missed: true,
+                        inundacion: true,
+                        moving: true,
+                        other: true,
+                      });
+                    }}
+                    className="w-7 h-7 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white flex items-center justify-center text-xs border border-white/5 transition-all cursor-pointer"
+                    title="Restablecer todas las capas y categorías"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                  </button>
+
+                  {/* Cerrar popover */}
+                  <button
+                    onClick={() => setIsEventFilterPanelOpen(false)}
+                    className="w-7 h-7 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white flex items-center justify-center text-xs border border-white/5 transition-colors cursor-pointer"
+                    title="Cerrar filtro"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Fila 1: Alternancia de Capas Principales (🚏, ⛽, 🏫 y 🔍 búsqueda de paradas) */}
+              <div className="py-2.5 border-b border-white/10 flex items-center justify-center gap-2">
+                <button
+                  onClick={() => {
+                    resetHideTimer();
+                    setShowStops(!showStops);
+                  }}
+                  className={`w-10 h-10 rounded-2xl flex items-center justify-center text-lg border transition-all cursor-pointer active:scale-95 ${
+                    showStops
+                      ? 'bg-cyan-500/25 text-cyan-200 border-cyan-400 ring-2 ring-cyan-400/40 shadow-[0_0_12px_rgba(6,182,212,0.3)]'
+                      : 'bg-white/5 text-slate-600 border-white/5 opacity-40 grayscale'
+                  }`}
+                  title={showStops ? 'Ocultar Paradas (🚏)' : 'Mostrar Paradas (🚏)'}
+                >
+                  <span className="leading-none select-none">🚏</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    resetHideTimer();
+                    setShowGasStations(!showGasStations);
+                  }}
+                  className={`w-10 h-10 rounded-2xl flex items-center justify-center text-lg border transition-all cursor-pointer active:scale-95 ${
+                    showGasStations
+                      ? 'bg-amber-500/25 text-amber-200 border-amber-400 ring-2 ring-amber-400/40 shadow-[0_0_12px_rgba(245,158,11,0.3)]'
+                      : 'bg-white/5 text-slate-600 border-white/5 opacity-40 grayscale'
+                  }`}
+                  title={showGasStations ? 'Ocultar Estaciones de Servicio (⛽)' : 'Mostrar Estaciones de Servicio (⛽)'}
+                >
+                  <span className="leading-none select-none">⛽</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    resetHideTimer();
+                    setShowSchools(!showSchools);
+                  }}
+                  className={`w-10 h-10 rounded-2xl flex items-center justify-center text-lg border transition-all cursor-pointer active:scale-95 ${
+                    showSchools
+                      ? 'bg-indigo-500/25 text-indigo-200 border-indigo-400 ring-2 ring-indigo-400/40 shadow-[0_0_12px_rgba(99,102,241,0.3)]'
+                      : 'bg-white/5 text-slate-600 border-white/5 opacity-40 grayscale'
+                  }`}
+                  title={showSchools ? 'Ocultar Colegios (🏫)' : 'Mostrar Colegios (🏫)'}
+                >
+                  <span className="leading-none select-none">🏫</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    resetHideTimer();
+                    setIsStopsPanelOpen(true);
+                    setIsEventFilterPanelOpen(false);
+                  }}
+                  className="w-10 h-10 rounded-2xl flex items-center justify-center text-cyan-300 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-400/30 transition-all cursor-pointer active:scale-95"
+                  title="Buscar paradas en lista detallada"
+                >
+                  <Search className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Fila 2: Categorías de Eventos e Inconvenientes (100% Icon-Only Grid) */}
+              <div className="pt-2.5 grid grid-cols-5 gap-2">
+                {EVENT_FILTER_CATEGORIES.map((cat) => {
+                  const isActive = showEvents && activeEventCategories[cat.key] !== false;
+                  return (
+                    <button
+                      key={cat.key}
+                      onClick={() => {
+                        resetHideTimer();
+                        setActiveEventCategories((prev) => ({
+                          ...prev,
+                          [cat.key]: !prev[cat.key],
+                        }));
+                      }}
+                      className={`relative w-11 h-11 rounded-2xl flex items-center justify-center text-lg border transition-all cursor-pointer active:scale-90 ${
+                        isActive
+                          ? `${cat.bg} ring-2 ${cat.ring} scale-105 shadow-md`
+                          : 'bg-white/5 text-slate-600 border-white/5 opacity-35 grayscale'
+                      }`}
+                      title={cat.tooltip}
+                    >
+                      <span className="leading-none select-none">{cat.icon}</span>
+                      {isActive && (
+                        <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-emerald-400 ring-2 ring-slate-950" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Acceso Rápido Inferior: Registrar Evento */}
+              <div className="mt-2.5 pt-2 border-t border-white/10 flex items-center justify-between">
+                <button
+                  onClick={() => {
+                    resetHideTimer();
+                    setIsEventsPanelOpen(true);
+                    setIsEventFilterPanelOpen(false);
+                  }}
+                  className="w-full py-2 rounded-2xl bg-gradient-to-r from-rose-500/20 to-orange-500/20 hover:from-rose-500/30 hover:to-orange-500/30 border border-rose-400/40 text-rose-300 hover:text-white flex items-center justify-center gap-2 text-xs font-bold transition-all cursor-pointer"
+                  title="Registrar nuevo evento en el mapa"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>⚠️</span>
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Botón 5: Reportar Eventos e Inconvenientes del Transporte (solo icono ⚠️ con desplegable) */}
         <div className="relative">
           <button
             onClick={() => {
               resetHideTimer();
               const next = !isEventsPanelOpen;
               setIsEventsPanelOpen(next);
-              if (next) setIsStopsPanelOpen(false);
+              if (next) {
+                setIsStopsPanelOpen(false);
+                setIsEventFilterPanelOpen(false);
+              }
             }}
             className={`w-10 h-10 rounded-2xl flex items-center justify-center text-lg shadow-xl backdrop-blur-xl border transition-all active:scale-95 cursor-pointer ${
               isEventsPanelOpen
