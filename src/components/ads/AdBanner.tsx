@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AdListing } from '../../types';
 import {
   ExternalLink,
@@ -14,6 +14,16 @@ interface AdBannerProps {
 
 export const AdBanner: React.FC<AdBannerProps> = ({ ads, onOpenContactModal }) => {
   const [isDismissed, setIsDismissed] = useState(false);
+  const [isCompact, setIsCompact] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
+
+  // Auto-achicar el botón de auspicio después de los 5 segundos para despejar la pantalla
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsCompact(true);
+    }, 5000);
+    return () => clearTimeout(timer);
+  }, []);
 
   const activeAds = ads.filter((a) => a.isActive);
 
@@ -24,12 +34,22 @@ export const AdBanner: React.FC<AdBannerProps> = ({ ads, onOpenContactModal }) =
         <button
           type="button"
           onClick={() => setIsDismissed(false)}
-          className="h-8.5 px-3.5 rounded-full bg-[#0a0d14]/95 hover:bg-slate-900 text-amber-300 hover:text-white border border-amber-400/40 shadow-2xl backdrop-blur-md text-xs font-bold flex items-center gap-2 cursor-pointer transition-all active:scale-95 ring-1 ring-amber-400/30 group"
+          onMouseEnter={() => setIsHovered(true)}
+          onMouseLeave={() => setIsHovered(false)}
+          className={`h-8.5 rounded-full bg-[#0a0d14]/95 hover:bg-slate-900 text-amber-300 hover:text-white border border-amber-400/40 shadow-2xl backdrop-blur-md text-xs font-bold flex items-center cursor-pointer transition-all duration-500 active:scale-95 ring-1 ring-amber-400/30 group ${
+            isCompact && !isHovered ? 'w-8.5 px-0 justify-center' : 'px-3.5 gap-2'
+          }`}
           title="Habilitar banner publicitario de auspicios locales"
         >
           <Megaphone className="w-3.5 h-3.5 text-amber-400 group-hover:scale-110 transition-transform shrink-0" />
-          <span>Habilitar Banner Publicitario</span>
-          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse ml-0.5" />
+          <span
+            className={`transition-all duration-500 ease-in-out overflow-hidden whitespace-nowrap ${
+              isCompact && !isHovered ? 'max-w-0 opacity-0 -ml-1 pointer-events-none' : 'max-w-xs opacity-100'
+            }`}
+          >
+            Habilitar Banner Publicitario
+          </span>
+          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse ml-0.5 shrink-0" />
         </button>
       </div>
     );
@@ -46,17 +66,31 @@ export const AdBanner: React.FC<AdBannerProps> = ({ ads, onOpenContactModal }) =
       title="Auspicios locales en vivo: pasá el cursor para pausar y hacer clic en cualquier comercio"
     >
       <div className="flex items-center h-12 sm:h-13 px-2 sm:px-3 gap-2">
-        {/* Left Sticky Compact Pill: "Auspicio Local" ultra-compacto hacia la izquierda para dar más lugar al banner */}
+        {/* Left Sticky Compact Pill: "Auspicio Local" que se achica automáticamente a los 5 segundos */}
         <div className="flex items-center shrink-0 z-10 bg-[#0a0d14] pr-1.5 border-r border-slate-800/80">
           <button
             type="button"
             onClick={onOpenContactModal}
-            className="h-7.5 px-2 rounded-lg bg-gradient-to-r from-amber-500/20 to-orange-500/20 hover:from-amber-500/35 hover:to-orange-500/35 text-amber-300 hover:text-white border border-amber-400/40 hover:border-amber-300 text-[10px] font-black uppercase tracking-tight flex items-center gap-1 shadow-sm active:scale-95 transition-all cursor-pointer shrink-0 group"
-            title="Pedir incluir un negocio en el banner publicitario de UPPA"
+            onMouseEnter={() => setIsHovered(true)}
+            onMouseLeave={() => setIsHovered(false)}
+            className={`h-7.5 rounded-lg bg-gradient-to-r from-amber-500/20 to-orange-500/20 hover:from-amber-500/35 hover:to-orange-500/35 text-amber-300 hover:text-white border border-amber-400/40 hover:border-amber-300 text-[10px] font-black uppercase tracking-tight flex items-center shadow-sm active:scale-95 transition-all duration-500 ease-in-out cursor-pointer shrink-0 group ${
+              isCompact && !isHovered ? 'w-7.5 px-0 justify-center' : 'px-2 gap-1'
+            }`}
+            title="Auspicio - Pedir incluir un negocio en el banner publicitario de UPPA"
           >
             <Megaphone className="w-3 h-3 text-amber-400 group-hover:scale-110 transition-transform shrink-0" />
-            <span>Auspicio</span>
-            <span className="hidden sm:inline text-[8.5px] bg-amber-400/20 px-1 py-0.2 rounded text-amber-200 font-extrabold border border-amber-400/30">
+            <span
+              className={`transition-all duration-500 ease-in-out overflow-hidden whitespace-nowrap ${
+                isCompact && !isHovered ? 'max-w-0 opacity-0 -ml-1 pointer-events-none' : 'max-w-xs opacity-100 ml-1'
+              }`}
+            >
+              Auspicio
+            </span>
+            <span
+              className={`hidden sm:inline text-[8.5px] bg-amber-400/20 px-1 py-0.2 rounded text-amber-200 font-extrabold border border-amber-400/30 transition-all duration-500 ease-in-out overflow-hidden whitespace-nowrap ${
+                isCompact && !isHovered ? 'max-w-0 opacity-0 border-0 p-0 m-0 pointer-events-none' : 'max-w-xs opacity-100 ml-0.5'
+              }`}
+            >
               + Negocio
             </span>
           </button>
