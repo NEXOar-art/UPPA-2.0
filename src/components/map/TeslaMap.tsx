@@ -309,7 +309,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
     userLng: number;
   } | null>(null);
 
-  // Auto-hide cards logic: 8 seconds of exposure, waking up on touch/hover, staying while interacting
+  // Auto-hide cards logic: 3.5 seconds of exposure, waking up on touch/hover, staying while interacting
   const [areCardsVisible, setAreCardsVisible] = useState(true);
   const [isHoveringCards, setIsHoveringCards] = useState(false);
   const hideTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -323,6 +323,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
   isEventsPanelOpenRef.current = isEventsPanelOpen;
   isEventFilterPanelOpenRef.current = isEventFilterPanelOpen;
 
+  const resetHideTimerRef = useRef<() => void>(() => {});
   const resetHideTimer = () => {
     setAreCardsVisible(true);
 
@@ -341,8 +342,9 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
       ) {
         setAreCardsVisible(false);
       }
-    }, 8000);
+    }, 3500); // 3.5 segundos de exposición
   };
+  resetHideTimerRef.current = resetHideTimer;
 
   const getEventCategoryKey = (type: any): string => {
     switch (type) {
@@ -542,6 +544,16 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
 
     mapInstanceRef.current = map;
 
+    const handleMapUserAction = () => {
+      resetHideTimerRef.current();
+    };
+
+    map.on('click', handleMapUserAction);
+    map.on('mousedown', handleMapUserAction);
+    map.on('touchstart', handleMapUserAction);
+    map.on('dragstart', handleMapUserAction);
+    map.on('zoomstart', handleMapUserAction);
+
     const handleResize = () => {
       if (mapInstanceRef.current) {
         mapInstanceRef.current.invalidateSize();
@@ -553,6 +565,11 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
     return () => {
       clearTimeout(initialResizeTimer);
       window.removeEventListener('resize', handleResize);
+      map.off('click', handleMapUserAction);
+      map.off('mousedown', handleMapUserAction);
+      map.off('touchstart', handleMapUserAction);
+      map.off('dragstart', handleMapUserAction);
+      map.off('zoomstart', handleMapUserAction);
       map.remove();
       mapInstanceRef.current = null;
     };
@@ -1330,6 +1347,8 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
     <div
       onMouseMove={resetHideTimer}
       onTouchStart={resetHideTimer}
+      onTouchMove={resetHideTimer}
+      onPointerDown={resetHideTimer}
       onClick={resetHideTimer}
       className="relative w-full h-full overflow-hidden bg-[#07090e]"
     >

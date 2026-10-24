@@ -42,59 +42,59 @@ export const LINEA_228_STOPS: Linea228Stop[] = [
   { id: 'p228-mcdonalds', sequence: 23, name: "McDonald's Campana (Panamericana Km 72.5 / Colectora & Axion)", lat: -34.191398, lng: -58.944732, zone: 'Colectora', description: 'Parada estratégica 24hs frente a McDonald\'s y Axion Panamericana Km 72.5.' },
 
   // Tramo 5: Av. 6 de Julio / Colectora Norte / Acceso Centro
-  { id: 'p228-25', sequence: 24, name: 'Av. 6 de Julio y Colectora Panamericana', lat: -34.1880, lng: -58.9455, zone: 'Colectora', description: 'Rotonda Av. 6 de Julio.' },
-  { id: 'p228-26', sequence: 25, name: 'Avenida 6 de Julio y Córdoba', lat: -34.1840, lng: -58.9460, zone: 'Colectora', description: 'Zona industrial y comercial.' },
-  { id: 'p228-27', sequence: 26, name: 'Avenida 6 de Julio y Namuncurá', lat: -34.1800, lng: -58.9455, zone: 'Colectora', description: 'Parada de media distancia.' },
-  { id: 'p228-28', sequence: 27, name: 'Avenida 6 de Julio y Doctor Salk', lat: -34.1755, lng: -58.9442, zone: 'Colectora', description: 'Ingreso Colectora Norte.' },
-  { id: 'p228-29', sequence: 28, name: 'Colectora Norte y Necochea', lat: -34.1720, lng: -58.9430, zone: 'Colectora', description: 'Parada barrio Siderca.' },
-  { id: 'p228-30', sequence: 29, name: 'Colectora Norte y Ricardo Rojas', lat: -34.1690, lng: -58.9420, zone: 'Colectora', description: 'Acceso a puente Av. Rivadavia.' },
+  { id: 'p228-25', sequence: 24, name: 'Av. 6 de Julio y Colectora Panamericana', lat: -34.187650, lng: -58.948400, zone: 'Colectora', description: 'Distribuidor Panamericana y Av. 6 de Julio.' },
+  { id: 'p228-26', sequence: 25, name: 'Avenida 6 de Julio y Córdoba', lat: -34.185050, lng: -58.950520, zone: 'Colectora', description: 'Zona comercial y residencial.' },
+  { id: 'p228-27', sequence: 26, name: 'Avenida 6 de Julio y Namuncurá', lat: -34.182250, lng: -58.952720, zone: 'Colectora', description: 'Parada con refugio peatonal iluminado.' },
+  { id: 'p228-28', sequence: 27, name: 'Avenida 6 de Julio y Doctor Salk', lat: -34.178750, lng: -58.955350, zone: 'Colectora', description: 'Ingreso Colectora Norte y acceso fabril.' },
+  { id: 'p228-29', sequence: 28, name: 'Colectora Norte y Necochea', lat: -34.174350, lng: -58.958620, zone: 'Colectora', description: 'Frente a Tenaris Siderca y B° Siderca.' },
+  { id: 'p228-30', sequence: 29, name: 'Colectora Norte y Ricardo Rojas', lat: -34.170450, lng: -58.961520, zone: 'Colectora', description: 'Giro hacia puente Av. Rivadavia.' },
 
   // Tramo 6: Ingreso Centro de Campana (Av. Rubén Varela / Plaza Eduardo Costa)
-  { id: 'p228-31', sequence: 30, name: 'Laprida y General Belgrano', lat: -34.1670, lng: -58.9550, zone: 'Campana Centro', description: 'Ingreso casco urbano de Campana.' },
-  { id: 'p228-32', sequence: 31, name: 'Avenida Rubén Varela y Andrés del Pino', lat: -34.1660, lng: -58.9580, zone: 'Campana Centro', description: 'Avenida principal Varela.' },
-  { id: 'p228-33', sequence: 32, name: 'Avenida Rubén Varela y Salmini', lat: -34.1652, lng: -58.9592, zone: 'Campana Centro', description: 'Comercios céntricos.' },
-  { id: 'p228-34', sequence: 33, name: 'Avenida Rubén Varela y Avenida Teniente Perón', lat: -34.1645, lng: -58.9593, zone: 'Campana Centro', description: 'Paso por bulevar céntrico.' },
-  { id: 'p228-35', sequence: 34, name: 'Plaza Eduardo Costa / San Martín', lat: -34.1633, lng: -58.9591, zone: 'Campana Centro', description: 'Plaza principal de Campana / Palacio Municipal.' },
-  { id: 'p228-36', sequence: 35, name: 'General Belgrano y Jean Jaurés', lat: -34.1620, lng: -58.9585, zone: 'Campana Centro', description: 'Zona bancaria y comercial.' },
-  { id: 'p228-37', sequence: 36, name: 'General Belgrano y Avenida Mitre', lat: -34.1608, lng: -58.9575, zone: 'Campana Centro', description: 'Av. Mitre comercial.' },
-  { id: 'p228-38', sequence: 37, name: 'General Belgrano y Alem', lat: -34.1595, lng: -58.9565, zone: 'Campana Centro', description: 'Avenida Alem.' },
+  { id: 'p228-31', sequence: 30, name: 'Laprida y General Belgrano', lat: -34.167650, lng: -58.959950, zone: 'Campana Centro', description: 'Ingreso casco urbano de Campana.' },
+  { id: 'p228-32', sequence: 31, name: 'Avenida Rubén Varela y Andrés del Pino', lat: -34.165950, lng: -58.958580, zone: 'Campana Centro', description: 'Avenida principal Varela y centro comercial.' },
+  { id: 'p228-33', sequence: 32, name: 'Avenida Rubén Varela y Salmini', lat: -34.165250, lng: -58.959020, zone: 'Campana Centro', description: 'Comercios y entidades bancarias.' },
+  { id: 'p228-34', sequence: 33, name: 'Avenida Rubén Varela y Avenida Teniente Perón', lat: -34.164450, lng: -58.959150, zone: 'Campana Centro', description: 'Bulevar céntrico.' },
+  { id: 'p228-35', sequence: 34, name: 'Plaza Eduardo Costa / San Martín', lat: -34.163200, lng: -58.958950, zone: 'Campana Centro', description: 'Plaza principal de Campana / Palacio Municipal.' },
+  { id: 'p228-36', sequence: 35, name: 'General Belgrano y Jean Jaurés', lat: -34.162350, lng: -58.958380, zone: 'Campana Centro', description: 'Casco histórico y bancos.' },
+  { id: 'p228-37', sequence: 36, name: 'General Belgrano y Avenida Mitre', lat: -34.161250, lng: -58.957480, zone: 'Campana Centro', description: 'Cruce con Avenida Mitre.' },
+  { id: 'p228-38', sequence: 37, name: 'General Belgrano y Alem', lat: -34.160050, lng: -58.956480, zone: 'Campana Centro', description: 'Avenida Leandro N. Alem.' },
 
   // Tramo 7: Estación Campana y Enlace Céntrico
-  { id: 'p228-39', sequence: 38, name: 'Estación de Tren Campana', lat: -34.1569, lng: -58.9585, zone: 'Campana Centro', description: 'Conexión Ferrocarril Mitre.' },
-  { id: 'p228-40', sequence: 39, name: 'San Martín y Luis Costa', lat: -34.1555, lng: -58.9600, zone: 'Campana Centro', description: 'Hacia Ruta Provincial 6.' },
-  { id: 'p228-41', sequence: 40, name: 'San Martín y Güemes', lat: -34.1540, lng: -58.9615, zone: 'Campana Centro', description: 'Salida de Campana.' },
-  { id: 'p228-42', sequence: 41, name: 'San Martín y Av. Mitre', lat: -34.1528, lng: -58.9630, zone: 'Campana Centro', description: 'Enlace vial.' },
-  { id: 'p228-43', sequence: 42, name: 'Jean Jaurés y Boulevard General Lavalle', lat: -34.1518, lng: -58.9642, zone: 'Campana Centro', description: 'Bulevar Lavalle.' },
-  { id: 'p228-44', sequence: 43, name: 'Avenida Mitre y Balcarce', lat: -34.1500, lng: -58.9655, zone: 'Campana Centro', description: 'Acceso a autovía RP6.' },
-  { id: 'p228-45', sequence: 44, name: 'Avenida Mitre y Santiago del Estero', lat: -34.1480, lng: -58.9675, zone: 'Campana Centro', description: 'Tramo final casco urbano.' },
+  { id: 'p228-39', sequence: 38, name: 'Estación de Tren Campana', lat: -34.156950, lng: -58.958550, zone: 'Campana Centro', description: 'Conexión Ferrocarril Mitre.' },
+  { id: 'p228-40', sequence: 39, name: 'San Martín y Luis Costa', lat: -34.156050, lng: -58.959520, zone: 'Campana Centro', description: 'Hacia Ruta Provincial 6.' },
+  { id: 'p228-41', sequence: 40, name: 'San Martín y Güemes', lat: -34.154850, lng: -58.960820, zone: 'Campana Centro', description: 'Zona céntrica norte de Campana.' },
+  { id: 'p228-42', sequence: 41, name: 'San Martín y Av. Mitre', lat: -34.153650, lng: -58.962150, zone: 'Campana Centro', description: 'Enlace vial principal.' },
+  { id: 'p228-43', sequence: 42, name: 'Jean Jaurés y Boulevard General Lavalle', lat: -34.152250, lng: -58.963650, zone: 'Campana Centro', description: 'Bulevar Lavalle y comercios.' },
+  { id: 'p228-44', sequence: 43, name: 'Avenida Mitre y Balcarce', lat: -34.151050, lng: -58.964950, zone: 'Campana Centro', description: 'Acceso a autovía RP6.' },
+  { id: 'p228-45', sequence: 44, name: 'Avenida Mitre y Santiago del Estero', lat: -34.149350, lng: -58.966850, zone: 'Campana Centro', description: 'Rotonda norte de enlace a RP6.' },
 
   // Tramo 8: Ruta Provincial 6 (Campana → Zárate)
-  { id: 'p228-46', sequence: 45, name: 'RP 6 y Bidegain', lat: -34.1430, lng: -58.9720, zone: 'Ruta 6', description: 'Autovía RP6 hacia Zárate.' },
-  { id: 'p228-47', sequence: 46, name: 'RP 6 y Fernando Ochoa', lat: -34.1370, lng: -58.9800, zone: 'Ruta 6', description: 'Parada sobre autovía.' },
-  { id: 'p228-48', sequence: 47, name: 'RP 6 y Saavedra', lat: -34.1300, lng: -58.9900, zone: 'Ruta 6', description: 'Zona descampada / fábricas.' },
-  { id: 'p228-49', sequence: 48, name: 'RP 6 y Scholnik', lat: -34.1230, lng: -59.0020, zone: 'Ruta 6', description: 'Ingreso al Partido de Zárate.' },
+  { id: 'p228-46', sequence: 45, name: 'RP 6 y Bidegain', lat: -34.144050, lng: -58.972450, zone: 'Ruta 6', description: 'Autovía RP6 hacia Zárate.' },
+  { id: 'p228-47', sequence: 46, name: 'RP 6 y Fernando Ochoa', lat: -34.138650, lng: -58.978250, zone: 'Ruta 6', description: 'Parada sobre autovía RP6.' },
+  { id: 'p228-48', sequence: 47, name: 'RP 6 y Saavedra', lat: -34.132350, lng: -58.985350, zone: 'Ruta 6', description: 'Zona industrial y comercial de la autovía.' },
+  { id: 'p228-49', sequence: 48, name: 'RP 6 y Scholnik', lat: -34.122650, lng: -58.997350, zone: 'Ruta 6', description: 'Ingreso al Partido de Zárate / Parque Industrial.' },
 
   // Tramo 9: Ingreso a Zárate (Rotonda Zárate y Av. Lavalle)
-  { id: 'p228-50', sequence: 49, name: 'Rotonda Zárate (Acceso RN 9 / Lavalle)', lat: -34.1190, lng: -59.0120, zone: 'Zárate', description: 'Rotonda principal de acceso a Zárate.' },
-  { id: 'p228-51', sequence: 50, name: 'Avenida Lavalle y Perito Moreno', lat: -34.1175, lng: -59.0150, zone: 'Zárate', description: 'Avenida Lavalle comercial.' },
-  { id: 'p228-52', sequence: 51, name: 'Avenida Lavalle y Pitrau', lat: -34.1160, lng: -59.0180, zone: 'Zárate', description: 'Parada barrial.' },
-  { id: 'p228-53', sequence: 52, name: 'Plaza Lavalle / Laprida', lat: -34.1145, lng: -59.0210, zone: 'Zárate', description: 'Plaza Lavalle.' },
-  { id: 'p228-54', sequence: 53, name: 'Avenida Lavalle y Larrea', lat: -34.1125, lng: -59.0240, zone: 'Zárate', description: 'Corredor comercial Zárate.' },
-  { id: 'p228-55', sequence: 54, name: 'Avenida Lavalle y Pellegrini', lat: -34.1105, lng: -59.0270, zone: 'Zárate', description: 'Cruce céntrico.' },
+  { id: 'p228-50', sequence: 49, name: 'Rotonda Zárate (Acceso RN 9 / Lavalle)', lat: -34.115650, lng: -59.013400, zone: 'Zárate', description: 'Rotonda principal de acceso a Zárate por RN 9 y RP 6.' },
+  { id: 'p228-51', sequence: 50, name: 'Avenida Lavalle y Perito Moreno', lat: -34.113650, lng: -59.016180, zone: 'Zárate', description: 'Avenida Lavalle comercial y residencial.' },
+  { id: 'p228-52', sequence: 51, name: 'Avenida Lavalle y Pitrau', lat: -34.112250, lng: -59.017980, zone: 'Zárate', description: 'Cruce Av. Lavalle y Pitrau / Teodoro Fels.' },
+  { id: 'p228-53', sequence: 52, name: 'Plaza Lavalle / Laprida', lat: -34.110850, lng: -59.019780, zone: 'Zárate', description: 'Plaza Lavalle y escuelas de la zona.' },
+  { id: 'p228-54', sequence: 53, name: 'Avenida Lavalle y Larrea', lat: -34.109450, lng: -59.021580, zone: 'Zárate', description: 'Corredor comercial céntrico Zárate.' },
+  { id: 'p228-55', sequence: 54, name: 'Avenida Lavalle y Pellegrini', lat: -34.108050, lng: -59.023380, zone: 'Zárate', description: 'Cruce de alto tránsito.' },
 
   // Tramo 10: Zárate Centro (Leandro Alem)
-  { id: 'p228-56', sequence: 55, name: 'Avenida Mitre y Leandro Alem', lat: -34.1085, lng: -59.0290, zone: 'Zárate', description: 'Avenida Leandro N. Alem.' },
-  { id: 'p228-57', sequence: 56, name: 'Leandro Alem y Castelli', lat: -34.1065, lng: -59.0310, zone: 'Zárate', description: 'Centro de Zárate.' },
-  { id: 'p228-58', sequence: 57, name: 'Leandro Alem y Rómulo Noya', lat: -34.1045, lng: -59.0325, zone: 'Zárate', description: 'Peatonal Rómulo Noya.' },
-  { id: 'p228-59', sequence: 58, name: 'Leandro Alem e Ituzaingó', lat: -34.1035, lng: -59.0332, zone: 'Zárate', description: 'Plaza Mitre Zárate.' },
-  { id: 'p228-60', sequence: 59, name: 'Leandro Alem y Rivadavia', lat: -34.1025, lng: -59.0340, zone: 'Zárate', description: 'Comercios céntricos.' },
+  { id: 'p228-56', sequence: 55, name: 'Avenida Mitre y Leandro Alem', lat: -34.105250, lng: -59.027400, zone: 'Zárate', description: 'Avenida Leandro N. Alem.' },
+  { id: 'p228-57', sequence: 56, name: 'Leandro Alem y Castelli', lat: -34.104050, lng: -59.029080, zone: 'Zárate', description: 'Centro cívico y comercial de Zárate.' },
+  { id: 'p228-58', sequence: 57, name: 'Leandro Alem y Rómulo Noya', lat: -34.102850, lng: -59.030680, zone: 'Zárate', description: 'Cruce con la peatonal Rómulo Noya.' },
+  { id: 'p228-59', sequence: 58, name: 'Leandro Alem e Ituzaingó', lat: -34.101650, lng: -59.032180, zone: 'Zárate', description: 'Plaza Mitre y Municipalidad de Zárate.' },
+  { id: 'p228-60', sequence: 59, name: 'Leandro Alem y Rivadavia', lat: -34.100450, lng: -59.033680, zone: 'Zárate', description: 'Área comercial y de servicios.' },
 
   // Tramo 11: Zárate Centro a Terminal de Zárate
-  { id: 'p228-61', sequence: 60, name: 'Florestano Andrade Atucha 173', lat: -34.1005, lng: -59.0355, zone: 'Zárate', description: 'Hacia terminal de ómnibus.' },
-  { id: 'p228-62', sequence: 61, name: 'Florestano Andrade Atucha 473', lat: -34.0995, lng: -59.0360, zone: 'Zárate', description: 'Zona residencial.' },
-  { id: 'p228-63', sequence: 62, name: 'Gregorio Quirno 1507', lat: -34.0988, lng: -59.0365, zone: 'Zárate', description: 'Avenida Anta.' },
-  { id: 'p228-64', sequence: 63, name: 'Soler y Avenida Anta', lat: -34.0980, lng: -59.0370, zone: 'Zárate', description: 'Acceso andenes.' },
-  { id: 'p228-65', sequence: 64, name: 'Centro de Transferencia de Zárate (Terminal)', lat: -34.0975, lng: -59.0373, zone: 'Zárate', description: 'Terminal de Ómnibus y Centro de Transferencia Zárate.' },
+  { id: 'p228-61', sequence: 60, name: 'Florestano Andrade Atucha 173', lat: -34.098950, lng: -59.035580, zone: 'Zárate', description: 'Hacia terminal de ómnibus.' },
+  { id: 'p228-62', sequence: 61, name: 'Florestano Andrade Atucha 473', lat: -34.098050, lng: -59.036480, zone: 'Zárate', description: 'Zona residencial.' },
+  { id: 'p228-63', sequence: 62, name: 'Gregorio Quirno 1507', lat: -34.097250, lng: -59.037280, zone: 'Zárate', description: 'Acceso avenida Anta.' },
+  { id: 'p228-64', sequence: 63, name: 'Soler y Avenida Anta', lat: -34.096450, lng: -59.037950, zone: 'Zárate', description: 'Acceso a andenes terminales.' },
+  { id: 'p228-65', sequence: 64, name: 'Centro de Transferencia de Zárate (Terminal)', lat: -34.095650, lng: -59.038650, zone: 'Zárate', description: 'Terminal de Ómnibus y Centro de Transferencia Zárate.' },
 ];
 
 // Corredor específico habilitado: Justo Vigalondo hasta McDonald's Campana (Panamericana Km 72.5)
@@ -102,44 +102,6 @@ export const VIGALONDO_MCDONALDS_STOPS: Linea228Stop[] = LINEA_228_STOPS.slice(0
 
 // Corredor específico: Centro de Campana hasta Zárate Centro y Terminal
 export const CAMPANA_CENTRO_ZARATE_STOPS: Linea228Stop[] = LINEA_228_STOPS.slice(29);
-
-// Polilínea Centro de Campana -> RP 6 -> Zárate Centro / Terminal
-export const CAMPANA_CENTRO_ZARATE_COORDINATES: [number, number][] = [
-  [-34.1670, -58.9550], // Laprida y General Belgrano (Centro Campana)
-  [-34.1660, -58.9580], // Av. Rubén Varela y Del Pino
-  [-34.1652, -58.9592], // Av. Varela y Salmini
-  [-34.1645, -58.9593], // Av. Varela y Av. Tte. Perón
-  [-34.1633, -58.9591], // Plaza Eduardo Costa / San Martín (Palacio Municipal)
-  [-34.1620, -58.9585], // General Belgrano y Jean Jaurés
-  [-34.1608, -58.9575], // Belgrano y Av. Mitre
-  [-34.1595, -58.9565], // Belgrano y Alem
-  [-34.1569, -58.9585], // Estación Ferrocarril Campana
-  [-34.1555, -58.9600], // San Martín y Luis Costa
-  [-34.1540, -58.9615], // San Martín y Güemes
-  [-34.1528, -58.9630], // San Martín y Av. Mitre
-  [-34.1518, -58.9642], // Jean Jaurés y Blvd. Lavalle
-  [-34.1500, -58.9655], // Av. Mitre y Balcarce
-  [-34.1480, -58.9675], // Av. Mitre y Santiago del Estero
-  [-34.1430, -58.9720], // RP 6 y Bidegain
-  [-34.1370, -58.9800], // RP 6 y Fernando Ochoa
-  [-34.1300, -58.9900], // RP 6 y Saavedra
-  [-34.1230, -59.0020], // RP 6 y Scholnik (Ingreso a Zárate)
-  [-34.1190, -59.0120], // Rotonda Zárate (Acceso RN 9 / Av. Lavalle)
-  [-34.1175, -59.0150], // Av. Lavalle y Perito Moreno
-  [-34.1160, -59.0180], // Av. Lavalle y Pitrau
-  [-34.1145, -59.0210], // Plaza Lavalle / Laprida
-  [-34.1125, -59.0240], // Av. Lavalle y Larrea
-  [-34.1105, -59.0270], // Av. Lavalle y Pellegrini
-  [-34.1085, -59.0290], // Av. Mitre y Leandro Alem
-  [-34.1065, -59.0310], // Leandro Alem y Castelli
-  [-34.1045, -59.0325], // Leandro Alem y Rómulo Noya (Peatonal)
-  [-34.1035, -59.0332], // Leandro Alem e Ituzaingó (Plaza Mitre)
-  [-34.1025, -59.0340], // Leandro Alem y Rivadavia
-  [-34.0995, -59.0360], // Andrade Atucha 473
-  [-34.0988, -59.0365], // Gregorio Quirno 1507
-  [-34.0980, -59.0370], // Soler y Av. Anta
-  [-34.0975, -59.0373], // Centro de Transferencia de Zárate (Terminal)
-];
 
 // Polilínea de alta fidelidad que sigue fielmente el trazado de las calles de Campana:
 // Justo Vigalondo -> Sandalía Bravo -> Las Campanas -> Ariel del Plata -> Colectora Sur -> McDonald's Panamericana Km 72.5
@@ -196,48 +158,121 @@ export const VIGALONDO_MCDONALDS_COORDINATES: [number, number][] = [
   [-34.191398, -58.944732], // McDonald's Campana (Km 72.5)
 ];
 
+// Trazado de alta fidelidad que conecta Panamericana Km 72.5 -> Colectora Norte -> Casco Céntrico Campana -> RP 6 -> Zárate Centro -> Terminal
+export const CAMPANA_A_ZARATE_SECTOR_COORDINATES: [number, number][] = [
+  [-34.190820, -58.945310],
+  [-34.189950, -58.946150],
+  [-34.189100, -58.947050], // Distribuidor Panamericana / Av. 6 de Julio
+  [-34.188450, -58.947800],
+  [-34.187650, -58.948400], // Av. 6 de Julio y Colectora Panamericana
+  [-34.186500, -58.949350],
+  [-34.185050, -58.950520], // Av. 6 de Julio y Córdoba
+  [-34.183800, -58.951500],
+  [-34.182250, -58.952720], // Av. 6 de Julio y Namuncurá
+  [-34.180800, -58.953800],
+  [-34.178750, -58.955350], // Av. 6 de Julio y Dr. Salk
+  [-34.176800, -58.956800],
+  [-34.174350, -58.958620], // Colectora Norte y Necochea (Tenaris)
+  [-34.172500, -58.960000],
+  [-34.170450, -58.961520], // Colectora Norte y Ricardo Rojas
+  [-34.169500, -58.962200], // Giro hacia Av. Rivadavia
+  [-34.168600, -58.961200],
+  [-34.167650, -58.959950], // Laprida y Belgrano
+  [-34.166800, -58.959300],
+  [-34.165950, -58.958580], // Av. Rubén Varela y Del Pino
+  [-34.165400, -58.958900],
+  [-34.165250, -58.959020], // Av. Varela y Salmini
+  [-34.164600, -58.959100],
+  [-34.164450, -58.959150], // Av. Varela y Av. Tte. Perón
+  [-34.163800, -58.959200], // Acceso Plaza Eduardo Costa
+  [-34.163200, -58.958950], // Plaza Eduardo Costa / San Martín (Palacio Municipal)
+  [-34.162500, -58.958500],
+  [-34.162350, -58.958380], // General Belgrano y Jean Jaurés
+  [-34.161400, -58.957600],
+  [-34.161250, -58.957480], // Belgrano y Av. Mitre
+  [-34.160200, -58.956600],
+  [-34.160050, -58.956480], // Belgrano y Alem
+  [-34.158500, -58.957400],
+  [-34.157200, -58.958300],
+  [-34.156950, -58.958550], // Estación Ferrocarril Campana
+  [-34.156200, -58.959400],
+  [-34.156050, -58.959520], // San Martín y Luis Costa
+  [-34.155000, -58.960700],
+  [-34.154850, -58.960820], // San Martín y Güemes
+  [-34.153800, -58.962000],
+  [-34.153650, -58.962150], // San Martín y Av. Mitre
+  [-34.152400, -58.963500],
+  [-34.152250, -58.963650], // Jean Jaurés y Blvd. Lavalle
+  [-34.151200, -58.964800],
+  [-34.151050, -58.964950], // Av. Mitre y Balcarce
+  [-34.149500, -58.966700],
+  [-34.149350, -58.966850], // Av. Mitre y Santiago del Estero
+  // Autovía Ruta Provincial 6 (Campana → Zárate)
+  [-34.147800, -58.968600],
+  [-34.146000, -58.970500],
+  [-34.144200, -58.972300],
+  [-34.144050, -58.972450], // RP 6 y Bidegain
+  [-34.141500, -58.975200],
+  [-34.138800, -58.978100],
+  [-34.138650, -58.978250], // RP 6 y Fernando Ochoa
+  [-34.135500, -58.981800],
+  [-34.132500, -58.985200],
+  [-34.132350, -58.985350], // RP 6 y Saavedra
+  [-34.129000, -58.989200],
+  [-34.125500, -58.993500],
+  [-34.122800, -58.997200],
+  [-34.122650, -58.997350], // RP 6 y Scholnik (Ingreso a Zárate / Parque Industrial)
+  [-34.120500, -59.001500],
+  [-34.118800, -59.005500],
+  [-34.117200, -59.009800],
+  // Rotonda Zárate (Acceso RN 9 / Av. Lavalle)
+  [-34.116500, -59.012200],
+  [-34.115800, -59.013200],
+  [-34.115650, -59.013400], // Rotonda Zárate
+  // Avenida Lavalle comercial
+  [-34.114800, -59.014600],
+  [-34.113800, -59.016000],
+  [-34.113650, -59.016180], // Av. Lavalle y Perito Moreno
+  [-34.112400, -59.017800],
+  [-34.112250, -59.017980], // Av. Lavalle y Pitrau
+  [-34.111000, -59.019600],
+  [-34.110850, -59.019780], // Plaza Lavalle / Laprida
+  [-34.109600, -59.021400],
+  [-34.109450, -59.021580], // Av. Lavalle y Larrea
+  [-34.108200, -59.023200],
+  [-34.108050, -59.023380], // Av. Lavalle y Pellegrini
+  [-34.107000, -59.024800],
+  // Zárate Centro (Av. Mitre & Leandro Alem)
+  [-34.106200, -59.026000],
+  [-34.105400, -59.027200],
+  [-34.105250, -59.027400], // Av. Mitre y Leandro Alem
+  [-34.104200, -59.028900],
+  [-34.104050, -59.029080], // Leandro Alem y Castelli
+  [-34.103000, -59.030500],
+  [-34.102850, -59.030680], // Leandro Alem y Rómulo Noya (Peatonal)
+  [-34.101800, -59.032000],
+  [-34.101650, -59.032180], // Leandro Alem e Ituzaingó (Plaza Mitre)
+  [-34.100600, -59.033500],
+  [-34.100450, -59.033680], // Leandro Alem y Rivadavia
+  // Acceso a Terminal Zárate
+  [-34.099800, -59.034600],
+  [-34.099100, -59.035400],
+  [-34.098950, -59.035580], // Andrade Atucha 173
+  [-34.098200, -59.036300],
+  [-34.098050, -59.036480], // Andrade Atucha 473
+  [-34.097400, -59.037100],
+  [-34.097250, -59.037280], // Gregorio Quirno 1507
+  [-34.096600, -59.037800],
+  [-34.096450, -59.037950], // Soler y Av. Anta
+  [-34.095900, -59.038400],
+  [-34.095650, -59.038650], // Centro de Transferencia de Zárate (Terminal)
+];
+
+// Polilínea Centro de Campana -> RP 6 -> Zárate Centro / Terminal
+export const CAMPANA_CENTRO_ZARATE_COORDINATES: [number, number][] = CAMPANA_A_ZARATE_SECTOR_COORDINATES.slice(17);
+
 // Recorrido troncal completo Zárate ↔ Malvinas
 export const LINEA_228_COORDINATES: [number, number][] = [
   ...VIGALONDO_MCDONALDS_COORDINATES,
-  [-34.1880, -58.9455], // Av. 6 de Julio y Panamericana
-  [-34.1840, -58.9460], // Av. 6 de Julio y Córdoba
-  [-34.1800, -58.9455], // Namuncurá
-  [-34.1755, -58.9442], // Salk
-  [-34.1720, -58.9430], // Necochea
-  [-34.1690, -58.9420], // Rojas
-  [-34.1670, -58.9550], // Laprida y Belgrano
-  [-34.1660, -58.9580], // Varela y Del Pino
-  [-34.1652, -58.9592], // Varela y Salmini
-  [-34.1645, -58.9593], // Varela y Perón
-  [-34.1633, -58.9591], // Plaza Costa
-  [-34.1620, -58.9585], // Belgrano y Jean Jaurés
-  [-34.1608, -58.9575], // Belgrano y Mitre
-  [-34.1595, -58.9565], // Belgrano y Alem
-  [-34.1569, -58.9585], // Estación Campana
-  [-34.1555, -58.9600], // San Martín y Costa
-  [-34.1540, -58.9615], // San Martín y Güemes
-  [-34.1528, -58.9630], // San Martín y Mitre
-  [-34.1518, -58.9642], // Lavalle
-  [-34.1500, -58.9655], // Balcarce
-  [-34.1480, -58.9675], // Santiago del Estero
-  [-34.1430, -58.9720], // RP6 y Bidegain
-  [-34.1370, -58.9800], // RP6 y Ochoa
-  [-34.1300, -58.9900], // RP6 y Saavedra
-  [-34.1230, -59.0020], // RP6 y Scholnik
-  [-34.1190, -59.0120], // Rotonda Zárate
-  [-34.1175, -59.0150], // Lavalle y Perito Moreno
-  [-34.1160, -59.0180], // Lavalle y Pitrau
-  [-34.1145, -59.0210], // Plaza Lavalle
-  [-34.1125, -59.0240], // Lavalle y Larrea
-  [-34.1105, -59.0270], // Lavalle y Pellegrini
-  [-34.1085, -59.0290], // Alem y Mitre
-  [-34.1065, -59.0310], // Alem y Castelli
-  [-34.1045, -59.0325], // Alem y Noya
-  [-34.1035, -59.0332], // Alem e Ituzaingó
-  [-34.1025, -59.0340], // Alem y Rivadavia
-  [-34.1005, -59.0355], // Atucha 173
-  [-34.0995, -59.0360], // Atucha 473
-  [-34.0988, -59.0365], // Quirno 1507
-  [-34.0980, -59.0370], // Soler y Anta
-  [-34.0975, -59.0373], // Terminal Zárate
+  ...CAMPANA_A_ZARATE_SECTOR_COORDINATES,
 ];
