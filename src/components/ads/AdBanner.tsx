@@ -9,10 +9,10 @@ import {
 
 interface AdBannerProps {
   ads: AdListing[];
-  onOpenContactModal: () => void;
+  onOpenContactModal?: () => void;
 }
 
-export const AdBanner: React.FC<AdBannerProps> = ({ ads, onOpenContactModal }) => {
+export const AdBanner: React.FC<AdBannerProps> = ({ ads }) => {
   const [isDismissed, setIsDismissed] = useState(false);
 
   const activeAds = ads.filter((a) => a.isActive);
@@ -46,22 +46,6 @@ export const AdBanner: React.FC<AdBannerProps> = ({ ads, onOpenContactModal }) =
       title="Auspicios locales en vivo: pasá el cursor para pausar y hacer clic en cualquier comercio"
     >
       <div className="flex items-center h-12 sm:h-13 px-2 sm:px-3 gap-2">
-        {/* Left Sticky Compact Pill: "Auspicio Local" ultra-compacto hacia la izquierda para dar más lugar al banner */}
-        <div className="flex items-center shrink-0 z-10 bg-[#0a0d14] pr-1.5 border-r border-slate-800/80">
-          <button
-            type="button"
-            onClick={onOpenContactModal}
-            className="h-7.5 px-2 rounded-lg bg-gradient-to-r from-amber-500/20 to-orange-500/20 hover:from-amber-500/35 hover:to-orange-500/35 text-amber-300 hover:text-white border border-amber-400/40 hover:border-amber-300 text-[10px] font-black uppercase tracking-tight flex items-center gap-1 shadow-sm active:scale-95 transition-all cursor-pointer shrink-0 group"
-            title="Pedir incluir un negocio en el banner publicitario de UPPA"
-          >
-            <Megaphone className="w-3 h-3 text-amber-400 group-hover:scale-110 transition-transform shrink-0" />
-            <span>Auspicio</span>
-            <span className="hidden sm:inline text-[8.5px] bg-amber-400/20 px-1 py-0.2 rounded text-amber-200 font-extrabold border border-amber-400/30">
-              + Negocio
-            </span>
-          </button>
-        </div>
-
         {/* Infinite Moving Marquee Track (Auto-pausa suavemente al pasar el mouse encima) */}
         <div className="flex-1 overflow-hidden relative">
           <div className="animate-marquee-infinite flex items-center gap-3">
@@ -142,17 +126,8 @@ export const AdBanner: React.FC<AdBannerProps> = ({ ads, onOpenContactModal }) =
           </div>
         </div>
 
-        {/* Right Actions: Anunciar Acá & Botón Cruz "X" para cerrar banner */}
+        {/* Right Actions: Botón Cruz "X" para cerrar banner */}
         <div className="flex items-center gap-1.5 shrink-0 z-10 bg-[#0a0d14] pl-2 border-l border-slate-800/80">
-          <button
-            type="button"
-            onClick={onOpenContactModal}
-            className="hidden lg:flex px-2 py-1 rounded-lg text-[10.5px] font-semibold text-slate-400 hover:text-amber-300 hover:bg-white/[0.04] transition-colors cursor-pointer"
-            title="Pedir incluir mi negocio en el banner"
-          >
-            Anunciar
-          </button>
-
           <button
             type="button"
             onClick={() => setIsDismissed(true)}

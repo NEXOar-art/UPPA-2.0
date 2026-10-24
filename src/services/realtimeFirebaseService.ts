@@ -490,8 +490,8 @@ export async function eliminarReporte(reporteId: string): Promise<void> {
 // ---------------------------------------------------------------------------
 // 3. CHAT COMUNITARIO: salas_chat/{salaId}/mensajes/{mensajeId}
 // ---------------------------------------------------------------------------
-// Retención comunitaria amplia: los mensajes se conservan para que toda la comunidad pueda leer e interactuar
-export const CHAT_MESSAGE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 días de retención comunitaria
+// Exposición de mensajes en chat: se borran automáticamente al cumplir 20 minutos de exposición
+export const CHAT_MESSAGE_TTL_MS = 20 * 60 * 1000; // 20 minutos de exposición exacta
 
 export function getMessageTimestampMs(enviadoEn: any): number {
   if (!enviadoEn) return Date.now();

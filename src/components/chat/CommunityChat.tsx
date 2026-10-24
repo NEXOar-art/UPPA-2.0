@@ -91,11 +91,14 @@ export const CommunityChat: React.FC<CommunityChatProps> = ({
     } catch {}
   };
 
-  // Actualiza la hora de referencia cada 30 segundos para las etiquetas relativas
+  // Actualiza la hora de referencia y purga automáticamente mensajes que superen los 20 minutos de exposición
   useEffect(() => {
     const timer = setInterval(() => {
-      setNowTimestamp(Date.now());
-    }, 30000);
+      const now = Date.now();
+      const twentyMinMs = 20 * 60 * 1000;
+      setNowTimestamp(now);
+      setMessages((prev) => prev.filter((m) => (now - getMessageTimestampMs(m.enviadoEn)) < twentyMinMs));
+    }, 5000);
     return () => clearInterval(timer);
   }, []);
 
@@ -119,9 +122,10 @@ export const CommunityChat: React.FC<CommunityChatProps> = ({
     }
   }, [activeContextEvent]);
 
-  // Filtrado de mensajes por canal, rol y búsqueda
+  // Filtrado de mensajes por canal, rol, búsqueda y límite estricto de 20 minutos de exposición
   const filteredMessages = useMemo(() => {
-    let list = messages;
+    const twentyMinMs = 20 * 60 * 1000;
+    let list = messages.filter((m) => (nowTimestamp - getMessageTimestampMs(m.enviadoEn)) < twentyMinMs);
 
     // Si hay un canal específico seleccionado, mostrar mensajes de ese canal y también los avisos comunitarios de 'todos'
     if (selectedChannel !== 'todos') {
@@ -237,11 +241,6 @@ export const CommunityChat: React.FC<CommunityChatProps> = ({
 
   const handleMention = (userName: string) => {
     setInputText((prev) => `${prev} @${userName} `);
-    inputRef.current?.focus();
-  };
-
-  const handleQuickChip = (text: string) => {
-    setInputText(text);
     inputRef.current?.focus();
   };
 
@@ -682,28 +681,6 @@ export const CommunityChat: React.FC<CommunityChatProps> = ({
           </button>
         </div>
       )}
-
-      {/* Quick Suggestion Chips para interacción rápida */}
-      <div className="px-3 py-1.5 bg-[#080b12] border-t border-white/5 flex items-center gap-1.5 overflow-x-auto scrollbar-none">
-        <span className="text-[10px] text-slate-400 uppercase font-bold shrink-0">Atajos:</span>
-        {[
-          '¿A qué hora pasa el próximo 228?',
-          '🏍️ Moto Taxi disponible ya',
-          '🚕 Auto Taxi con baúl disponible',
-          'Tránsito normal en Panamericana',
-          '¿Cómo está el puente Zárate?',
-          '🙋 Necesito viaje hacia Zárate',
-        ].map((chip) => (
-          <button
-            key={chip}
-            type="button"
-            onClick={() => handleQuickChip(chip)}
-            className="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-purple-950/60 text-slate-300 hover:text-white text-[10.5px] border border-white/10 shrink-0 cursor-pointer active:scale-95 transition-all"
-          >
-            {chip}
-          </button>
-        ))}
-      </div>
 
       {/* Indicador de Identidad y Envío Libre */}
       <div className="px-3 pt-1.5 pb-0.5 bg-[#0b0e17] flex items-center justify-between text-[11px] text-slate-400">

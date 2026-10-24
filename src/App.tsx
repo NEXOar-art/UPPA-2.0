@@ -72,6 +72,10 @@ import {
   Bike,
   KeyRound,
   Mail,
+  MoreVertical,
+  Zap,
+  Sun,
+  Moon,
 } from 'lucide-react';
 
 export default function App() {
@@ -210,8 +214,28 @@ export default function App() {
   // Active View / Tabs
   const [activeTab, setActiveTab] = useState<'map' | 'taxi' | 'chat' | 'admin'>('map');
   const [selectedEvent, setSelectedEvent] = useState<MapEvent | null>(null);
-  const [selectedRouteId, setSelectedRouteId] = useState<string>('all');
+  const [selectedRouteId, setSelectedRouteId] = useState<string>('route-zarate-malvinas');
   const [activeTrackingTaxi, setActiveTrackingTaxi] = useState<TaxiListing | null>(null);
+  const [isHeaderMenuOpen, setIsHeaderMenuOpen] = useState(false);
+  const headerMenuRef = useRef<HTMLDivElement>(null);
+
+  // Escenario Inteligente de App Claro / Oscuro
+  const [themeMode, setThemeMode] = useState<'dark' | 'light'>(() => {
+    try {
+      const stored = localStorage.getItem('uppa_theme_mode');
+      if (stored === 'light' || stored === 'dark') return stored;
+    } catch {}
+    return 'dark';
+  });
+
+  const toggleThemeMode = () => {
+    const next = themeMode === 'dark' ? 'light' : 'dark';
+    setThemeMode(next);
+    try {
+      localStorage.setItem('uppa_theme_mode', next);
+    } catch {}
+    showToast(next === 'light' ? 'Modo Claro activado' : 'Modo Oscuro activado');
+  };
 
   // Modals
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
@@ -228,6 +252,19 @@ export default function App() {
 
   // Eventos Push en Pantalla (Deduplicación & Exposición de 15 Minutos)
   const [screenPushEvents, setScreenPushEvents] = useState<PushNotificationPayload[]>([]);
+
+  // Cerrar menú de 3 puntos al hacer clic afuera
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (headerMenuRef.current && !headerMenuRef.current.contains(e.target as Node)) {
+        setIsHeaderMenuOpen(false);
+      }
+    };
+    if (isHeaderMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isHeaderMenuOpen]);
 
   // Limpieza periódica de eventos push que superaron los 15 minutos de exposición
   useEffect(() => {
@@ -352,7 +389,15 @@ export default function App() {
     setTimeout(() => setToastMessage(null), 3000);
   };
 
-  const latestCommunityMessage = communityChatList.length > 0 ? communityChatList[communityChatList.length - 1] : null;
+  const latestCommunityMessage = useMemo(() => {
+    const twentyMinMs = 20 * 60 * 1000;
+    const now = Date.now();
+    const active = communityChatList.filter((m) => {
+      const ts = m.enviadoEn ? Number(m.enviadoEn) : now;
+      return (now - ts) < twentyMinMs;
+    });
+    return active.length > 0 ? active[active.length - 1] : null;
+  }, [communityChatList]);
 
   const sentiment = computeLineSentiment(messages, events);
 
@@ -663,7 +708,9 @@ export default function App() {
   }
 
   return (
-    <div className="flex flex-col h-screen w-screen bg-[#07090e] text-slate-100 overflow-hidden font-sans">
+    <div className={`flex flex-col h-screen w-screen overflow-hidden font-sans transition-colors duration-300 ${
+      themeMode === 'light' ? 'bg-[#f4f6fb] text-slate-800' : 'bg-[#07090e] text-slate-100'
+    }`}>
       {/* Toast Notification */}
       {toastMessage && (
         <div className="fixed top-14 left-1/2 -translate-x-1/2 z-50 glass-panel px-4 py-2 rounded-2xl shadow-2xl text-xs flex items-center gap-2 border-sky-400/40 text-sky-200 animate-in fade-in duration-200">
@@ -755,57 +802,63 @@ export default function App() {
       )}
 
       {/* Floating Glass Top Bar (Tesla / Uber Style) */}
-      <header className="h-14 px-4 bg-[#0a0d14]/75 backdrop-blur-2xl border-b border-white/5 flex items-center justify-between shrink-0 z-30">
-        {/* Brand */}
+      <header className={`h-14 px-4 backdrop-blur-2xl border-b flex items-center justify-between shrink-0 z-30 transition-colors duration-300 ${
+        themeMode === 'light'
+          ? 'bg-white/85 border-slate-200/90 text-slate-900 shadow-sm'
+          : 'bg-[#0a0d14]/75 border-white/5 text-white'
+      }`}>
+        {/* Brand: Solo el texto UPPA sin icono */}
         <div className="flex items-center gap-2">
-          <button onClick={() => setActiveTab('map')} className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-sky-400 to-cyan-500 flex items-center justify-center font-bold text-slate-950 font-display text-sm shadow-md shadow-sky-500/20">
-              U
-            </div>
-            <span className="text-base font-extrabold tracking-tight text-white font-display">
+          <button onClick={() => setActiveTab('map')} className="flex items-center">
+            <span className={`text-lg font-black tracking-wider font-display transition-colors ${
+              themeMode === 'light' ? 'text-slate-950' : 'text-white'
+            }`}>
               UPPA
             </span>
           </button>
         </div>
 
-        {/* Deductive Icon-First Navigation Tabs */}
+        {/* Deductive Icon-First Navigation Tabs (Sin texto, solo iconos directos) */}
         <nav className="flex items-center gap-1 glass-pill p-1 rounded-2xl border-white/5">
           <button
             onClick={() => setActiveTab('map')}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5 ${
+            className={`p-2 text-xs font-semibold rounded-xl transition-all flex items-center justify-center ${
               activeTab === 'map'
                 ? 'bg-sky-400/20 text-sky-200 border border-sky-400/35 shadow-sm'
                 : 'text-slate-400 hover:text-white'
             }`}
+            title="Mapa"
           >
-            <Bus className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Mapa</span>
+            <Bus className="w-4 h-4" />
           </button>
 
           <button
             onClick={() => setActiveTab('taxi')}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5 ${
+            className={`p-2 text-xs font-semibold rounded-xl transition-all flex items-center justify-center ${
               activeTab === 'taxi'
                 ? 'bg-emerald-400/20 text-emerald-200 border border-emerald-400/35 shadow-sm'
                 : 'text-slate-400 hover:text-white'
             }`}
+            title="Taxis & Motos"
           >
-            <Car className="w-3.5 h-3.5" />
-            <span>Taxis & Motos</span>
+            <div className="flex items-center gap-0.5">
+              <Bike className="w-4 h-4" />
+              <Car className="w-4 h-4" />
+            </div>
           </button>
 
           <button
             onClick={() => setActiveTab('chat')}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5 relative ${
+            className={`p-2 text-xs font-semibold rounded-xl transition-all flex items-center justify-center relative ${
               activeTab === 'chat'
                 ? 'bg-purple-400/20 text-purple-200 border border-purple-400/35 shadow-sm'
                 : 'text-slate-400 hover:text-white'
             }`}
+            title="Chat"
           >
-            <MessageSquare className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Chat</span>
+            <MessageSquare className="w-4 h-4" />
             {communityChatList.length > 0 && (
-              <span className="px-1.5 py-0.2 rounded-full bg-purple-500 text-white font-extrabold text-[9.5px] min-w-4 text-center animate-pulse">
+              <span className="absolute -top-1 -right-1 px-1 py-0.2 rounded-full bg-purple-500 text-white font-extrabold text-[9px] min-w-3.5 text-center animate-pulse">
                 {communityChatList.length}
               </span>
             )}
@@ -813,40 +866,76 @@ export default function App() {
 
           <button
             onClick={() => setActiveTab('admin')}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5 ${
+            className={`p-2 text-xs font-semibold rounded-xl transition-all flex items-center justify-center ${
               activeTab === 'admin'
                 ? 'bg-purple-500/25 text-purple-200 border border-purple-400/40 shadow-sm'
                 : 'text-slate-400 hover:text-purple-300'
             }`}
+            title="Admin"
           >
-            <Shield className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Admin</span>
+            <Shield className="w-4 h-4" />
           </button>
         </nav>
 
         {/* Right Actions */}
         <div className="flex items-center gap-1.5">
+          {/* Botón Inteligente de Escenario Claro / Oscuro */}
           <button
-            onClick={() => setIsReportModalOpen(true)}
-            className="h-8 px-3 rounded-xl bg-gradient-to-r from-sky-400 to-cyan-500 hover:from-sky-300 hover:to-cyan-400 text-slate-950 font-bold text-xs flex items-center gap-1 shadow-sm active:scale-95 transition-all"
+            onClick={toggleThemeMode}
+            className={`h-8 w-8 rounded-xl flex items-center justify-center transition-all cursor-pointer active:scale-95 ${
+              themeMode === 'light'
+                ? 'bg-amber-100/90 text-amber-700 hover:bg-amber-200/90 border border-amber-300/60 shadow-sm'
+                : 'glass-button text-amber-300 hover:text-white'
+            }`}
+            title={themeMode === 'dark' ? 'Cambiar a Modo Claro (Día)' : 'Cambiar a Modo Oscuro (Noche)'}
           >
-            <Plus className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Alerta</span>
+            {themeMode === 'dark' ? (
+              <Sun className="w-4 h-4 text-amber-400 hover:rotate-90 transition-transform" />
+            ) : (
+              <Moon className="w-4 h-4 text-slate-800 hover:-rotate-12 transition-transform" />
+            )}
           </button>
 
-          {/* Choferes: Botón directo para prestar servicio con transferencia, código y temporizador */}
-          <button
-            onClick={() => {
-              setPublishTaxiInitialTab('transfer');
-              setIsPublishTaxiOpen(true);
-            }}
-            className="h-8 px-3 rounded-xl bg-gradient-to-r from-emerald-500/25 to-teal-500/25 hover:from-emerald-500/35 hover:to-teal-500/35 text-emerald-300 border border-emerald-400/50 text-xs font-extrabold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-sm shadow-emerald-500/20"
-            title="Prestar servicio de Moto o Auto Taxi (Transferencia y Código con Temporizador)"
-          >
-            <Bike className="w-3.5 h-3.5 text-emerald-400" />
-            <Car className="w-3.5 h-3.5 text-cyan-400 -ml-1" />
-            <span className="hidden sm:inline">Prestar Servicio</span>
-          </button>
+          {/* Menú de 3 puntos: Prestar Servicio / Pedir Transporte Alternativo */}
+          <div className="relative" ref={headerMenuRef}>
+            <button
+              onClick={() => setIsHeaderMenuOpen((prev) => !prev)}
+              className="h-8 w-8 rounded-xl glass-button flex items-center justify-center text-slate-300 hover:text-white active:scale-95 transition-all cursor-pointer"
+              title="Más opciones: Prestar Servicio / Pedir Transporte"
+            >
+              <MoreVertical className="w-4 h-4" />
+            </button>
+
+            {isHeaderMenuOpen && (
+              <div className="absolute right-0 top-full mt-2 w-64 rounded-2xl bg-[#0a0e19]/95 backdrop-blur-2xl border border-white/10 shadow-2xl p-1.5 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
+                <button
+                  onClick={() => {
+                    setPublishTaxiInitialTab('transfer');
+                    setIsPublishTaxiOpen(true);
+                    setIsHeaderMenuOpen(false);
+                  }}
+                  className="w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold text-emerald-300 hover:bg-emerald-500/15 flex items-center gap-2.5 transition-all cursor-pointer"
+                >
+                  <div className="flex items-center gap-0.5">
+                    <Bike className="w-4 h-4 text-emerald-400" />
+                    <Car className="w-4 h-4 text-cyan-400" />
+                  </div>
+                  <span>Prestar Servicio</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setIsPedirTransporteOpen(true);
+                    setIsHeaderMenuOpen(false);
+                  }}
+                  className="w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold text-amber-300 hover:bg-amber-500/15 flex items-center gap-2.5 transition-all cursor-pointer"
+                >
+                  <Zap className="w-4 h-4 fill-amber-400 text-amber-400" />
+                  <span>Pedir Transporte Alternativo</span>
+                </button>
+              </div>
+            )}
+          </div>
 
           {isLoggedIn ? (
             <>
@@ -946,6 +1035,7 @@ export default function App() {
                 activeTrackingTaxi={activeTrackingTaxi}
                 onClearTrackingTaxi={() => setActiveTrackingTaxi(null)}
                 onOpenPedirTransporte={() => setIsPedirTransporteOpen(true)}
+                themeMode={themeMode}
               />
             </div>
 
