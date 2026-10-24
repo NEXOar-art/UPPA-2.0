@@ -1398,7 +1398,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
             B° Malvinas ↔ Zárate Terminal
           </span>
           <span className="text-[10px] text-cyan-300 font-mono font-bold bg-cyan-500/15 px-1.5 py-0.5 rounded-full border border-cyan-400/30">
-            64 Paradas
+            {totalRoute.stops.length} Paradas
           </span>
         </div>
       </div>

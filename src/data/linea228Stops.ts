@@ -11,107 +11,101 @@ export interface Linea228Stop extends BusStop {
 
 export const LINEA_228_STOPS: Linea228Stop[] = [
   // Tramo 1: Justo Vigalondo & B° Malvinas (Campana Sur)
-  { id: 'p228-01', sequence: 1, name: 'Justo Vigalondo y Colectora (Cabecera B° Malvinas)', lat: -34.214048, lng: -58.939303, zone: 'Barrio Malvinas', description: 'Esquina de Colectora Sur y Vigalondo. Garita techada de espera.' },
-  { id: 'p228-02', sequence: 2, name: 'Puerto San Carlos y Justo Vigalondo', lat: -34.212768, lng: -58.940199, zone: 'Barrio Malvinas', description: 'Frente a plaza vecinal y comercio de barrio.' },
-  { id: 'p228-03', sequence: 3, name: 'Justo Vigalondo 1887 (Comercial)', lat: -34.211791, lng: -58.940898, zone: 'Barrio Malvinas', description: 'Parada demarcada en poste oficial.' },
-  { id: 'p228-04', sequence: 4, name: 'Justo Vigalondo y Sandalía Bravo', lat: -34.211355, lng: -58.941215, zone: 'Barrio Malvinas', description: 'Cruce principal de acceso peatonal.' },
-  { id: 'p228-05', sequence: 5, name: 'Justo Vigalondo y Bomberos Voluntarios', lat: -34.209988, lng: -58.942204, zone: 'Barrio Malvinas', description: 'Centro neurálgico B° Malvinas.' },
-  { id: 'p228-06', sequence: 6, name: 'Justo Vigalondo 1419', lat: -34.208704, lng: -58.943139, zone: 'Barrio Malvinas', description: 'Frente a Escuela de la zona.' },
-  { id: 'p228-07', sequence: 7, name: 'Justo Vigalondo 1219 y Sierra', lat: -34.207533, lng: -58.943970, zone: 'Barrio Malvinas', description: 'Esquina asfaltada con refugio peatonal.' },
-  { id: 'p228-08', sequence: 8, name: 'Justo Vigalondo y Puerto Argentino', lat: -34.205220, lng: -58.945641, zone: 'Barrio Malvinas', description: 'Fin tramo Vigalondo, giro hacia Las Campanas.' },
+  { id: 'p228-03', sequence: 1, name: 'Justo Vigalondo 1887 (Comercial)', lat: -34.211791, lng: -58.940898, zone: 'Barrio Malvinas', description: 'Parada demarcada en poste oficial.' },
+  { id: 'p228-04', sequence: 2, name: 'Justo Vigalondo y Sandalía Bravo', lat: -34.211355, lng: -58.941215, zone: 'Barrio Malvinas', description: 'Cruce principal de acceso peatonal.' },
+  { id: 'p228-05', sequence: 3, name: 'Justo Vigalondo y Bomberos Voluntarios', lat: -34.209988, lng: -58.942204, zone: 'Barrio Malvinas', description: 'Centro neurálgico B° Malvinas.' },
+  { id: 'p228-06', sequence: 4, name: 'Justo Vigalondo 1419', lat: -34.208704, lng: -58.943139, zone: 'Barrio Malvinas', description: 'Frente a Escuela de la zona.' },
+  { id: 'p228-07', sequence: 5, name: 'Justo Vigalondo 1219 y Sierra', lat: -34.207533, lng: -58.943970, zone: 'Barrio Malvinas', description: 'Esquina asfaltada con refugio peatonal.' },
+  { id: 'p228-08', sequence: 6, name: 'Justo Vigalondo y Puerto Argentino', lat: -34.205220, lng: -58.945641, zone: 'Barrio Malvinas', description: 'Fin tramo Vigalondo, giro hacia Las Campanas.' },
 
   // Tramo 2: Barrio Las Campanas
-  { id: 'p228-09', sequence: 9, name: 'Schinoni y Miracca (Las Campanas)', lat: -34.206483, lng: -58.941843, zone: 'Las Campanas', description: 'Entrada B° Las Campanas.' },
-  { id: 'p228-10', sequence: 10, name: 'A. Schinoni y Casaux', lat: -34.205854, lng: -58.940590, zone: 'Las Campanas', description: 'Parada comunitaria con iluminación.' },
-  { id: 'p228-11', sequence: 11, name: 'Casaux y Chapuis', lat: -34.205225, lng: -58.939338, zone: 'Las Campanas', description: 'Cruce peatonal Las Campanas.' },
-  { id: 'p228-12', sequence: 12, name: 'Fremi y Casaux', lat: -34.204587, lng: -58.938069, zone: 'Las Campanas', description: 'Enlace entre Las Campanas y Ariel del Plata.' },
+  { id: 'p228-09', sequence: 7, name: 'Schinoni y Miracca (Las Campanas)', lat: -34.206483, lng: -58.941843, zone: 'Las Campanas', description: 'Entrada B° Las Campanas.' },
+  { id: 'p228-10', sequence: 8, name: 'A. Schinoni y Casaux', lat: -34.205854, lng: -58.940590, zone: 'Las Campanas', description: 'Parada comunitaria con iluminación.' },
+  { id: 'p228-11', sequence: 9, name: 'Casaux y Chapuis', lat: -34.205225, lng: -58.939338, zone: 'Las Campanas', description: 'Cruce peatonal Las Campanas.' },
+  { id: 'p228-12', sequence: 10, name: 'Fremi y Casaux', lat: -34.204587, lng: -58.938069, zone: 'Las Campanas', description: 'Enlace entre Las Campanas y Ariel del Plata.' },
 
   // Tramo 3: Barrio Ariel del Plata
-  { id: 'p228-13', sequence: 13, name: 'Casaux y Goujon (Ariel del Plata)', lat: -34.203967, lng: -58.936834, zone: 'Ariel del Plata', description: 'Ingreso B° Ariel del Plata.' },
-  { id: 'p228-14', sequence: 14, name: 'Sociedad de Fomento Ariel del Plata', lat: -34.203006, lng: -58.935582, zone: 'Ariel del Plata', description: 'Frente al club social y centro comunitario.' },
-  { id: 'p228-15', sequence: 15, name: 'Escuela Ariel del Plata (Calle Aguer)', lat: -34.202119, lng: -58.936479, zone: 'Ariel del Plata', description: 'Parada escolar de alto tránsito.' },
-  { id: 'p228-16', sequence: 16, name: 'Galería Ariel del Plata', lat: -34.201022, lng: -58.937241, zone: 'Ariel del Plata', description: 'Centro comercial barrial.' },
-  { id: 'p228-17', sequence: 17, name: 'Escuela Técnica Roberto Rocca', lat: -34.200810, lng: -58.937393, zone: 'Ariel del Plata', description: 'Acceso principal Escuela Técnica Roberto Rocca.' },
+  { id: 'p228-13', sequence: 11, name: 'Casaux y Goujon (Ariel del Plata)', lat: -34.203967, lng: -58.936834, zone: 'Ariel del Plata', description: 'Ingreso B° Ariel del Plata.' },
+  { id: 'p228-14', sequence: 12, name: 'Sociedad de Fomento Ariel del Plata', lat: -34.203006, lng: -58.935582, zone: 'Ariel del Plata', description: 'Frente al club social y centro comunitario.' },
+  { id: 'p228-15', sequence: 13, name: 'Escuela Ariel del Plata (Calle Aguer)', lat: -34.202119, lng: -58.936479, zone: 'Ariel del Plata', description: 'Parada escolar de alto tránsito.' },
+  { id: 'p228-16', sequence: 14, name: 'Galería Ariel del Plata', lat: -34.201022, lng: -58.937241, zone: 'Ariel del Plata', description: 'Centro comercial barrial.' },
+  { id: 'p228-17', sequence: 15, name: 'Escuela Técnica Roberto Rocca', lat: -34.200810, lng: -58.937393, zone: 'Ariel del Plata', description: 'Acceso principal Escuela Técnica Roberto Rocca.' },
 
   // Tramo 4: Colectora Sur Panamericana (hasta McDonald's Campana)
-  { id: 'p228-18', sequence: 18, name: 'Colectora Sur y Grassi', lat: -34.200217, lng: -58.940283, zone: 'Colectora', description: 'Empalme Colectora Sur Panamericana y calle Grassi.' },
-  { id: 'p228-19', sequence: 19, name: 'Colectora Sur y Avenida Bellomo', lat: -34.197811, lng: -58.939523, zone: 'Colectora', description: 'Acceso a B° Ariel del Plata por Av. Bellomo.' },
-  { id: 'p228-20', sequence: 20, name: 'Colectora Sur y Avenida Lavezzari', lat: -34.195019, lng: -58.941631, zone: 'Colectora', description: 'Parada frente a concesionarias y talleres.' },
-  { id: 'p228-21', sequence: 21, name: 'Escuela Secundaria N° 3 (Colectora Sur)', lat: -34.193448, lng: -58.942756, zone: 'Colectora', description: 'Frente a Escuela Secundaria N° 3.' },
-  { id: 'p228-22', sequence: 22, name: 'Colectora Sur y Magaldi', lat: -34.192306, lng: -58.943583, zone: 'Colectora', description: 'Punto de transferencia y parada de micros.' },
-  { id: 'p228-mcdonalds', sequence: 23, name: "McDonald's Campana (Panamericana Km 72.5 / Colectora & Axion)", lat: -34.191398, lng: -58.944732, zone: 'Colectora', description: 'Parada estratégica 24hs frente a McDonald\'s y Axion Panamericana Km 72.5.' },
+  { id: 'p228-18', sequence: 16, name: 'Colectora Sur y Grassi', lat: -34.200217, lng: -58.940283, zone: 'Colectora', description: 'Empalme Colectora Sur Panamericana y calle Grassi.' },
+  { id: 'p228-19', sequence: 17, name: 'Colectora Sur y Avenida Bellomo', lat: -34.197811, lng: -58.939523, zone: 'Colectora', description: 'Acceso a B° Ariel del Plata por Av. Bellomo.' },
+  { id: 'p228-20', sequence: 18, name: 'Colectora Sur y Avenida Lavezzari', lat: -34.195019, lng: -58.941631, zone: 'Colectora', description: 'Parada frente a concesionarias y talleres.' },
+  { id: 'p228-21', sequence: 19, name: 'Escuela Secundaria N° 3 (Colectora Sur)', lat: -34.193448, lng: -58.942756, zone: 'Colectora', description: 'Frente a Escuela Secundaria N° 3.' },
+  { id: 'p228-22', sequence: 20, name: 'Colectora Sur y Magaldi', lat: -34.192306, lng: -58.943583, zone: 'Colectora', description: 'Punto de transferencia y parada de micros.' },
+  { id: 'p228-mcdonalds', sequence: 21, name: "McDonald's Campana (Panamericana Km 72.5 / Colectora & Axion)", lat: -34.191398, lng: -58.944732, zone: 'Colectora', description: 'Parada estratégica 24hs frente a McDonald\'s y Axion Panamericana Km 72.5.' },
 
   // Tramo 5: Av. 6 de Julio / Colectora Norte / Acceso Centro
-  { id: 'p228-25', sequence: 24, name: 'Av. 6 de Julio y Colectora Panamericana', lat: -34.187650, lng: -58.948400, zone: 'Colectora', description: 'Distribuidor Panamericana y Av. 6 de Julio.' },
-  { id: 'p228-26', sequence: 25, name: 'Avenida 6 de Julio y Córdoba', lat: -34.185050, lng: -58.950520, zone: 'Colectora', description: 'Zona comercial y residencial.' },
-  { id: 'p228-27', sequence: 26, name: 'Avenida 6 de Julio y Namuncurá', lat: -34.182250, lng: -58.952720, zone: 'Colectora', description: 'Parada con refugio peatonal iluminado.' },
-  { id: 'p228-28', sequence: 27, name: 'Avenida 6 de Julio y Doctor Salk', lat: -34.178750, lng: -58.955350, zone: 'Colectora', description: 'Ingreso Colectora Norte y acceso fabril.' },
-  { id: 'p228-29', sequence: 28, name: 'Colectora Norte y Necochea', lat: -34.174350, lng: -58.958620, zone: 'Colectora', description: 'Frente a Tenaris Siderca y B° Siderca.' },
-  { id: 'p228-30', sequence: 29, name: 'Colectora Norte y Ricardo Rojas', lat: -34.170450, lng: -58.961520, zone: 'Colectora', description: 'Giro hacia puente Av. Rivadavia.' },
+  { id: 'p228-25', sequence: 22, name: 'Av. 6 de Julio y Colectora Panamericana', lat: -34.187650, lng: -58.948400, zone: 'Colectora', description: 'Distribuidor Panamericana y Av. 6 de Julio.' },
+  { id: 'p228-26', sequence: 23, name: 'Avenida 6 de Julio y Córdoba', lat: -34.185050, lng: -58.950520, zone: 'Colectora', description: 'Zona comercial y residencial.' },
+  { id: 'p228-27', sequence: 24, name: 'Avenida 6 de Julio y Namuncurá', lat: -34.182250, lng: -58.952720, zone: 'Colectora', description: 'Parada con refugio peatonal iluminado.' },
+  { id: 'p228-28', sequence: 25, name: 'Avenida 6 de Julio y Doctor Salk', lat: -34.178750, lng: -58.955350, zone: 'Colectora', description: 'Ingreso Colectora Norte y acceso fabril.' },
+  { id: 'p228-29', sequence: 26, name: 'Colectora Norte y Necochea', lat: -34.174350, lng: -58.958620, zone: 'Colectora', description: 'Frente a Tenaris Siderca y B° Siderca.' },
+  { id: 'p228-30', sequence: 27, name: 'Colectora Norte y Ricardo Rojas', lat: -34.170450, lng: -58.961520, zone: 'Colectora', description: 'Giro hacia puente Av. Rivadavia.' },
 
   // Tramo 6: Ingreso Centro de Campana (Av. Rubén Varela / Plaza Eduardo Costa)
-  { id: 'p228-31', sequence: 30, name: 'Laprida y General Belgrano', lat: -34.167650, lng: -58.959950, zone: 'Campana Centro', description: 'Ingreso casco urbano de Campana.' },
-  { id: 'p228-32', sequence: 31, name: 'Avenida Rubén Varela y Andrés del Pino', lat: -34.165950, lng: -58.958580, zone: 'Campana Centro', description: 'Avenida principal Varela y centro comercial.' },
-  { id: 'p228-33', sequence: 32, name: 'Avenida Rubén Varela y Salmini', lat: -34.165250, lng: -58.959020, zone: 'Campana Centro', description: 'Comercios y entidades bancarias.' },
-  { id: 'p228-34', sequence: 33, name: 'Avenida Rubén Varela y Avenida Teniente Perón', lat: -34.164450, lng: -58.959150, zone: 'Campana Centro', description: 'Bulevar céntrico.' },
-  { id: 'p228-35', sequence: 34, name: 'Plaza Eduardo Costa / San Martín', lat: -34.163200, lng: -58.958950, zone: 'Campana Centro', description: 'Plaza principal de Campana / Palacio Municipal.' },
-  { id: 'p228-36', sequence: 35, name: 'General Belgrano y Jean Jaurés', lat: -34.162350, lng: -58.958380, zone: 'Campana Centro', description: 'Casco histórico y bancos.' },
-  { id: 'p228-37', sequence: 36, name: 'General Belgrano y Avenida Mitre', lat: -34.161250, lng: -58.957480, zone: 'Campana Centro', description: 'Cruce con Avenida Mitre.' },
-  { id: 'p228-38', sequence: 37, name: 'General Belgrano y Alem', lat: -34.160050, lng: -58.956480, zone: 'Campana Centro', description: 'Avenida Leandro N. Alem.' },
+  { id: 'p228-31', sequence: 28, name: 'Laprida y General Belgrano', lat: -34.167650, lng: -58.959950, zone: 'Campana Centro', description: 'Ingreso casco urbano de Campana.' },
+  { id: 'p228-32', sequence: 29, name: 'Avenida Rubén Varela y Andrés del Pino', lat: -34.165950, lng: -58.958580, zone: 'Campana Centro', description: 'Avenida principal Varela y centro comercial.' },
+  { id: 'p228-33', sequence: 30, name: 'Avenida Rubén Varela y Salmini', lat: -34.165250, lng: -58.959020, zone: 'Campana Centro', description: 'Comercios y entidades bancarias.' },
+  { id: 'p228-34', sequence: 31, name: 'Avenida Rubén Varela y Avenida Teniente Perón', lat: -34.164450, lng: -58.959150, zone: 'Campana Centro', description: 'Bulevar céntrico.' },
+  { id: 'p228-35', sequence: 32, name: 'Plaza Eduardo Costa / San Martín', lat: -34.163200, lng: -58.958950, zone: 'Campana Centro', description: 'Plaza principal de Campana / Palacio Municipal.' },
+  { id: 'p228-36', sequence: 33, name: 'General Belgrano y Jean Jaurés', lat: -34.162350, lng: -58.958380, zone: 'Campana Centro', description: 'Casco histórico y bancos.' },
+  { id: 'p228-37', sequence: 34, name: 'General Belgrano y Avenida Mitre', lat: -34.161250, lng: -58.957480, zone: 'Campana Centro', description: 'Cruce con Avenida Mitre.' },
+  { id: 'p228-38', sequence: 35, name: 'General Belgrano y Alem', lat: -34.160050, lng: -58.956480, zone: 'Campana Centro', description: 'Avenida Leandro N. Alem.' },
 
   // Tramo 7: Estación Campana y Enlace Céntrico
-  { id: 'p228-39', sequence: 38, name: 'Estación de Tren Campana', lat: -34.156950, lng: -58.958550, zone: 'Campana Centro', description: 'Conexión Ferrocarril Mitre.' },
-  { id: 'p228-40', sequence: 39, name: 'San Martín y Luis Costa', lat: -34.156050, lng: -58.959520, zone: 'Campana Centro', description: 'Hacia Ruta Provincial 6.' },
-  { id: 'p228-41', sequence: 40, name: 'San Martín y Güemes', lat: -34.154850, lng: -58.960820, zone: 'Campana Centro', description: 'Zona céntrica norte de Campana.' },
-  { id: 'p228-42', sequence: 41, name: 'San Martín y Av. Mitre', lat: -34.153650, lng: -58.962150, zone: 'Campana Centro', description: 'Enlace vial principal.' },
-  { id: 'p228-43', sequence: 42, name: 'Jean Jaurés y Boulevard General Lavalle', lat: -34.152250, lng: -58.963650, zone: 'Campana Centro', description: 'Bulevar Lavalle y comercios.' },
-  { id: 'p228-44', sequence: 43, name: 'Avenida Mitre y Balcarce', lat: -34.151050, lng: -58.964950, zone: 'Campana Centro', description: 'Acceso a autovía RP6.' },
-  { id: 'p228-45', sequence: 44, name: 'Avenida Mitre y Santiago del Estero', lat: -34.149350, lng: -58.966850, zone: 'Campana Centro', description: 'Rotonda norte de enlace a RP6.' },
+  { id: 'p228-39', sequence: 36, name: 'Estación de Tren Campana', lat: -34.156950, lng: -58.958550, zone: 'Campana Centro', description: 'Conexión Ferrocarril Mitre.' },
+  { id: 'p228-40', sequence: 37, name: 'San Martín y Luis Costa', lat: -34.156050, lng: -58.959520, zone: 'Campana Centro', description: 'Hacia Ruta Provincial 6.' },
+  { id: 'p228-41', sequence: 38, name: 'San Martín y Güemes', lat: -34.154850, lng: -58.960820, zone: 'Campana Centro', description: 'Zona céntrica norte de Campana.' },
+  { id: 'p228-42', sequence: 39, name: 'San Martín y Av. Mitre', lat: -34.153650, lng: -58.962150, zone: 'Campana Centro', description: 'Enlace vial principal.' },
+  { id: 'p228-43', sequence: 40, name: 'Jean Jaurés y Boulevard General Lavalle', lat: -34.152250, lng: -58.963650, zone: 'Campana Centro', description: 'Bulevar Lavalle y comercios.' },
+  { id: 'p228-44', sequence: 41, name: 'Avenida Mitre y Balcarce', lat: -34.151050, lng: -58.964950, zone: 'Campana Centro', description: 'Acceso a autovía RP6.' },
+  { id: 'p228-45', sequence: 42, name: 'Avenida Mitre y Santiago del Estero', lat: -34.149350, lng: -58.966850, zone: 'Campana Centro', description: 'Rotonda norte de enlace a RP6.' },
 
   // Tramo 8: Ruta Provincial 6 (Campana → Zárate)
-  { id: 'p228-46', sequence: 45, name: 'RP 6 y Bidegain', lat: -34.144050, lng: -58.972450, zone: 'Ruta 6', description: 'Autovía RP6 hacia Zárate.' },
-  { id: 'p228-47', sequence: 46, name: 'RP 6 y Fernando Ochoa', lat: -34.138650, lng: -58.978250, zone: 'Ruta 6', description: 'Parada sobre autovía RP6.' },
-  { id: 'p228-48', sequence: 47, name: 'RP 6 y Saavedra', lat: -34.132350, lng: -58.985350, zone: 'Ruta 6', description: 'Zona industrial y comercial de la autovía.' },
-  { id: 'p228-49', sequence: 48, name: 'RP 6 y Scholnik', lat: -34.122650, lng: -58.997350, zone: 'Ruta 6', description: 'Ingreso al Partido de Zárate / Parque Industrial.' },
+  { id: 'p228-46', sequence: 43, name: 'RP 6 y Bidegain', lat: -34.144050, lng: -58.972450, zone: 'Ruta 6', description: 'Autovía RP6 hacia Zárate.' },
+  { id: 'p228-47', sequence: 44, name: 'RP 6 y Fernando Ochoa', lat: -34.138650, lng: -58.978250, zone: 'Ruta 6', description: 'Parada sobre autovía RP6.' },
+  { id: 'p228-48', sequence: 45, name: 'RP 6 y Saavedra', lat: -34.132350, lng: -58.985350, zone: 'Ruta 6', description: 'Zona industrial y comercial de la autovía.' },
+  { id: 'p228-49', sequence: 46, name: 'RP 6 y Scholnik', lat: -34.122650, lng: -58.997350, zone: 'Ruta 6', description: 'Ingreso al Partido de Zárate / Parque Industrial.' },
 
   // Tramo 9: Ingreso a Zárate (Rotonda Zárate y Av. Lavalle)
-  { id: 'p228-50', sequence: 49, name: 'Rotonda Zárate (Acceso RN 9 / Lavalle)', lat: -34.115650, lng: -59.013400, zone: 'Zárate', description: 'Rotonda principal de acceso a Zárate por RN 9 y RP 6.' },
-  { id: 'p228-51', sequence: 50, name: 'Avenida Lavalle y Perito Moreno', lat: -34.113650, lng: -59.016180, zone: 'Zárate', description: 'Avenida Lavalle comercial y residencial.' },
-  { id: 'p228-52', sequence: 51, name: 'Avenida Lavalle y Pitrau', lat: -34.112250, lng: -59.017980, zone: 'Zárate', description: 'Cruce Av. Lavalle y Pitrau / Teodoro Fels.' },
-  { id: 'p228-53', sequence: 52, name: 'Plaza Lavalle / Laprida', lat: -34.110850, lng: -59.019780, zone: 'Zárate', description: 'Plaza Lavalle y escuelas de la zona.' },
-  { id: 'p228-54', sequence: 53, name: 'Avenida Lavalle y Larrea', lat: -34.109450, lng: -59.021580, zone: 'Zárate', description: 'Corredor comercial céntrico Zárate.' },
-  { id: 'p228-55', sequence: 54, name: 'Avenida Lavalle y Pellegrini', lat: -34.108050, lng: -59.023380, zone: 'Zárate', description: 'Cruce de alto tránsito.' },
+  { id: 'p228-50', sequence: 47, name: 'Rotonda Zárate (Acceso RN 9 / Lavalle)', lat: -34.115650, lng: -59.013400, zone: 'Zárate', description: 'Rotonda principal de acceso a Zárate por RN 9 y RP 6.' },
+  { id: 'p228-51', sequence: 48, name: 'Avenida Lavalle y Perito Moreno', lat: -34.113650, lng: -59.016180, zone: 'Zárate', description: 'Avenida Lavalle comercial y residencial.' },
+  { id: 'p228-52', sequence: 49, name: 'Avenida Lavalle y Pitrau', lat: -34.112250, lng: -59.017980, zone: 'Zárate', description: 'Cruce Av. Lavalle y Pitrau / Teodoro Fels.' },
+  { id: 'p228-53', sequence: 50, name: 'Plaza Lavalle / Laprida', lat: -34.110850, lng: -59.019780, zone: 'Zárate', description: 'Plaza Lavalle y escuelas de la zona.' },
+  { id: 'p228-54', sequence: 51, name: 'Avenida Lavalle y Larrea', lat: -34.109450, lng: -59.021580, zone: 'Zárate', description: 'Corredor comercial céntrico Zárate.' },
+  { id: 'p228-55', sequence: 52, name: 'Avenida Lavalle y Pellegrini', lat: -34.108050, lng: -59.023380, zone: 'Zárate', description: 'Cruce de alto tránsito.' },
 
   // Tramo 10: Zárate Centro (Leandro Alem)
-  { id: 'p228-56', sequence: 55, name: 'Avenida Mitre y Leandro Alem', lat: -34.105250, lng: -59.027400, zone: 'Zárate', description: 'Avenida Leandro N. Alem.' },
-  { id: 'p228-57', sequence: 56, name: 'Leandro Alem y Castelli', lat: -34.104050, lng: -59.029080, zone: 'Zárate', description: 'Centro cívico y comercial de Zárate.' },
-  { id: 'p228-58', sequence: 57, name: 'Leandro Alem y Rómulo Noya', lat: -34.102850, lng: -59.030680, zone: 'Zárate', description: 'Cruce con la peatonal Rómulo Noya.' },
-  { id: 'p228-59', sequence: 58, name: 'Leandro Alem e Ituzaingó', lat: -34.101650, lng: -59.032180, zone: 'Zárate', description: 'Plaza Mitre y Municipalidad de Zárate.' },
-  { id: 'p228-60', sequence: 59, name: 'Leandro Alem y Rivadavia', lat: -34.100450, lng: -59.033680, zone: 'Zárate', description: 'Área comercial y de servicios.' },
+  { id: 'p228-56', sequence: 53, name: 'Avenida Mitre y Leandro Alem', lat: -34.105250, lng: -59.027400, zone: 'Zárate', description: 'Avenida Leandro N. Alem.' },
+  { id: 'p228-57', sequence: 54, name: 'Leandro Alem y Castelli', lat: -34.104050, lng: -59.029080, zone: 'Zárate', description: 'Centro cívico y comercial de Zárate.' },
+  { id: 'p228-58', sequence: 55, name: 'Leandro Alem y Rómulo Noya', lat: -34.102850, lng: -59.030680, zone: 'Zárate', description: 'Cruce con la peatonal Rómulo Noya.' },
+  { id: 'p228-59', sequence: 56, name: 'Leandro Alem e Ituzaingó', lat: -34.101650, lng: -59.032180, zone: 'Zárate', description: 'Plaza Mitre y Municipalidad de Zárate.' },
+  { id: 'p228-60', sequence: 57, name: 'Leandro Alem y Rivadavia', lat: -34.100450, lng: -59.033680, zone: 'Zárate', description: 'Área comercial y de servicios.' },
 
   // Tramo 11: Zárate Centro a Terminal de Zárate
-  { id: 'p228-61', sequence: 60, name: 'Florestano Andrade Atucha 173', lat: -34.098950, lng: -59.035580, zone: 'Zárate', description: 'Hacia terminal de ómnibus.' },
-  { id: 'p228-62', sequence: 61, name: 'Florestano Andrade Atucha 473', lat: -34.098050, lng: -59.036480, zone: 'Zárate', description: 'Zona residencial.' },
-  { id: 'p228-63', sequence: 62, name: 'Gregorio Quirno 1507', lat: -34.097250, lng: -59.037280, zone: 'Zárate', description: 'Acceso avenida Anta.' },
-  { id: 'p228-64', sequence: 63, name: 'Soler y Avenida Anta', lat: -34.096450, lng: -59.037950, zone: 'Zárate', description: 'Acceso a andenes terminales.' },
-  { id: 'p228-65', sequence: 64, name: 'Centro de Transferencia de Zárate (Terminal)', lat: -34.095650, lng: -59.038650, zone: 'Zárate', description: 'Terminal de Ómnibus y Centro de Transferencia Zárate.' },
+  { id: 'p228-61', sequence: 58, name: 'Florestano Andrade Atucha 173', lat: -34.098950, lng: -59.035580, zone: 'Zárate', description: 'Hacia terminal de ómnibus.' },
+  { id: 'p228-62', sequence: 59, name: 'Florestano Andrade Atucha 473', lat: -34.098050, lng: -59.036480, zone: 'Zárate', description: 'Zona residencial.' },
+  { id: 'p228-63', sequence: 60, name: 'Gregorio Quirno 1507', lat: -34.097250, lng: -59.037280, zone: 'Zárate', description: 'Acceso avenida Anta.' },
+  { id: 'p228-64', sequence: 61, name: 'Soler y Avenida Anta', lat: -34.096450, lng: -59.037950, zone: 'Zárate', description: 'Acceso a andenes terminales.' },
+  { id: 'p228-65', sequence: 62, name: 'Centro de Transferencia de Zárate (Terminal)', lat: -34.095650, lng: -59.038650, zone: 'Zárate', description: 'Terminal de Ómnibus y Centro de Transferencia Zárate.' },
 ];
 
 // Corredor específico habilitado: Justo Vigalondo hasta McDonald's Campana (Panamericana Km 72.5)
-export const VIGALONDO_MCDONALDS_STOPS: Linea228Stop[] = LINEA_228_STOPS.slice(0, 23);
+export const VIGALONDO_MCDONALDS_STOPS: Linea228Stop[] = LINEA_228_STOPS.slice(0, 21);
 
 // Corredor específico: Centro de Campana hasta Zárate Centro y Terminal
-export const CAMPANA_CENTRO_ZARATE_STOPS: Linea228Stop[] = LINEA_228_STOPS.slice(29);
+export const CAMPANA_CENTRO_ZARATE_STOPS: Linea228Stop[] = LINEA_228_STOPS.slice(27);
 
 // Polilínea de alta fidelidad que sigue fielmente el trazado de las calles de Campana:
 // Justo Vigalondo -> Sandalía Bravo -> Las Campanas -> Ariel del Plata -> Colectora Sur -> McDonald's Panamericana Km 72.5
 export const VIGALONDO_MCDONALDS_COORDINATES: [number, number][] = [
-  [-34.214048, -58.939303], // Inicio Colectora / Vigalondo
-  [-34.213685, -58.939551],
-  [-34.212768, -58.940199], // Puerto San Carlos
-  [-34.212532, -58.940368],
-  [-34.211791, -58.940898], // Vigalondo 1887
-  [-34.211355, -58.941215], // Sandalía Bravo
+  [-34.211791, -58.940898], // Vigalondo 1887 (Parada #1)
+  [-34.211355, -58.941215], // Sandalía Bravo (Parada #2)
   [-34.210888, -58.941554],
   [-34.210440, -58.941880],
   [-34.209988, -58.942204], // Bomberos Voluntarios
