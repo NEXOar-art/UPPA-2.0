@@ -31,6 +31,10 @@ import {
   RefreshCw,
   Smile,
   Volume2,
+  ChevronDown,
+  RotateCcw,
+  Filter,
+  SlidersHorizontal,
 } from 'lucide-react';
 
 interface CommunityChatProps {
@@ -39,8 +43,22 @@ interface CommunityChatProps {
   onClearContextEvent?: () => void;
 }
 
-type ChannelType = 'todos' | 'campana-zarate' | 'zarate-campana' | 'general';
-type RoleFilter = 'todos' | 'choferes' | 'pasajeros' | 'colectivos';
+export type ChannelType = 'todos' | 'campana-zarate' | 'zarate-campana' | 'general';
+export type RoleFilter = 'todos' | 'choferes' | 'pasajeros' | 'colectivos';
+
+export const CHANNEL_OPTIONS: { id: ChannelType; label: string; shortLabel: string; icon: string; desc: string }[] = [
+  { id: 'todos', label: 'Todos los Mensajes', shortLabel: 'Canal: Todos', icon: '🌐', desc: 'Comunidad completa (Campana ↔ Zárate)' },
+  { id: 'campana-zarate', label: 'Campana ➔ Zárate', shortLabel: 'Campana ➔ Zárate', icon: '🏙️', desc: 'Sentido Zárate Centro y Terminal' },
+  { id: 'zarate-campana', label: 'Zárate ➔ Campana', shortLabel: 'Zárate ➔ Campana', icon: '🏙️', desc: 'Sentido B° Malvinas y Colectora' },
+  { id: 'general', label: 'General & Avisos', shortLabel: 'General & Avisos', icon: '💬', desc: 'Novedades y consultas vecinales' },
+];
+
+export const ROLE_OPTIONS: { id: RoleFilter; label: string; shortLabel: string; icon: string; desc: string }[] = [
+  { id: 'todos', label: 'Todos los Roles', shortLabel: 'Rol: Todos', icon: '👥', desc: 'Pasajeros, choferes y colectivos' },
+  { id: 'pasajeros', label: 'Pasajeros', shortLabel: 'Pasajeros', icon: '👤', desc: 'Mensajes de vecinos y pasajeros' },
+  { id: 'choferes', label: 'Taxis y Motos', shortLabel: 'Taxis/Motos', icon: '🚕', desc: 'Choferes de auto taxi y moto taxi' },
+  { id: 'colectivos', label: 'Colectivos', shortLabel: 'Colectivos', icon: '🚌', desc: 'Choferes de la Línea 228' },
+];
 
 const QUICK_REACTIONS = ['👍', '🚌', '🛵', '🚕', '❤️', '⚠️'];
 
@@ -62,8 +80,27 @@ export const CommunityChat: React.FC<CommunityChatProps> = ({
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [showReactionPickerForId, setShowReactionPickerForId] = useState<string | null>(null);
 
+  // Estados y referencias para los menús desplegables del filtro inteligente
+  const [isChannelDropdownOpen, setIsChannelDropdownOpen] = useState(false);
+  const [isRoleDropdownOpen, setIsRoleDropdownOpen] = useState(false);
+  const channelDropdownRef = useRef<HTMLDivElement | null>(null);
+  const roleDropdownRef = useRef<HTMLDivElement | null>(null);
+
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (channelDropdownRef.current && !channelDropdownRef.current.contains(e.target as Node)) {
+        setIsChannelDropdownOpen(false);
+      }
+      if (roleDropdownRef.current && !roleDropdownRef.current.contains(e.target as Node)) {
+        setIsRoleDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const showNotice = (msg: string) => {
     setActionNotice(msg);
@@ -307,156 +344,235 @@ export const CommunityChat: React.FC<CommunityChatProps> = ({
   const userRoleBadge = getRoleBadge(currentUser.rol || currentUser.role);
   const CurrentUserRoleIcon = userRoleBadge.icon;
 
+  const currentChannelOption = CHANNEL_OPTIONS.find((c) => c.id === selectedChannel) || CHANNEL_OPTIONS[0];
+  const currentRoleOption = ROLE_OPTIONS.find((r) => r.id === roleFilter) || ROLE_OPTIONS[0];
+  const hasActiveFilters = selectedChannel !== 'todos' || roleFilter !== 'todos' || searchQuery.trim() !== '';
+
   return (
     <div className="w-full h-full flex flex-col bg-[#07090e] text-slate-100 overflow-hidden font-sans">
-      {/* Top Header / Channel Tabs */}
-      <div className="p-3 sm:p-4 border-b border-white/5 bg-[#0b0e17]/95 backdrop-blur-xl shrink-0 space-y-2.5">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-2xl bg-gradient-to-br from-purple-500/30 to-indigo-500/30 border border-purple-400/40 flex items-center justify-center text-purple-300 shadow-md shadow-purple-500/15">
-              <MessageSquare className="w-4.5 h-4.5" />
+      {/* Top Header: Barra ultra compacta para maximizar espacio del chat */}
+      <div className="px-3 py-2 sm:px-4 sm:py-2 border-b border-white/5 bg-[#0b0e17]/95 backdrop-blur-xl shrink-0">
+        <div className="flex items-center justify-between gap-2">
+          {/* Left: Título y estado en vivo */}
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-purple-500/30 to-indigo-500/30 border border-purple-400/40 flex items-center justify-center text-purple-300 shadow-sm shrink-0">
+              <MessageSquare className="w-4 h-4" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-sm font-extrabold text-white flex items-center gap-1.5 font-display">
-                  Chat Comunitario Abierto
-                </h2>
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-                  <span>COMUNIDAD EN VIVO</span>
-                </span>
-              </div>
-              <p className="text-[11px] text-slate-400 flex items-center gap-1.5 flex-wrap">
-                <span className="text-purple-300 font-semibold">
-                  {selectedChannel === 'todos' ? 'Todos los Vecinos (Campana ↔ Zárate)' : selectedChannel}
-                </span>
-                <span>•</span>
-                <span className="text-cyan-300 font-mono text-[10.5px]">
-                  {messages.length} mensajes visibles para toda la comunidad
-                </span>
-              </p>
+            <div className="flex items-center gap-1.5 min-w-0">
+              <h2 className="text-xs sm:text-sm font-extrabold text-white font-display truncate">
+                Chat Comunitario
+              </h2>
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded-full text-[9px] font-extrabold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shrink-0">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                <span>EN VIVO</span>
+              </span>
+              <span className="text-[10px] text-cyan-300 font-mono hidden sm:inline truncate">
+                · {filteredMessages.length} mensaje{filteredMessages.length !== 1 ? 's' : ''}
+              </span>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleManualRefresh}
-              disabled={isRefreshing}
-              className="p-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-white/10 transition-colors flex items-center gap-1 text-xs"
-              title="Refrescar mensajes"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-purple-400' : ''}`} />
-              <span className="hidden sm:inline text-[11px]">Sincronizar</span>
-            </button>
-
+          {/* Right: Identificación de usuario y sincronización */}
+          <div className="flex items-center gap-1.5 shrink-0">
             {actionNotice && (
-              <div className="px-3 py-1 rounded-full bg-purple-500/20 border border-purple-400/40 text-[11px] font-bold text-purple-200 animate-in fade-in">
+              <div className="px-2 py-0.5 rounded-full bg-purple-500/20 border border-purple-400/40 text-[10px] font-bold text-purple-200 animate-in fade-in">
                 {actionNotice}
               </div>
             )}
-          </div>
-        </div>
 
-        {/* Channel Selector Pills */}
-        <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pt-0.5">
-          {[
-            { id: 'todos' as const, label: '🌐 Todos los Mensajes' },
-            { id: 'campana-zarate' as const, label: '🏙️ Campana ↔ Zárate' },
-            { id: 'zarate-campana' as const, label: '🏙️ Zárate ↔ Campana' },
-            { id: 'general' as const, label: '💬 General & Avisos' },
-          ].map((ch) => (
-            <button
-              key={ch.id}
-              onClick={() => {
-                setSelectedChannel(ch.id);
-                setReplyingTo(null);
-              }}
-              className={`px-3 py-1.5 text-xs font-bold rounded-xl transition-all whitespace-nowrap cursor-pointer active:scale-95 ${
-                selectedChannel === ch.id
-                  ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-md shadow-purple-600/30 border border-purple-400/40'
-                  : 'text-slate-400 hover:text-white bg-slate-900/70 border border-white/5'
-              }`}
-            >
-              {ch.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Search & Filter Bar */}
-        <div className="flex items-center gap-2 pt-1 flex-wrap sm:flex-nowrap">
-          <div className="relative flex-1 min-w-[140px]">
-            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Buscar por línea 228, chofer, parada..."
-              className="w-full h-8 pl-8 pr-3 rounded-xl bg-slate-900/90 border border-white/10 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-purple-400"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery('')}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
-              >
-                <X className="w-3 h-3" />
-              </button>
-            )}
-          </div>
-
-          <div className="flex items-center gap-1 text-[11px] overflow-x-auto scrollbar-none shrink-0">
-            {(
-              [
-                { id: 'todos', label: 'Todos' },
-                { id: 'pasajeros', label: 'Pasajeros' },
-                { id: 'choferes', label: 'Taxis/Motos' },
-                { id: 'colectivos', label: 'Colectivos' },
-              ] as const
-            ).map((filter) => (
-              <button
-                key={filter.id}
-                onClick={() => setRoleFilter(filter.id)}
-                className={`px-2 py-1 rounded-lg font-semibold transition-all whitespace-nowrap ${
-                  roleFilter === filter.id
-                    ? 'bg-purple-600/30 text-purple-200 border border-purple-400/30'
-                    : 'text-slate-400 hover:text-white bg-slate-900/50'
-                }`}
-              >
-                {filter.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Identificación Visible del Usuario Activo en el Chat */}
-        <div className="pt-2 border-t border-white/5 flex items-center justify-between text-xs flex-wrap gap-2">
-          <div className="flex items-center gap-2">
-            <div className="relative">
+            <div className="flex items-center gap-1.5 bg-slate-900/80 px-2 py-1 rounded-xl border border-white/5 text-xs">
               <img
                 src={
                   currentUser.avatarUrl ||
                   `https://api.dicebear.com/7.x/bottts/svg?seed=${currentUser.id || 'usr'}&backgroundColor=12141c`
                 }
                 alt={currentUser.name}
-                className="w-6 h-6 rounded-full border border-purple-400/40 object-cover"
+                className="w-4.5 h-4.5 rounded-full border border-purple-400/40 object-cover"
               />
-              <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-400 border border-[#0b0e17]" />
-            </div>
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="text-[11.5px] text-slate-300">Tu Usuario:</span>
-              <strong className="text-white font-extrabold text-xs">{currentUser.name}</strong>
-              <span className={`px-2 py-0.5 rounded-md text-[9.5px] font-bold border flex items-center gap-1 ${userRoleBadge.bg}`}>
+              <span className="font-bold text-white text-[11px] max-w-[80px] sm:max-w-[110px] truncate">
+                {currentUser.name}
+              </span>
+              <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold border hidden sm:inline-flex items-center gap-0.5 ${userRoleBadge.bg}`}>
                 <CurrentUserRoleIcon className="w-2.5 h-2.5" />
                 <span>{userRoleBadge.label}</span>
               </span>
             </div>
+
+            <button
+              onClick={handleManualRefresh}
+              disabled={isRefreshing}
+              className="p-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-white/10 transition-colors cursor-pointer"
+              title="Refrescar mensajes"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-purple-400' : ''}`} />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Intelligent Search & Filter Bar: Una sola fila compacta con buscador y filtros inteligentes */}
+      <div className="px-3 py-1.5 sm:px-4 sm:py-2 border-b border-white/5 bg-[#080b12]/90 backdrop-blur-xl shrink-0">
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          {/* Campo de búsqueda */}
+          <div className="relative flex-1 min-w-[110px]">
+            <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Buscar en el chat (ej: 228, Tenaris, chofer...)"
+              className="w-full h-8 pl-8 pr-7 rounded-xl bg-slate-900/90 border border-white/10 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-purple-400 transition-colors"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white p-0.5 cursor-pointer"
+                title="Borrar búsqueda"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            )}
           </div>
 
-          <div className="flex items-center gap-2 text-[10.5px]">
-            <span className="text-emerald-400 font-mono flex items-center gap-1">
-              <Radio className="w-3 h-3 text-emerald-400 animate-pulse" />
-              <span>Conectado a la comunidad</span>
-            </span>
+          {/* Filtro Inteligente: Canal / Sentido */}
+          <div className="relative" ref={channelDropdownRef}>
+            <button
+              onClick={() => {
+                setIsChannelDropdownOpen((prev) => !prev);
+                setIsRoleDropdownOpen(false);
+              }}
+              className={`h-8 px-2 sm:px-2.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer active:scale-95 ${
+                selectedChannel !== 'todos'
+                  ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white border-purple-400/50 shadow-sm shadow-purple-600/30'
+                  : 'bg-slate-900/90 hover:bg-slate-800 text-slate-300 hover:text-white border-white/10'
+              }`}
+              title="Filtrar por canal o sentido: Todos, Campana-Zárate, Zárate-Campana, General"
+            >
+              <span className="text-sm leading-none">{currentChannelOption.icon}</span>
+              <span className="hidden sm:inline text-[11px] max-w-[115px] truncate">
+                {currentChannelOption.shortLabel}
+              </span>
+              <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform ${isChannelDropdownOpen ? 'rotate-180 text-white' : ''}`} />
+            </button>
+
+            {/* Menú desplegable de canales */}
+            {isChannelDropdownOpen && (
+              <div className="absolute right-0 sm:left-0 sm:right-auto top-full mt-1.5 w-64 rounded-2xl bg-[#0a0e19]/98 border border-purple-500/30 shadow-2xl p-1.5 z-50 backdrop-blur-2xl animate-in fade-in slide-in-from-top-2 duration-150">
+                <div className="px-2.5 py-1.5 border-b border-white/5 mb-1 flex items-center justify-between">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-purple-300 font-mono">
+                    Canal / Sentido
+                  </span>
+                  <span className="text-[9px] text-slate-400">4 opciones</span>
+                </div>
+                <div className="space-y-0.5">
+                  {CHANNEL_OPTIONS.map((ch) => {
+                    const isSelected = selectedChannel === ch.id;
+                    return (
+                      <button
+                        key={ch.id}
+                        onClick={() => {
+                          setSelectedChannel(ch.id);
+                          setIsChannelDropdownOpen(false);
+                        }}
+                        className={`w-full text-left px-2.5 py-2 rounded-xl text-xs flex items-center gap-2.5 transition-all cursor-pointer ${
+                          isSelected
+                            ? 'bg-purple-600/30 text-purple-200 border border-purple-400/40 font-bold'
+                            : 'text-slate-300 hover:text-white hover:bg-white/5 font-medium'
+                        }`}
+                      >
+                        <span className="text-base">{ch.icon}</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between">
+                            <span className="truncate text-[11.5px]">{ch.label}</span>
+                            {isSelected && <Check className="w-3.5 h-3.5 text-purple-400 shrink-0" />}
+                          </div>
+                          <span className="text-[9.5px] text-slate-400 block truncate">{ch.desc}</span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
+
+          {/* Filtro Inteligente: Rol / Tipo de Usuario */}
+          <div className="relative" ref={roleDropdownRef}>
+            <button
+              onClick={() => {
+                setIsRoleDropdownOpen((prev) => !prev);
+                setIsChannelDropdownOpen(false);
+              }}
+              className={`h-8 px-2 sm:px-2.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer active:scale-95 ${
+                roleFilter !== 'todos'
+                  ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white border-cyan-400/50 shadow-sm shadow-cyan-600/30'
+                  : 'bg-slate-900/90 hover:bg-slate-800 text-slate-300 hover:text-white border-white/10'
+              }`}
+              title="Filtrar por rol: Todos, Pasajeros, Taxis/Motos, Colectivos"
+            >
+              <span className="text-sm leading-none">{currentRoleOption.icon}</span>
+              <span className="hidden sm:inline text-[11px] max-w-[85px] truncate">
+                {currentRoleOption.shortLabel}
+              </span>
+              <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform ${isRoleDropdownOpen ? 'rotate-180 text-white' : ''}`} />
+            </button>
+
+            {/* Menú desplegable de roles */}
+            {isRoleDropdownOpen && (
+              <div className="absolute right-0 top-full mt-1.5 w-60 rounded-2xl bg-[#0a0e19]/98 border border-cyan-500/30 shadow-2xl p-1.5 z-50 backdrop-blur-2xl animate-in fade-in slide-in-from-top-2 duration-150">
+                <div className="px-2.5 py-1.5 border-b border-white/5 mb-1 flex items-center justify-between">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-cyan-300 font-mono">
+                    Filtrar por Rol
+                  </span>
+                  <span className="text-[9px] text-slate-400">4 opciones</span>
+                </div>
+                <div className="space-y-0.5">
+                  {ROLE_OPTIONS.map((rf) => {
+                    const isSelected = roleFilter === rf.id;
+                    return (
+                      <button
+                        key={rf.id}
+                        onClick={() => {
+                          setRoleFilter(rf.id);
+                          setIsRoleDropdownOpen(false);
+                        }}
+                        className={`w-full text-left px-2.5 py-2 rounded-xl text-xs flex items-center gap-2.5 transition-all cursor-pointer ${
+                          isSelected
+                            ? 'bg-cyan-600/30 text-cyan-200 border border-cyan-400/40 font-bold'
+                            : 'text-slate-300 hover:text-white hover:bg-white/5 font-medium'
+                        }`}
+                      >
+                        <span className="text-base">{rf.icon}</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between">
+                            <span className="truncate text-[11.5px]">{rf.label}</span>
+                            {isSelected && <Check className="w-3.5 h-3.5 text-cyan-400 shrink-0" />}
+                          </div>
+                          <span className="text-[9.5px] text-slate-400 block truncate">{rf.desc}</span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Botón rápido de reset cuando hay filtros activos */}
+          {hasActiveFilters && (
+            <button
+              onClick={() => {
+                setSelectedChannel('todos');
+                setRoleFilter('todos');
+                setSearchQuery('');
+              }}
+              className="h-8 px-2 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-400/30 text-[11px] font-bold flex items-center gap-1 transition-all shrink-0 cursor-pointer"
+              title="Restablecer todos los filtros"
+            >
+              <RotateCcw className="w-3 h-3" />
+              <span className="hidden md:inline">Limpiar</span>
+            </button>
+          )}
         </div>
       </div>
 
