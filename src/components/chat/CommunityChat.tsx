@@ -91,14 +91,11 @@ export const CommunityChat: React.FC<CommunityChatProps> = ({
     } catch {}
   };
 
-  // Actualiza la hora de referencia y purga automáticamente mensajes que superen los 20 minutos de exposición
+  // Actualiza la hora de referencia cada 30 segundos para las etiquetas relativas
   useEffect(() => {
     const timer = setInterval(() => {
-      const now = Date.now();
-      const twentyMinMs = 20 * 60 * 1000;
-      setNowTimestamp(now);
-      setMessages((prev) => prev.filter((m) => (now - getMessageTimestampMs(m.enviadoEn)) < twentyMinMs));
-    }, 5000);
+      setNowTimestamp(Date.now());
+    }, 30000);
     return () => clearInterval(timer);
   }, []);
 
@@ -122,10 +119,9 @@ export const CommunityChat: React.FC<CommunityChatProps> = ({
     }
   }, [activeContextEvent]);
 
-  // Filtrado de mensajes por canal, rol, búsqueda y límite estricto de 20 minutos de exposición
+  // Filtrado de mensajes por canal, rol y búsqueda
   const filteredMessages = useMemo(() => {
-    const twentyMinMs = 20 * 60 * 1000;
-    let list = messages.filter((m) => (nowTimestamp - getMessageTimestampMs(m.enviadoEn)) < twentyMinMs);
+    let list = messages;
 
     // Si hay un canal específico seleccionado, mostrar mensajes de ese canal y también los avisos comunitarios de 'todos'
     if (selectedChannel !== 'todos') {

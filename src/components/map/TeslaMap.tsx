@@ -91,7 +91,6 @@ interface TeslaMapProps {
   activeTrackingTaxi?: TaxiListing | null;
   onClearTrackingTaxi?: () => void;
   onOpenPedirTransporte?: () => void;
-  themeMode?: 'dark' | 'light';
 }
 
 interface TrajectoryResult {
@@ -120,7 +119,6 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
   activeTrackingTaxi,
   onClearTrackingTaxi,
   onOpenPedirTransporte,
-  themeMode = 'dark',
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
@@ -139,21 +137,13 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
   const schoolsLayerRef = useRef<L.LayerGroup | null>(null);
 
   // Map state
-  const [activeTileStyle, setActiveTileStyle] = useState<'streets' | 'tesla-dark' | 'osm'>(
-    themeMode === 'light' ? 'streets' : 'tesla-dark'
-  );
+  const [activeTileStyle, setActiveTileStyle] = useState<'streets' | 'tesla-dark' | 'osm'>('osm');
   const [showWeatherRadar, setShowWeatherRadar] = useState(false);
   const [showGasStations, setShowGasStations] = useState(false);
   const [showSchools, setShowSchools] = useState(false);
   const [isStopsPanelOpen, setIsStopsPanelOpen] = useState(false);
-  const [isEventsPanelOpen, setIsEventsPanelOpen] = useState(false);
   const [stopSearchQuery, setStopSearchQuery] = useState('');
   const [selectedStop, setSelectedStop] = useState<{ stop: BusStop; route: TransitRoute } | null>(null);
-
-  // Sincronización automática de cartografía con modo claro/oscuro
-  useEffect(() => {
-    setActiveTileStyle(themeMode === 'light' ? 'streets' : 'tesla-dark');
-  }, [themeMode]);
 
   // Trajectory state for driver tracking
   const [trajectoryInfo, setTrajectoryInfo] = useState<TrajectoryResult | null>(null);
@@ -169,27 +159,54 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
     userLng: number;
   } | null>(null);
 
-  // Visibilidad permanente del mapa interactivo y toda la actividad
+  // Auto-hide cards logic: 8 seconds of exposure, waking up on touch/hover, staying while interacting
   const [areCardsVisible, setAreCardsVisible] = useState(true);
   const [isHoveringCards, setIsHoveringCards] = useState(false);
+  const hideTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const isHoveringCardsRef = useRef(false);
   const isStopsPanelOpenRef = useRef(false);
-  const isEventsPanelOpenRef = useRef(false);
   isHoveringCardsRef.current = isHoveringCards;
   isStopsPanelOpenRef.current = isStopsPanelOpen;
-  isEventsPanelOpenRef.current = isEventsPanelOpen;
 
   const resetHideTimer = () => {
     setAreCardsVisible(true);
+
+    if (hideTimerRef.current) {
+      clearTimeout(hideTimerRef.current);
+      hideTimerRef.current = null;
+    }
+
+    hideTimerRef.current = setTimeout(() => {
+      // Don't auto-hide if user is hovering cards or interacting with stops panel
+      if (!isHoveringCardsRef.current && !isStopsPanelOpenRef.current) {
+        setAreCardsVisible(false);
+      }
+    }, 8000);
   };
+
+  // Re-start 8s exposure timer on mount (e.g. when returning from another section/tab)
+  useEffect(() => {
+    resetHideTimer();
+    return () => {
+      if (hideTimerRef.current) {
+        clearTimeout(hideTimerRef.current);
+      }
+    };
+  }, []);
 
   const handleCardMouseEnter = () => {
     setIsHoveringCards(true);
+    setAreCardsVisible(true);
+    if (hideTimerRef.current) {
+      clearTimeout(hideTimerRef.current);
+      hideTimerRef.current = null;
+    }
   };
 
   const handleCardMouseLeave = () => {
     setIsHoveringCards(false);
+    resetHideTimer();
   };
 
   const totalRoute: TransitRoute = routes.find((r) => r.id === 'route-zarate-malvinas') || routes.find((r) => r.stops.length > 30) || {
@@ -262,12 +279,6 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
     schoolsLayerRef.current = L.layerGroup().addTo(map);
 
     mapInstanceRef.current = map;
-
-    // Ajuste inicial para mostrar toda la actividad del corredor inmediatamente
-    try {
-      const allBounds = L.latLngBounds(LINEA_228_COORDINATES);
-      map.fitBounds(allBounds, { padding: [45, 45] });
-    } catch {}
 
     const handleResize = () => {
       if (mapInstanceRef.current) {
@@ -1298,129 +1309,6 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
             {showSchools ? 'Activo' : 'Colegios'}
           </span>
         </button>
-
-        {/* Botón 4: Eventos del Recorrido del Micro (Habilitado con panel desplegable) */}
-        <div className="relative">
-          <button
-            onClick={() => {
-              resetHideTimer();
-              setIsEventsPanelOpen(!isEventsPanelOpen);
-            }}
-            className={`w-10 h-10 rounded-2xl flex flex-col items-center justify-center text-xs shadow-xl backdrop-blur-xl border transition-all active:scale-95 cursor-pointer relative ${
-              isEventsPanelOpen
-                ? 'bg-rose-500 text-white border-rose-300 ring-2 ring-rose-400/40 shadow-rose-500/30'
-                : events.length > 0
-                ? 'glass-panel text-amber-300 hover:text-white border-amber-400/40 hover:bg-white/10'
-                : 'glass-panel text-slate-400 hover:text-white border-white/10 hover:bg-white/10'
-            }`}
-            title="Ver Eventos y Alertas del Recorrido del Micro"
-          >
-            <span className="text-base leading-none">⚠️</span>
-            <span className={`text-[8px] font-black tracking-tight leading-none mt-0.5 ${isEventsPanelOpen ? 'text-white' : 'text-amber-300'}`}>
-              Eventos
-            </span>
-            {events.length > 0 && (
-              <span className="absolute -top-1 -right-1 px-1 py-0.2 rounded-full bg-rose-500 text-white font-mono text-[8.5px] font-extrabold border border-black animate-pulse">
-                {events.length}
-              </span>
-            )}
-          </button>
-
-          {/* Desplegable de Eventos del Recorrido */}
-          {isEventsPanelOpen && (
-            <div
-              className="absolute top-0 right-12 w-80 sm:w-92 max-h-[70vh] rounded-3xl bg-[#090d18]/95 backdrop-blur-2xl border border-white/10 shadow-2xl p-3 z-40 flex flex-col animate-in fade-in slide-in-from-right-2 duration-150"
-            >
-              <div className="flex items-center justify-between pb-2 border-b border-white/10 shrink-0">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-sm">⚠️</span>
-                  <h3 className="text-xs font-black text-white">Eventos del Recorrido</h3>
-                  <span className="px-1.5 py-0.2 rounded-full bg-rose-500/20 text-rose-300 text-[10px] font-mono font-bold">
-                    {events.length} {events.length === 1 ? 'alerta' : 'alertas'}
-                  </span>
-                </div>
-                <button
-                  onClick={() => setIsEventsPanelOpen(false)}
-                  className="w-6 h-6 rounded-full bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white flex items-center justify-center cursor-pointer"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </div>
-
-              {/* Lista scrollable de eventos y demoras en el trazado */}
-              <div className="overflow-y-auto space-y-2 pr-1 pt-2 flex-1 max-h-[50vh]">
-                {events.length === 0 ? (
-                  <div className="py-6 text-center text-xs text-slate-400">
-                    <span className="text-2xl block mb-1">✅</span>
-                    Sin cortes, demoras ni alertas reportadas en el recorrido.
-                  </div>
-                ) : (
-                  events.map((ev) => {
-                    const isAccident = ev.type === 'accident' || (ev.type as any) === 'accidente';
-                    const isCongestion = ev.type === 'traffic' || (ev.type as any) === 'congestion' || (ev.type as any) === 'corte';
-                    const isDelay = ev.type === 'late' || (ev.type as any) === 'demora';
-
-                    const badgeColor = isAccident
-                      ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
-                      : isCongestion
-                      ? 'bg-orange-500/20 text-orange-300 border-orange-500/40'
-                      : isDelay
-                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-                      : 'bg-sky-500/20 text-sky-300 border-sky-500/40';
-
-                    const iconEmoji = isAccident ? '💥' : isCongestion ? '🚗' : isDelay ? '⏳' : '⚠️';
-
-                    return (
-                      <div
-                        key={ev.id}
-                        className="p-2.5 rounded-2xl bg-white/[0.03] hover:bg-white/[0.07] border border-white/10 transition-all text-xs"
-                      >
-                        <div className="flex items-start justify-between gap-1.5">
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className={`px-1.5 py-0.2 rounded text-[9.5px] font-bold border uppercase ${badgeColor}`}>
-                                {iconEmoji} {ev.type}
-                              </span>
-                              <span className="text-[10px] text-slate-400 font-mono">
-                                {ev.reportedAt || 'En vivo'}
-                              </span>
-                              <span className="text-[9.5px] text-cyan-300 bg-cyan-500/10 px-1 py-0.2 rounded font-mono">
-                                +{ev.confirmations || 1}
-                              </span>
-                            </div>
-                            <h4 className="font-bold text-white text-[11.5px] mt-1 leading-snug">
-                              {ev.title}
-                            </h4>
-                            <p className="text-[10.5px] text-slate-300 mt-0.5 leading-relaxed">
-                              {ev.description}
-                            </p>
-                          </div>
-                        </div>
-
-                        {/* Botón Ver en el mapa */}
-                        <div className="mt-2 flex items-center gap-2">
-                          <button
-                            onClick={() => {
-                              if (mapInstanceRef.current) {
-                                mapInstanceRef.current.flyTo([ev.lat, ev.lng], 16, { animate: true });
-                              }
-                              onSelectEvent(ev);
-                              setIsEventsPanelOpen(false);
-                            }}
-                            className="flex-1 py-1.5 px-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black text-[10.5px] flex items-center justify-center gap-1.5 shadow-md active:scale-95 transition-all cursor-pointer"
-                          >
-                            <MapPin className="w-3 h-3 fill-slate-950" />
-                            <span>Ver en el Mapa</span>
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </div>
-          )}
-        </div>
       </div>
 
       {/* =========================================================================
