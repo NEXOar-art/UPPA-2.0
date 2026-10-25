@@ -12,7 +12,6 @@ import {
   ADMIN_MASTER_PIN,
   habilitarChofer,
 } from '../../services/realtimeFirebaseService';
-import { useAuth } from '../../context/AuthContext';
 import {
   X,
   Copy,
@@ -30,9 +29,6 @@ import {
   CheckCircle2,
   Send,
   MessageCircle,
-  Mail,
-  Lock,
-  UserCheck,
 } from 'lucide-react';
 
 interface PublishTaxiModalProps {
@@ -90,65 +86,6 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
   const [inputCode, setInputCode] = useState('');
   const [codeSuccessMsg, setCodeSuccessMsg] = useState<string | null>(null);
 
-  // Firebase Email Authentication for Service Providers (Moto / Auto Taxi)
-  const { firebaseUser, loginWithEmail, registerWithEmail } = useAuth();
-  const [driverEmail, setDriverEmail] = useState('');
-  const [driverPassword, setDriverPassword] = useState('');
-  const [driverAuthMode, setDriverAuthMode] = useState<'login' | 'register'>('login');
-  const [isDriverAuthLoading, setIsDriverAuthLoading] = useState(false);
-  const [driverAuthSuccessMsg, setDriverAuthSuccessMsg] = useState<string | null>(null);
-  const [showDriverAuthSection, setShowDriverAuthSection] = useState(!firebaseUser);
-
-  useEffect(() => {
-    if (firebaseUser?.email) {
-      setDriverEmail(firebaseUser.email);
-      setShowDriverAuthSection(false);
-    }
-  }, [firebaseUser]);
-
-  const handleDriverAuth = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMsg('');
-    setDriverAuthSuccessMsg(null);
-
-    const cleanEmail = driverEmail.trim().toLowerCase();
-    if (!cleanEmail) {
-      setErrorMsg('Ingresá el correo electrónico del chofer para autenticar en Firebase.');
-      return;
-    }
-    if (!driverPassword || driverPassword.length < 6) {
-      setErrorMsg('La contraseña de chofer debe tener al menos 6 caracteres.');
-      return;
-    }
-
-    setIsDriverAuthLoading(true);
-    try {
-      if (driverAuthMode === 'register') {
-        const profile = await registerWithEmail(
-          cleanEmail,
-          driverPassword,
-          driverName.trim() || 'Conductor UPPA',
-          vehicleType === 'moto' ? 'chofer_moto' : 'chofer_auto',
-          {
-            phone: whatsapp.trim(),
-            barrio: zone.trim(),
-            esChofer: true,
-            tipoVehiculo: vehicleType,
-          }
-        );
-        setDriverAuthSuccessMsg(`¡Conductor de ${vehicleType === 'moto' ? 'Moto Taxi' : 'Auto Taxi'} registrado y autenticado en Firebase! (${profile.email})`);
-      } else {
-        const profile = await loginWithEmail(cleanEmail, driverPassword);
-        setDriverAuthSuccessMsg(`¡Sesión iniciada con Firebase como chofer de ${vehicleType === 'moto' ? 'Moto Taxi' : 'Auto Taxi'}! (${profile.email})`);
-      }
-      setShowDriverAuthSection(false);
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Error al autenticar chofer con Firebase.');
-    } finally {
-      setIsDriverAuthLoading(false);
-    }
-  };
-
   useEffect(() => {
     if (isOpen) {
       setModalTab(initialTab);
@@ -162,8 +99,6 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
       setZone('');
       setAdminPinInput('');
       setInputCode('');
-      setDriverEmail('');
-      setDriverPassword('');
     }
   }, [isOpen, initialTab]);
 
@@ -279,7 +214,7 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
   const handleAdminPinActivation = (codeToUse: string) => {
     setPinValidationErr('');
     if (adminPinInput.trim() !== ADMIN_MASTER_PIN) {
-      setPinValidationErr('Clave de administrador incorrecta. Se requiere clave 0608 para habilitar el servicio.');
+      setPinValidationErr('Clave de administrador incorrecta. Verificá los 4 dígitos e intentá nuevamente.');
       return;
     }
 
@@ -352,22 +287,22 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="w-full max-w-lg bg-[#0b0e17] border border-emerald-500/40 rounded-3xl p-5 sm:p-6 text-slate-100 shadow-2xl relative overflow-hidden flex flex-col max-h-[92vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200">
+      <div className="w-full max-w-lg bg-[#0b0e17] border border-emerald-500/40 rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 md:p-6 text-slate-100 shadow-2xl relative overflow-hidden flex flex-col max-h-[95vh] sm:max-h-[90vh]">
         {/* Ambient Top Pastel Line */}
         <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400" />
 
         {/* Modal Header */}
-        <div className="flex items-center justify-between pb-3 border-b border-white/5 shrink-0">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-2xl bg-emerald-400/15 border border-emerald-400/30 flex items-center justify-center text-emerald-300">
+        <div className="flex items-start sm:items-center justify-between pb-2.5 sm:pb-3 border-b border-white/5 shrink-0 gap-2">
+          <div className="flex items-start sm:items-center gap-2 sm:gap-2.5 min-w-0">
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl sm:rounded-2xl bg-emerald-400/15 border border-emerald-400/30 flex items-center justify-center text-emerald-300 shrink-0 mt-0.5 sm:mt-0">
               {vehicleType === 'moto' ? <Bike className="w-4 h-4" /> : <Car className="w-4 h-4" />}
             </div>
-            <div>
-              <h2 className="text-base font-bold text-white font-display">
-                Habilitación de Chofer (Moto / Auto Taxi)
+            <div className="min-w-0">
+              <h2 className="text-sm sm:text-base font-bold text-white font-display leading-tight truncate">
+                Habilitación de Chofer
               </h2>
-              <p className="text-[11px] text-slate-400">
+              <p className="text-[10px] sm:text-[11px] text-slate-400 leading-tight mt-0.5 line-clamp-2 sm:line-clamp-none">
                 Transferí a Alias: <strong className="text-emerald-300 font-mono">luciaveronicag</strong>, adjuntá el comprobante al WhatsApp <strong>3489690058</strong> y activá tu temporizador
               </p>
             </div>
@@ -375,7 +310,7 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
 
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
+            className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white flex items-center justify-center transition-colors cursor-pointer shrink-0"
           >
             <X className="w-4 h-4" />
           </button>
@@ -383,14 +318,14 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
 
         {/* Tab switcher: Transferir & Obtener Código vs Tengo un Código */}
         {!generatedCodeResult && (
-          <div className="flex rounded-2xl bg-white/[0.04] p-1 my-3 border border-white/5 shrink-0">
+          <div className="flex rounded-xl sm:rounded-2xl bg-white/[0.04] p-1 my-2.5 sm:my-3 border border-white/5 shrink-0">
             <button
               type="button"
               onClick={() => {
                 setModalTab('transfer');
                 setErrorMsg('');
               }}
-              className={`flex-1 py-1.5 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+              className={`flex-1 py-1.5 text-[11px] sm:text-xs font-bold rounded-lg sm:rounded-xl transition-all cursor-pointer text-center ${
                 modalTab === 'transfer'
                   ? 'bg-emerald-500/20 text-emerald-200 border border-emerald-400/40 shadow-sm'
                   : 'text-slate-400 hover:text-white'
@@ -404,13 +339,13 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
                 setModalTab('enter-code');
                 setErrorMsg('');
               }}
-              className={`flex-1 py-1.5 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+              className={`flex-1 py-1.5 text-[11px] sm:text-xs font-bold rounded-lg sm:rounded-xl transition-all flex items-center justify-center gap-1 sm:gap-1.5 cursor-pointer text-center ${
                 modalTab === 'enter-code'
                   ? 'bg-emerald-500/20 text-emerald-200 border border-emerald-400/40 shadow-sm'
                   : 'text-slate-400 hover:text-white'
               }`}
             >
-              <KeyRound className="w-3.5 h-3.5" />
+              <KeyRound className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
               <span>2. Ya tengo un Código</span>
             </button>
           </div>
@@ -500,11 +435,11 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
               </div>
 
               {/* Admin Quick Unlock Form */}
-              <div className="p-3.5 rounded-2xl bg-black/60 border border-white/10 max-w-sm mx-auto space-y-2 text-left">
+              <div className="p-3 sm:p-3.5 rounded-2xl bg-black/60 border border-white/10 max-w-sm mx-auto space-y-2 text-left">
                 <label className="block text-[11px] font-bold text-slate-300">
                   Ingreso de Clave de Administrador
                 </label>
-                <div className="flex gap-2">
+                <div className="flex flex-col sm:flex-row gap-2">
                   <input
                     type="password"
                     value={adminPinInput}
@@ -518,7 +453,7 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
                   <button
                     type="button"
                     onClick={() => handleAdminPinActivation(generatedCodeResult)}
-                    className="h-10 px-4 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs rounded-xl shadow-md transition-all cursor-pointer whitespace-nowrap"
+                    className="h-10 px-4 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs rounded-xl shadow-md transition-all cursor-pointer whitespace-nowrap flex items-center justify-center"
                   >
                     Habilitar Servicio
                   </button>
@@ -582,144 +517,13 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
                   <KeyRound className="w-4 h-4" />
                   <span>Activar Servicio y Arrancar Temporizador</span>
                 </button>
-
-                {/* Demo helper */}
-                <div className="pt-2 border-t border-white/5 text-center">
-                  <span className="text-[11px] text-slate-400 font-mono">
-                    Códigos rápidos para probar:{' '}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setInputCode('UPPA-MOTO-6H');
-                        setVehicleType('moto');
-                      }}
-                      className="text-emerald-400 underline font-bold cursor-pointer"
-                    >
-                      UPPA-MOTO-6H (Moto 6h)
-                    </button>{' '}
-                    ·{' '}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setInputCode('UPPA-TX-12H');
-                        setVehicleType('auto');
-                      }}
-                      className="text-emerald-400 underline font-bold cursor-pointer"
-                    >
-                      UPPA-TX-12H (Auto 12h)
-                    </button>{' '}
-                    ·{' '}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setInputCode('UPPA-VIP-24H');
-                        setVehicleType('auto');
-                      }}
-                      className="text-emerald-400 underline font-bold cursor-pointer"
-                    >
-                      UPPA-VIP-24H (24h)
-                    </button>
-                  </span>
-                </div>
               </div>
             </div>
           ) : (
             /* ========================================================
                TAB 1: TRANSFER AND REQUEST CODE FORM
                ======================================================== */
-            <form onSubmit={handleTransferSubmit} className="space-y-3.5">
-              {/* Driver Firebase Email Authentication Section */}
-              <div className="p-3.5 rounded-2xl bg-[#090e17] border border-emerald-500/30 space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Mail className="w-4 h-4 text-emerald-400" />
-                    <span className="text-xs font-bold text-white">
-                      Autenticación de Prestador (Firebase Auth)
-                    </span>
-                  </div>
-                  {firebaseUser?.email && (
-                    <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/20 px-2 py-0.5 rounded-full border border-emerald-400/40">
-                      Enlazado: {firebaseUser.email}
-                    </span>
-                  )}
-                </div>
-
-                {driverAuthSuccessMsg && (
-                  <div className="p-2 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-[11px] flex items-center gap-1.5">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                    <span>{driverAuthSuccessMsg}</span>
-                  </div>
-                )}
-
-                {(!firebaseUser || showDriverAuthSection) ? (
-                  <div className="space-y-2 pt-1 border-t border-white/5">
-                    <p className="text-[11px] text-slate-300 leading-tight">
-                      Acceso libre para pasajeros, pero choferes de Moto/Auto Taxi deben validar su email con Firebase:
-                    </p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      <div>
-                        <label className="block text-[10px] text-slate-400 mb-0.5">Correo del Chofer</label>
-                        <input
-                          type="email"
-                          value={driverEmail}
-                          onChange={(e) => setDriverEmail(e.target.value)}
-                          placeholder="chofer@ejemplo.com"
-                          className="w-full bg-black/40 border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-400"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] text-slate-400 mb-0.5">Contraseña</label>
-                        <input
-                          type="password"
-                          value={driverPassword}
-                          onChange={(e) => setDriverPassword(e.target.value)}
-                          placeholder="Mínimo 6 caracteres"
-                          className="w-full bg-black/40 border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-400"
-                        />
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 pt-1">
-                      <button
-                        type="button"
-                        disabled={isDriverAuthLoading}
-                        onClick={handleDriverAuth}
-                        className="px-3 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-400/40 text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer"
-                      >
-                        {isDriverAuthLoading ? (
-                          <span>Verificando...</span>
-                        ) : (
-                          <>
-                            <UserCheck className="w-3.5 h-3.5" />
-                            <span>
-                              {driverAuthMode === 'login' ? 'Iniciar Sesión Chofer' : 'Registrar Nuevo Chofer'}
-                            </span>
-                          </>
-                        )}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setDriverAuthMode(driverAuthMode === 'login' ? 'register' : 'login')
-                        }
-                        className="text-[10px] text-slate-400 hover:text-white underline cursor-pointer"
-                      >
-                        {driverAuthMode === 'login' ? '¿Crear cuenta nueva?' : '¿Ya tenés cuenta? Iniciar'}
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-between text-[11px] text-slate-300">
-                    <span>Sesión de prestador verificada para este turno.</span>
-                    <button
-                      type="button"
-                      onClick={() => setShowDriverAuthSection(true)}
-                      className="text-[10px] text-slate-400 hover:text-white underline cursor-pointer"
-                    >
-                      Cambiar email
-                    </button>
-                  </div>
-                )}
-              </div>
+            <form onSubmit={handleTransferSubmit} className="space-y-3 sm:space-y-3.5">
 
               {/* Vehicle Type Choice */}
               <div>
@@ -894,9 +698,9 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
                       }
                       handleTransferSubmit();
                     }}
-                    className="w-full flex items-center justify-center gap-2.5 px-4 py-3 bg-gradient-to-r from-emerald-500 via-green-500 to-emerald-600 hover:from-emerald-400 hover:to-green-500 text-slate-950 font-black text-xs uppercase tracking-wider rounded-2xl shadow-xl shadow-emerald-500/25 transition-all cursor-pointer active:scale-97"
+                    className="w-full flex items-center justify-center gap-2 px-3 sm:px-4 py-2.5 sm:py-3 bg-gradient-to-r from-emerald-500 via-green-500 to-emerald-600 hover:from-emerald-400 hover:to-green-500 text-slate-950 font-black text-[11px] sm:text-xs uppercase tracking-wider rounded-xl sm:rounded-2xl shadow-xl shadow-emerald-500/25 transition-all cursor-pointer active:scale-97 text-center leading-snug"
                   >
-                    <MessageCircle className="w-4 h-4 fill-slate-950" />
+                    <MessageCircle className="w-4 h-4 fill-slate-950 shrink-0" />
                     <span>Enviar Datos y Adjuntar Comprobante (WhatsApp 3489690058)</span>
                   </a>
 

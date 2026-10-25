@@ -12,7 +12,9 @@ import {
   Clock,
   Sparkles,
   CheckCircle2,
+  ShieldAlert,
 } from 'lucide-react';
+import { PoliticasTransporteModal } from '../taxi/PoliticasTransporteModal';
 
 interface PedirTransporteModalProps {
   isOpen: boolean;
@@ -39,6 +41,7 @@ export const PedirTransporteModal: React.FC<PedirTransporteModalProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [isPoliticasOpen, setIsPoliticasOpen] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -107,16 +110,32 @@ export const PedirTransporteModal: React.FC<PedirTransporteModalProps> = ({
         <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-amber-400 via-orange-400 to-yellow-300" />
 
         {/* Modal Header */}
-        <div className="flex items-center justify-between pb-3 border-b border-white/5 shrink-0">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-2xl bg-amber-400/20 border border-amber-400/40 flex items-center justify-center text-amber-300">
+        <div className="flex items-center justify-between pb-3 border-b border-white/5 shrink-0 gap-2">
+          <div className="flex items-start sm:items-center gap-2.5 min-w-0">
+            <div className="w-9 h-9 rounded-2xl bg-amber-400/20 border border-amber-400/40 flex items-center justify-center text-amber-300 shrink-0 mt-0.5 sm:mt-0">
               <Zap className="w-4 h-4 fill-amber-300" />
             </div>
-            <div>
-              <h2 className="text-base font-bold text-white font-display">
-                Pedir Transporte Alternativo
-              </h2>
-              <p className="text-[11px] text-slate-400">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-base font-bold text-white font-display">
+                  Pedir Transporte Alternativo
+                </h2>
+                {/* Botón destellando de políticas */}
+                <button
+                  type="button"
+                  onClick={() => setIsPoliticasOpen(true)}
+                  className="relative inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold text-amber-200 bg-amber-500/20 hover:bg-amber-500/35 border border-amber-400/60 shadow-[0_0_12px_rgba(245,158,11,0.5)] transition-all animate-pulse hover:scale-105 active:scale-95 cursor-pointer"
+                  title="Ver Políticas de Uso y Descargo de Responsabilidad"
+                >
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-80"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-400"></span>
+                  </span>
+                  <ShieldAlert className="w-3 h-3 text-amber-300" />
+                  <span>Políticas & Descargo</span>
+                </button>
+              </div>
+              <p className="text-[11px] text-slate-400 mt-0.5">
                 Aviso prioritario: se notificará a todas las Moto Taxis y Auto Taxis activas
               </p>
             </div>
@@ -124,19 +143,19 @@ export const PedirTransporteModal: React.FC<PedirTransporteModalProps> = ({
 
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
+            className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white flex items-center justify-center transition-colors cursor-pointer shrink-0"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Inconveniente Notice */}
+        {/* Inconveniente Notice with 12-minute countdown rule */}
         <div className="my-3 p-3 rounded-2xl bg-gradient-to-r from-amber-950/40 to-orange-950/30 border border-amber-500/30 text-amber-200 text-xs flex items-start gap-2.5">
-          <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+          <Clock className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
           <div className="space-y-0.5 leading-relaxed">
-            <span className="font-bold text-amber-300">¿Sufriste un inconveniente o demora con el micro?</span>
+            <span className="font-bold text-amber-300">Temporizador de 12 minutos para aceptación:</span>
             <p className="text-[11px] text-slate-300">
-              Al presionar este botón, tu mensaje llega en vivo a los choferes de Moto Taxi y Auto Taxi de Zárate y Campana para coordinar tu viaje de inmediato.
+              Al emitir la solicitud, se notifica en vivo a todos los choferes habilitados de Zárate y Campana. Dispondrán de <strong className="text-white">12 minutos</strong> para aceptarla; si transcurre ese plazo sin chofer asignado, deberás emitir una nueva solicitud.
             </p>
           </div>
         </div>
@@ -273,6 +292,12 @@ export const PedirTransporteModal: React.FC<PedirTransporteModalProps> = ({
           </div>
         </form>
       </div>
+
+      {/* Politicas & Descargo Modal */}
+      <PoliticasTransporteModal
+        isOpen={isPoliticasOpen}
+        onClose={() => setIsPoliticasOpen(false)}
+      />
     </div>
   );
 };

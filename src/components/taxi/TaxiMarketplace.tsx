@@ -1,9 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { TaxiListing, SolicitudTransporteFirestore } from '../../types';
 import {
   subscribeToSolicitudesTransporte,
   crearSolicitudTransporte,
   aceptarSolicitudTransporte,
+  isSolicitudExpired,
+  getSolicitudRemainingSeconds,
+  SOLICITUD_TIMEOUT_MS,
 } from '../../services/realtimeFirebaseService';
 import {
   Car,
@@ -16,6 +19,7 @@ import {
   Plus,
   CheckCircle,
   Shield,
+  ShieldAlert,
   Navigation,
   KeyRound,
   Sparkles,
@@ -24,7 +28,11 @@ import {
   Zap,
   Check,
   X,
+  AlertCircle,
+  RotateCcw,
+  Timer,
 } from 'lucide-react';
+import { PoliticasTransporteModal } from './PoliticasTransporteModal';
 
 interface TaxiMarketplaceProps {
   taxis: TaxiListing[];
@@ -55,6 +63,16 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
   const [reqType, setReqType] = useState<'moto' | 'auto'>('moto');
   const [isSubmittingRide, setIsSubmittingRide] = useState(false);
   const [rideSuccessNotice, setRideSuccessNotice] = useState<string | null>(null);
+  const [isPoliticasOpen, setIsPoliticasOpen] = useState(false);
+
+  // Live 1-second ticker for 12-minute countdown timer
+  const [nowTimestamp, setNowTimestamp] = useState<number>(Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setNowTimestamp(Date.now());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   // Subscribe to alternative transport requests in real-time
   useEffect(() => {
@@ -63,6 +81,13 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
     });
     return () => unsub();
   }, []);
+
+  // Most recent request made by current user
+  const myRecentSolicitud = useMemo(() => {
+    return solicitudes.find(
+      (s) => s.pasajeroId === currentUserId || s.nombrePasajero === currentUserName
+    );
+  }, [solicitudes, currentUserId, currentUserName]);
 
   const handleCreateRideRequest = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -78,8 +103,8 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
         tipoVehiculoRequerido: reqType,
       });
       setIsRequestRideOpen(false);
-      setRideSuccessNotice('¡Solicitud de transporte creada! Los choferes cercanos fueron notificados.');
-      setTimeout(() => setRideSuccessNotice(null), 4000);
+      setRideSuccessNotice('¡Solicitud de transporte creada! Temporizador de 12 minutos activo para ser aceptada por un chofer.');
+      setTimeout(() => setRideSuccessNotice(null), 5000);
     } catch (e: any) {
       alert('Error al solicitar transporte: ' + e.message);
     } finally {
@@ -88,6 +113,11 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
   };
 
   const handleAcceptRide = async (solId: string) => {
+    const target = solicitudes.find((s) => s.id === solId);
+    if (target && isSolicitudExpired(target, Date.now())) {
+      alert('Esta solicitud ha expirado tras 12 minutos sin chofer asignado. El pasajero debe emitir una nueva solicitud.');
+      return;
+    }
     try {
       await aceptarSolicitudTransporte(
         solId,
@@ -192,6 +222,83 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
           </div>
         )}
 
+        {/* User's Own Active / Expired Solicitud Live Card */}
+        {myRecentSolicitud && (
+          <div
+            className={`mt-3 p-3 sm:p-3.5 rounded-2xl border text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 transition-all animate-in fade-in ${
+              myRecentSolicitud.estado === 'aceptado'
+                ? 'bg-emerald-950/30 border-emerald-500/40 text-emerald-200'
+                : isSolicitudExpired(myRecentSolicitud, nowTimestamp)
+                ? 'bg-rose-950/30 border-rose-500/40 text-rose-200'
+                : 'bg-amber-950/30 border-amber-500/40 text-amber-200'
+            }`}
+          >
+            <div className="flex items-start sm:items-center gap-2.5 min-w-0">
+              <div
+                className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5 sm:mt-0 ${
+                  myRecentSolicitud.estado === 'aceptado'
+                    ? 'bg-emerald-500/20 text-emerald-300'
+                    : isSolicitudExpired(myRecentSolicitud, nowTimestamp)
+                    ? 'bg-rose-500/20 text-rose-300'
+                    : 'bg-amber-500/20 text-amber-300'
+                }`}
+              >
+                {myRecentSolicitud.estado === 'aceptado' ? (
+                  <CheckCircle className="w-4 h-4" />
+                ) : isSolicitudExpired(myRecentSolicitud, nowTimestamp) ? (
+                  <AlertCircle className="w-4 h-4" />
+                ) : (
+                  <Clock className="w-4 h-4 animate-spin" />
+                )}
+              </div>
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                  <span className="font-bold text-white text-xs">
+                    Tu solicitud ({myRecentSolicitud.tipoVehiculoRequerido === 'moto' ? 'Moto Taxi' : 'Auto Taxi'})
+                  </span>
+                  {myRecentSolicitud.estado === 'pendiente' && !isSolicitudExpired(myRecentSolicitud, nowTimestamp) && (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500/25 border border-amber-400/40 text-amber-300 font-mono flex items-center gap-1 animate-pulse">
+                      <Clock className="w-2.5 h-2.5" />
+                      <span>
+                        {Math.floor(getSolicitudRemainingSeconds(myRecentSolicitud, nowTimestamp) / 60)}:
+                        {(getSolicitudRemainingSeconds(myRecentSolicitud, nowTimestamp) % 60).toString().padStart(2, '0')}{' '}
+                        restantes
+                      </span>
+                    </span>
+                  )}
+                  {isSolicitudExpired(myRecentSolicitud, nowTimestamp) && (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-500/25 border border-rose-400/40 text-rose-300">
+                      EXPIRADA (12 min)
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11px] text-slate-300 truncate mt-0.5">
+                  {myRecentSolicitud.estado === 'aceptado'
+                    ? `¡Viaje aceptado por ${myRecentSolicitud.choferNombre}! El chofer está en camino a tu ubicación.`
+                    : isSolicitudExpired(myRecentSolicitud, nowTimestamp)
+                    ? 'No se asignó chofer dentro del límite de 12 minutos. Por favor emití una nueva solicitud.'
+                    : `Buscando chofer: ${myRecentSolicitud.origen} ➔ ${myRecentSolicitud.destino}.`}
+                </p>
+              </div>
+            </div>
+
+            {isSolicitudExpired(myRecentSolicitud, nowTimestamp) && (
+              <button
+                onClick={() => {
+                  setReqOrigin(myRecentSolicitud.origen);
+                  setReqDestination(myRecentSolicitud.destino);
+                  setReqType(myRecentSolicitud.tipoVehiculoRequerido);
+                  setIsRequestRideOpen(true);
+                }}
+                className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-md shrink-0 active:scale-95"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Emitir Nueva Solicitud</span>
+              </button>
+            )}
+          </div>
+        )}
+
         {/* Filter Pills */}
         <div className="flex items-center gap-2 mt-3 pt-3 border-t border-white/5">
           <button
@@ -229,62 +336,121 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
         </div>
       </div>
 
-      {/* Alternative Transport Live Requests Carousel */}
+      {/* Alternative Transport Live Requests Carousel with 12-minute countdown */}
       {solicitudes.length > 0 && (
         <div className="p-3 sm:px-5 bg-blue-950/20 border-b border-blue-500/20 space-y-2">
-          <div className="flex items-center justify-between text-xs">
+          <div className="flex items-center justify-between text-xs gap-2 flex-wrap">
             <span className="font-bold text-blue-300 flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-blue-400 animate-ping" />
-              Solicitudes Activas de Pasajeros en Espera ({solicitudes.filter((s) => s.estado === 'pendiente').length})
+              Solicitudes de Pasajeros · Temporizador de 12 min ({solicitudes.filter((s) => s.estado === 'pendiente' && !isSolicitudExpired(s, nowTimestamp)).length} activas)
             </span>
+            <button
+              type="button"
+              onClick={() => setIsPoliticasOpen(true)}
+              className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold text-amber-300 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/50 shadow-[0_0_8px_rgba(245,158,11,0.4)] animate-pulse transition-all cursor-pointer"
+              title="Ver Políticas de Uso y Descargo de Responsabilidad"
+            >
+              <ShieldAlert className="w-3 h-3 text-amber-300" />
+              <span>Políticas & Descargo</span>
+            </button>
           </div>
 
           <div className="flex gap-2.5 overflow-x-auto pb-1 scrollbar-none">
-            {solicitudes.map((sol) => (
-              <div
-                key={sol.id}
-                className={`p-3 rounded-xl border text-xs min-w-[260px] max-w-[300px] shrink-0 space-y-1.5 ${
-                  sol.estado === 'pendiente'
-                    ? 'bg-[#0f1424] border-amber-500/30 text-slate-200'
-                    : 'bg-[#0c1322] border-blue-500/30 text-blue-200'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5 font-bold text-white">
-                    {sol.tipoVehiculoRequerido === 'moto' ? <Bike className="w-3.5 h-3.5 text-amber-300" /> : <Car className="w-3.5 h-3.5 text-cyan-300" />}
-                    <span>{sol.nombrePasajero}</span>
+            {solicitudes.map((sol) => {
+              const isExpired = isSolicitudExpired(sol, nowTimestamp);
+              const remainingSec = getSolicitudRemainingSeconds(sol, nowTimestamp);
+              const mins = Math.floor(remainingSec / 60);
+              const secs = remainingSec % 60;
+              const formattedTimer = `${mins}:${secs.toString().padStart(2, '0')}`;
+
+              return (
+                <div
+                  key={sol.id}
+                  className={`p-3 rounded-xl border text-xs min-w-[270px] max-w-[310px] shrink-0 space-y-1.5 ${
+                    sol.estado === 'aceptado'
+                      ? 'bg-[#0c1322] border-blue-500/30 text-blue-200'
+                      : isExpired
+                      ? 'bg-[#180f14] border-rose-500/30 text-rose-200'
+                      : 'bg-[#0f1424] border-amber-500/30 text-slate-200'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-1.5">
+                    <div className="flex items-center gap-1.5 font-bold text-white min-w-0">
+                      {sol.tipoVehiculoRequerido === 'moto' ? (
+                        <Bike className="w-3.5 h-3.5 text-amber-300 shrink-0" />
+                      ) : (
+                        <Car className="w-3.5 h-3.5 text-cyan-300 shrink-0" />
+                      )}
+                      <span className="truncate">{sol.nombrePasajero}</span>
+                    </div>
+
+                    {sol.estado === 'pendiente' && !isExpired && (
+                      <span
+                        className={`px-2 py-0.5 rounded text-[9px] font-bold font-mono flex items-center gap-1 shrink-0 ${
+                          remainingSec <= 180
+                            ? 'bg-rose-500/20 text-rose-300 border border-rose-400/40 animate-pulse'
+                            : 'bg-amber-500/20 text-amber-300 border border-amber-400/30'
+                        }`}
+                        title="Tiempo restante para aceptar viaje (límite 12 minutos)"
+                      >
+                        <Clock className="w-2.5 h-2.5" />
+                        <span>{formattedTimer}</span>
+                      </span>
+                    )}
+
+                    {sol.estado === 'pendiente' && isExpired && (
+                      <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/40 shrink-0">
+                        EXPIRADA (12m)
+                      </span>
+                    )}
+
+                    {sol.estado === 'aceptado' && (
+                      <span className="px-2 py-0.5 rounded text-[9px] font-bold uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shrink-0">
+                        Aceptado
+                      </span>
+                    )}
                   </div>
-                  <span
-                    className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase ${
-                      sol.estado === 'pendiente'
-                        ? 'bg-amber-500/20 text-amber-300 border border-amber-400/30'
-                        : 'bg-emerald-500/20 text-emerald-300'
-                    }`}
-                  >
-                    {sol.estado}
-                  </span>
-                </div>
 
-                <div className="text-[11px] text-slate-300 space-y-0.5">
-                  <p className="truncate">📍 {sol.origen}</p>
-                  <p className="truncate">🏁 {sol.destino}</p>
-                </div>
+                  <div className="text-[11px] text-slate-300 space-y-0.5">
+                    <p className="truncate">📍 {sol.origen}</p>
+                    <p className="truncate">🏁 {sol.destino}</p>
+                  </div>
 
-                {sol.estado === 'pendiente' ? (
-                  <button
-                    onClick={() => handleAcceptRide(sol.id)}
-                    className="w-full py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-[11px] flex items-center justify-center gap-1 shadow transition-all cursor-pointer active:scale-95"
-                  >
-                    <Check className="w-3 h-3" />
-                    <span>Aceptar Viaje Ahora</span>
-                  </button>
-                ) : (
-                  <p className="text-[10px] text-emerald-300 font-semibold truncate">
-                    Chofer: {sol.choferNombre || 'Asignado'}
-                  </p>
-                )}
-              </div>
-            ))}
+                  {sol.estado === 'pendiente' && !isExpired ? (
+                    <button
+                      onClick={() => handleAcceptRide(sol.id)}
+                      className="w-full py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-[11px] flex items-center justify-center gap-1 shadow transition-all cursor-pointer active:scale-95"
+                    >
+                      <Check className="w-3 h-3" />
+                      <span>Aceptar Viaje ({formattedTimer})</span>
+                    </button>
+                  ) : sol.estado === 'pendiente' && isExpired ? (
+                    <div className="space-y-1 pt-0.5">
+                      <div className="text-[10px] text-rose-300/90 flex items-center gap-1 leading-tight">
+                        <AlertCircle className="w-3 h-3 text-rose-400 shrink-0" />
+                        <span>12 min cumplidos sin chofer</span>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setReqOrigin(sol.origen);
+                          setReqDestination(sol.destino);
+                          setReqType(sol.tipoVehiculoRequerido);
+                          setIsRequestRideOpen(true);
+                        }}
+                        className="w-full py-1 rounded-lg bg-blue-600/90 hover:bg-blue-500 text-white font-bold text-[10px] flex items-center justify-center gap-1 transition-all cursor-pointer active:scale-95 shadow-sm"
+                      >
+                        <RotateCcw className="w-3 h-3" />
+                        <span>Emitir Nueva Solicitud</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="text-[10px] text-emerald-300 font-semibold truncate">
+                      Chofer: {sol.choferNombre || 'Asignado'}
+                    </p>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
@@ -405,17 +571,33 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
       {isRequestRideOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in">
           <div className="w-full max-w-md bg-[#0f1422] border border-blue-500/40 rounded-3xl p-5 shadow-2xl relative text-slate-100 space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-white/5">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-blue-500/20 text-blue-300 flex items-center justify-center">
+            <div className="flex items-center justify-between pb-3 border-b border-white/5 gap-2">
+              <div className="flex items-start sm:items-center gap-2.5 min-w-0">
+                <div className="w-8 h-8 rounded-xl bg-blue-500/20 text-blue-300 flex items-center justify-center shrink-0 mt-0.5 sm:mt-0">
                   <Zap className="w-4 h-4 text-amber-300" />
                 </div>
-                <div>
-                  <h3 className="text-sm font-bold text-white">Solicitud de Transporte Alternativo</h3>
-                  <p className="text-[11px] text-slate-400">Cuando quedás sin micro o necesitás traslado urgente</p>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-sm font-bold text-white">Solicitud de Transporte Alternativo</h3>
+                    {/* Botón destellando de políticas */}
+                    <button
+                      type="button"
+                      onClick={() => setIsPoliticasOpen(true)}
+                      className="relative inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-extrabold text-amber-200 bg-amber-500/20 hover:bg-amber-500/35 border border-amber-400/60 shadow-[0_0_12px_rgba(245,158,11,0.5)] transition-all animate-pulse hover:scale-105 active:scale-95 cursor-pointer"
+                      title="Ver Políticas de Uso y Descargo de Responsabilidad"
+                    >
+                      <span className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-80"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-400"></span>
+                      </span>
+                      <ShieldAlert className="w-3 h-3 text-amber-300" />
+                      <span>Políticas & Descargo</span>
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-0.5">Cuando quedás sin micro o necesitás traslado urgente</p>
                 </div>
               </div>
-              <button onClick={() => setIsRequestRideOpen(false)} className="p-1 rounded-full text-slate-400 hover:text-white">
+              <button onClick={() => setIsRequestRideOpen(false)} className="p-1 rounded-full text-slate-400 hover:text-white shrink-0">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -475,8 +657,14 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                 </div>
               </div>
 
-              <div className="p-3 rounded-xl bg-blue-950/40 border border-blue-500/30 text-[11px] text-blue-200">
-                📢 Tu solicitud será emitida instantáneamente vía Firebase a los choferes habilitados en Zárate y Campana.
+              <div className="p-3 rounded-2xl bg-blue-950/40 border border-blue-500/30 text-[11px] text-blue-200 flex items-start gap-2.5">
+                <Clock className="w-4 h-4 text-amber-300 shrink-0 mt-0.5" />
+                <div className="space-y-0.5 leading-relaxed">
+                  <span className="font-bold text-amber-300">Temporizador de 12 minutos para aceptación:</span>
+                  <p className="text-[11px] text-slate-300">
+                    Tu solicitud se emitirá en vivo a los choferes habilitados en Zárate y Campana con un temporizador de <strong className="text-white">12 minutos</strong>. Si ningún chofer acepta en ese lapso, la solicitud expirará y deberás emitir una nueva.
+                  </p>
+                </div>
               </div>
 
               <button
@@ -491,6 +679,12 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
           </div>
         </div>
       )}
+
+      {/* Politicas & Descargo Modal */}
+      <PoliticasTransporteModal
+        isOpen={isPoliticasOpen}
+        onClose={() => setIsPoliticasOpen(false)}
+      />
     </div>
   );
 };

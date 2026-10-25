@@ -200,12 +200,13 @@ export interface SolicitudTransporteFirestore {
   destino: string;
   origenCoords?: { lat: number; lng: number };
   destinoCoords?: { lat: number; lng: number };
-  estado: 'pendiente' | 'aceptado' | 'en_camino' | 'completado' | 'cancelado';
+  estado: 'pendiente' | 'aceptado' | 'en_camino' | 'completado' | 'cancelado' | 'expirada';
   tipoVehiculoRequerido: 'moto' | 'auto';
   choferId: string | null;
   choferNombre?: string | null;
   choferTelefono?: string | null;
   fechaSolicitud: any;
+  expiresAt?: number; // Temporizador límite de 12 minutos
   actualizadoEn?: any;
   precioEstimado?: number;
   distanciaKm?: number;

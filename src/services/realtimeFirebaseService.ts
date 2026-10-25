@@ -919,7 +919,34 @@ export async function reportarMensajeChat(salaId: string, mensajeId: string): Pr
 
 // ---------------------------------------------------------------------------
 // 4. SOLICITUDES DE TRANSPORTE ALTERNATIVO: solicitudes_transporte/{solicitudId}
+// Temporizador de 12 minutos exactos para ser aceptadas
 // ---------------------------------------------------------------------------
+export const SOLICITUD_TIMEOUT_MS = 12 * 60 * 1000; // 12 minutos
+
+export function isSolicitudExpired(sol: SolicitudTransporteFirestore, now: number = Date.now()): boolean {
+  if (sol.estado === 'expirada') return true;
+  if (sol.estado !== 'pendiente') return false;
+  const createdMs = typeof sol.fechaSolicitud === 'number'
+    ? sol.fechaSolicitud
+    : typeof sol.fechaSolicitud?.seconds === 'number'
+    ? sol.fechaSolicitud.seconds * 1000
+    : Date.now();
+  const limit = sol.expiresAt || (createdMs + SOLICITUD_TIMEOUT_MS);
+  return now >= limit;
+}
+
+export function getSolicitudRemainingSeconds(sol: SolicitudTransporteFirestore, now: number = Date.now()): number {
+  if (sol.estado !== 'pendiente') return 0;
+  const createdMs = typeof sol.fechaSolicitud === 'number'
+    ? sol.fechaSolicitud
+    : typeof sol.fechaSolicitud?.seconds === 'number'
+    ? sol.fechaSolicitud.seconds * 1000
+    : Date.now();
+  const limit = sol.expiresAt || (createdMs + SOLICITUD_TIMEOUT_MS);
+  const diffMs = limit - now;
+  return Math.max(0, Math.floor(diffMs / 1000));
+}
+
 const MOCK_INITIAL_SOLICITUDES: SolicitudTransporteFirestore[] = [
   {
     id: 'sol-init-1',
@@ -933,7 +960,8 @@ const MOCK_INITIAL_SOLICITUDES: SolicitudTransporteFirestore[] = [
     estado: 'pendiente',
     tipoVehiculoRequerido: 'moto',
     choferId: null,
-    fechaSolicitud: Date.now() - 5 * 60 * 1000,
+    fechaSolicitud: Date.now() - 4 * 60 * 1000,
+    expiresAt: Date.now() + 8 * 60 * 1000,
     precioEstimado: 2200,
     distanciaKm: 4.2,
   },
@@ -952,6 +980,7 @@ const MOCK_INITIAL_SOLICITUDES: SolicitudTransporteFirestore[] = [
     choferNombre: 'Lucia Veronica Gimenez (Auto Taxi)',
     choferTelefono: '3489690058',
     fechaSolicitud: Date.now() - 18 * 60 * 1000,
+    expiresAt: Date.now() - 6 * 60 * 1000,
     precioEstimado: 6800,
     distanciaKm: 14.5,
   },
@@ -1036,6 +1065,7 @@ export async function crearSolicitudTransporte(data: {
 }): Promise<SolicitudTransporteFirestore> {
   const localId = `sol-${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
   const now = Date.now();
+  const expiresAt = now + SOLICITUD_TIMEOUT_MS; // 12 minutos
 
   const nuevaSolicitud: SolicitudTransporteFirestore = {
     id: localId,
@@ -1052,6 +1082,7 @@ export async function crearSolicitudTransporte(data: {
     choferNombre: null,
     choferTelefono: null,
     fechaSolicitud: now,
+    expiresAt,
     precioEstimado: data.precioEstimado || (data.tipoVehiculoRequerido === 'moto' ? 2200 : 3800),
     distanciaKm: data.distanciaKm || 4.5,
   };
@@ -1074,7 +1105,7 @@ export async function crearSolicitudTransporte(data: {
   try {
     triggerInAppPushNotification(
       `🚕 Nueva solicitud de transporte (${data.tipoVehiculoRequerido === 'moto' ? 'Moto' : 'Auto'})`,
-      `${data.nombrePasajero} necesita viaje: ${data.origen} ➔ ${data.destino}`,
+      `${data.nombrePasajero} necesita viaje: ${data.origen} ➔ ${data.destino} (⏱️ Temporizador de 12 min)`,
       'transporte',
       { solicitudId: localId }
     );
@@ -1086,6 +1117,7 @@ export async function crearSolicitudTransporte(data: {
     await setDoc(docRef, {
       ...nuevaSolicitud,
       fechaSolicitud: serverTimestamp(),
+      expiresAt,
     });
   } catch (error) {
     console.warn('Firestore crearSolicitudTransporte notice (resilient write active):', error);
@@ -1100,6 +1132,12 @@ export async function aceptarSolicitudTransporte(
   choferNombre: string,
   choferTelefono: string
 ): Promise<void> {
+  const cached = getCached<SolicitudTransporteFirestore[]>('solicitudes', MOCK_INITIAL_SOLICITUDES);
+  const existing = cached.find((s) => s.id === solicitudId);
+  if (existing && isSolicitudExpired(existing)) {
+    throw new Error('Esta solicitud ha expirado tras 12 minutos sin chofer asignado. El pasajero debe emitir una nueva solicitud.');
+  }
+
   const patch = {
     estado: 'aceptado' as const,
     choferId,
@@ -1109,7 +1147,6 @@ export async function aceptarSolicitudTransporte(
 
   // Actualizar caché local
   try {
-    const cached = getCached<SolicitudTransporteFirestore[]>('solicitudes', MOCK_INITIAL_SOLICITUDES);
     setCached(
       'solicitudes',
       cached.map((s) => (s.id === solicitudId ? { ...s, ...patch } : s))
@@ -1262,14 +1299,14 @@ export async function solicitarHabilitacionChofer(data: {
       comprobanteUrl: data.comprobanteUrl || '',
       comprobanteFileName: data.comprobanteFileName || 'comprobante_transferencia.pdf',
       createdAt: serverTimestamp(),
-      adminNotes: 'Comprobante transferido a luciaveronicag. En espera de habilitación con clave 0608.',
+      adminNotes: 'Comprobante transferido a luciaveronicag. En espera de habilitación autorizada.',
     };
 
     await setDoc(newDoc, payload);
 
     triggerInAppPushNotification(
       '📋 Nueva Solicitud de Chofer Pendiente',
-      `${data.driverName} solicitó habilitar ${data.vehicleType === 'moto' ? 'Moto' : 'Auto'} por ${data.horas}h. Habilitar con clave 0608.`,
+      `${data.driverName} solicitó habilitar ${data.vehicleType === 'moto' ? 'Moto' : 'Auto'} por ${data.horas}h. Requiere habilitación de administración.`,
       'admin',
       { habilitacionId: newDoc.id }
     );
@@ -1295,7 +1332,7 @@ export async function solicitarHabilitacionChofer(data: {
       comprobanteUrl: data.comprobanteUrl || '',
       comprobanteFileName: data.comprobanteFileName || 'comprobante_transferencia.pdf',
       createdAt: Date.now(),
-      adminNotes: 'Comprobante transferido a luciaveronicag. En espera de habilitación con clave 0608.',
+      adminNotes: 'Comprobante transferido a luciaveronicag. En espera de habilitación autorizada.',
     };
 
     const cached = getCached<HabilitacionChofer[]>('habilitaciones', MOCK_INITIAL_HABILITACIONES);
@@ -1303,7 +1340,7 @@ export async function solicitarHabilitacionChofer(data: {
 
     triggerInAppPushNotification(
       '📋 Nueva Solicitud de Chofer Pendiente',
-      `${data.driverName} solicitó habilitar ${data.vehicleType === 'moto' ? 'Moto' : 'Auto'} por ${data.horas}h. Habilitar con clave 0608.`,
+      `${data.driverName} solicitó habilitar ${data.vehicleType === 'moto' ? 'Moto' : 'Auto'} por ${data.horas}h. Requiere habilitación de administración.`,
       'admin',
       { habilitacionId: localId }
     );
@@ -1314,7 +1351,7 @@ export async function solicitarHabilitacionChofer(data: {
 
 /**
  * Habilitación de Chofer:
- * Solo el Administrador entra con la clave "0608".
+ * Solo el Administrador entra con su clave autorizada.
  * En ese momento se asigna el código y COMIENZA EL TEMPORIZADOR EN VIVO solo para ese driver.
  */
 export async function habilitarChoferConClaveAdmin(
@@ -1324,7 +1361,7 @@ export async function habilitarChoferConClaveAdmin(
 ): Promise<{ success: boolean; session: ActiveDriverSession; message: string }> {
   const cleanPin = pinIngresado.trim();
   if (cleanPin !== ADMIN_MASTER_PIN) {
-    throw new Error(`Clave de seguridad inválida. Solo la clave de administración autorizada ("${ADMIN_MASTER_PIN}") puede habilitar choferes.`);
+    throw new Error('Clave de seguridad inválida. Verificá los 4 dígitos e intentá nuevamente.');
   }
 
   const path = `${COL_HABILITACIONES}/${habilitacionId}`;
