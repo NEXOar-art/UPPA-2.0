@@ -191,8 +191,12 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onExploreGuest })
       {/* Top Floating Glass Header */}
       <header className="relative z-10 w-full px-6 py-4 flex items-center justify-between max-w-6xl mx-auto">
         <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-2xl bg-gradient-to-br from-sky-400 to-cyan-500 flex items-center justify-center font-bold text-slate-950 font-display text-lg shadow-lg shadow-sky-500/20">
-            U
+          <div className="w-10 h-10 rounded-2xl overflow-hidden border border-cyan-400/40 shadow-lg shadow-cyan-500/20 bg-[#070b14] shrink-0">
+            <img
+              src="/assets/aistudio/UPPALOGO_c4c84137.jpg"
+              alt="UPPA"
+              className="w-full h-full object-cover"
+            />
           </div>
           <div>
             <span className="text-lg font-extrabold tracking-tight text-white font-display">

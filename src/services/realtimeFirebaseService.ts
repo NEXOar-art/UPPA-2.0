@@ -965,25 +965,6 @@ const MOCK_INITIAL_SOLICITUDES: SolicitudTransporteFirestore[] = [
     precioEstimado: 2200,
     distanciaKm: 4.2,
   },
-  {
-    id: 'sol-init-2',
-    pasajeroId: 'usr-p2',
-    nombrePasajero: 'Roberto Fernandez',
-    telefonoPasajero: '3489691122',
-    origen: 'Sociedad de Fomento Ariel del Plata',
-    destino: 'Terminal de Ómnibus Zárate',
-    origenCoords: { lat: -34.2030, lng: -58.9355 },
-    destinoCoords: { lat: -34.0975, lng: -59.0373 },
-    estado: 'aceptado',
-    tipoVehiculoRequerido: 'auto',
-    choferId: 'usr-d1',
-    choferNombre: 'Lucia Veronica Gimenez (Auto Taxi)',
-    choferTelefono: '3489690058',
-    fechaSolicitud: Date.now() - 18 * 60 * 1000,
-    expiresAt: Date.now() - 6 * 60 * 1000,
-    precioEstimado: 6800,
-    distanciaKm: 14.5,
-  },
 ];
 
 // In-Memory Cross-Tab Broadcast Channel para solicitudes de transporte

@@ -82,12 +82,6 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
     return () => unsub();
   }, []);
 
-  // Most recent request made by current user
-  const myRecentSolicitud = useMemo(() => {
-    return solicitudes.find(
-      (s) => s.pasajeroId === currentUserId || s.nombrePasajero === currentUserName
-    );
-  }, [solicitudes, currentUserId, currentUserName]);
 
   const handleCreateRideRequest = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -198,9 +192,6 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                 ¿Querés prestar servicio de Moto o Auto Taxi?
               </span>
             </div>
-            <p className="text-[11px] text-slate-300 max-w-xl leading-relaxed">
-              Realizá la transferencia a Alias: <strong className="text-emerald-300 font-mono">luciaveronicag</strong> (CVU: <span className="font-mono text-emerald-200">0000003100020253501840</span> - Titular: <strong className="text-white">Lucia Veronica Gimenez</strong>). Adjuntá el comprobante al WhatsApp <strong className="text-emerald-300 font-mono">3489690058</strong>.
-            </p>
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
@@ -219,83 +210,6 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
           <div className="mt-2.5 p-2.5 rounded-xl bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 text-xs flex items-center gap-2 animate-in fade-in">
             <Check className="w-4 h-4 shrink-0" />
             <span>{rideSuccessNotice}</span>
-          </div>
-        )}
-
-        {/* User's Own Active / Expired Solicitud Live Card */}
-        {myRecentSolicitud && (
-          <div
-            className={`mt-3 p-3 sm:p-3.5 rounded-2xl border text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 transition-all animate-in fade-in ${
-              myRecentSolicitud.estado === 'aceptado'
-                ? 'bg-emerald-950/30 border-emerald-500/40 text-emerald-200'
-                : isSolicitudExpired(myRecentSolicitud, nowTimestamp)
-                ? 'bg-rose-950/30 border-rose-500/40 text-rose-200'
-                : 'bg-amber-950/30 border-amber-500/40 text-amber-200'
-            }`}
-          >
-            <div className="flex items-start sm:items-center gap-2.5 min-w-0">
-              <div
-                className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5 sm:mt-0 ${
-                  myRecentSolicitud.estado === 'aceptado'
-                    ? 'bg-emerald-500/20 text-emerald-300'
-                    : isSolicitudExpired(myRecentSolicitud, nowTimestamp)
-                    ? 'bg-rose-500/20 text-rose-300'
-                    : 'bg-amber-500/20 text-amber-300'
-                }`}
-              >
-                {myRecentSolicitud.estado === 'aceptado' ? (
-                  <CheckCircle className="w-4 h-4" />
-                ) : isSolicitudExpired(myRecentSolicitud, nowTimestamp) ? (
-                  <AlertCircle className="w-4 h-4" />
-                ) : (
-                  <Clock className="w-4 h-4 animate-spin" />
-                )}
-              </div>
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-                  <span className="font-bold text-white text-xs">
-                    Tu solicitud ({myRecentSolicitud.tipoVehiculoRequerido === 'moto' ? 'Moto Taxi' : 'Auto Taxi'})
-                  </span>
-                  {myRecentSolicitud.estado === 'pendiente' && !isSolicitudExpired(myRecentSolicitud, nowTimestamp) && (
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500/25 border border-amber-400/40 text-amber-300 font-mono flex items-center gap-1 animate-pulse">
-                      <Clock className="w-2.5 h-2.5" />
-                      <span>
-                        {Math.floor(getSolicitudRemainingSeconds(myRecentSolicitud, nowTimestamp) / 60)}:
-                        {(getSolicitudRemainingSeconds(myRecentSolicitud, nowTimestamp) % 60).toString().padStart(2, '0')}{' '}
-                        restantes
-                      </span>
-                    </span>
-                  )}
-                  {isSolicitudExpired(myRecentSolicitud, nowTimestamp) && (
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-500/25 border border-rose-400/40 text-rose-300">
-                      EXPIRADA (12 min)
-                    </span>
-                  )}
-                </div>
-                <p className="text-[11px] text-slate-300 truncate mt-0.5">
-                  {myRecentSolicitud.estado === 'aceptado'
-                    ? `¡Viaje aceptado por ${myRecentSolicitud.choferNombre}! El chofer está en camino a tu ubicación.`
-                    : isSolicitudExpired(myRecentSolicitud, nowTimestamp)
-                    ? 'No se asignó chofer dentro del límite de 12 minutos. Por favor emití una nueva solicitud.'
-                    : `Buscando chofer: ${myRecentSolicitud.origen} ➔ ${myRecentSolicitud.destino}.`}
-                </p>
-              </div>
-            </div>
-
-            {isSolicitudExpired(myRecentSolicitud, nowTimestamp) && (
-              <button
-                onClick={() => {
-                  setReqOrigin(myRecentSolicitud.origen);
-                  setReqDestination(myRecentSolicitud.destino);
-                  setReqType(myRecentSolicitud.tipoVehiculoRequerido);
-                  setIsRequestRideOpen(true);
-                }}
-                className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-md shrink-0 active:scale-95"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-                <span>Emitir Nueva Solicitud</span>
-              </button>
-            )}
           </div>
         )}
 
