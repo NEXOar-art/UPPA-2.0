@@ -206,6 +206,7 @@ export interface SolicitudTransporteFirestore {
   choferNombre?: string | null;
   choferTelefono?: string | null;
   fechaSolicitud: any;
+  fechaAceptado?: number; // Timestamp de aceptación para ventana de exposición de 30 minutos
   expiresAt?: number; // Temporizador límite de 12 minutos
   actualizadoEn?: any;
   precioEstimado?: number;

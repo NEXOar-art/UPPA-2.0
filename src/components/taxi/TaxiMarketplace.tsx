@@ -6,7 +6,10 @@ import {
   aceptarSolicitudTransporte,
   isSolicitudExpired,
   getSolicitudRemainingSeconds,
+  isSolicitudAceptadaExpired,
+  getSolicitudAceptadaRemainingSeconds,
   SOLICITUD_TIMEOUT_MS,
+  SOLICITUD_ACEPTADA_MAX_VISIBILITY_MS,
 } from '../../services/realtimeFirebaseService';
 import {
   Car,
@@ -81,6 +84,18 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
     });
     return () => unsub();
   }, []);
+  // Solicitudes visibles en pantalla:
+  // - Solicitudes pendientes (y expiradas de 12 min si esperan reemisión)
+  // - Solicitudes aceptadas: VISIBLES POR 30 MINUTOS exactos desde su aceptación.
+  //   Pasados los 30 minutos desaparecen para dar lugar a nuevas solicitudes.
+  const visibleSolicitudes = useMemo(() => {
+    return solicitudes.filter((sol) => {
+      if (sol.estado === 'aceptado') {
+        return !isSolicitudAceptadaExpired(sol, nowTimestamp);
+      }
+      return true;
+    });
+  }, [solicitudes, nowTimestamp]);
 
 
   const handleCreateRideRequest = async (e: React.FormEvent) => {
@@ -250,13 +265,13 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
         </div>
       </div>
 
-      {/* Alternative Transport Live Requests Carousel with 12-minute countdown */}
-      {solicitudes.length > 0 && (
+      {/* Alternative Transport Live Requests Carousel with 12-min acceptance and 30-min visibility */}
+      {visibleSolicitudes.length > 0 && (
         <div className="p-3 sm:px-5 bg-blue-950/20 border-b border-blue-500/20 space-y-2">
           <div className="flex items-center justify-between text-xs gap-2 flex-wrap">
             <span className="font-bold text-blue-300 flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-blue-400 animate-ping" />
-              Solicitudes de Pasajeros · Temporizador de 12 min ({solicitudes.filter((s) => s.estado === 'pendiente' && !isSolicitudExpired(s, nowTimestamp)).length} activas)
+              Solicitudes de Pasajeros ({visibleSolicitudes.filter((s) => s.estado === 'pendiente' && !isSolicitudExpired(s, nowTimestamp)).length} activas · {visibleSolicitudes.filter((s) => s.estado === 'aceptado').length} aceptadas)
             </span>
             <button
               type="button"
@@ -270,19 +285,22 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
           </div>
 
           <div className="flex gap-2.5 overflow-x-auto pb-1 scrollbar-none">
-            {solicitudes.map((sol) => {
+            {visibleSolicitudes.map((sol) => {
               const isExpired = isSolicitudExpired(sol, nowTimestamp);
               const remainingSec = getSolicitudRemainingSeconds(sol, nowTimestamp);
               const mins = Math.floor(remainingSec / 60);
               const secs = remainingSec % 60;
               const formattedTimer = `${mins}:${secs.toString().padStart(2, '0')}`;
 
+              const remainingAcceptedSec = getSolicitudAceptadaRemainingSeconds(sol, nowTimestamp);
+              const acceptedMins = Math.floor(remainingAcceptedSec / 60);
+
               return (
                 <div
                   key={sol.id}
                   className={`p-3 rounded-xl border text-xs min-w-[270px] max-w-[310px] shrink-0 space-y-1.5 ${
                     sol.estado === 'aceptado'
-                      ? 'bg-[#0c1322] border-blue-500/30 text-blue-200'
+                      ? 'bg-[#0c1322] border-emerald-500/40 text-blue-200'
                       : isExpired
                       ? 'bg-[#180f14] border-rose-500/30 text-rose-200'
                       : 'bg-[#0f1424] border-amber-500/30 text-slate-200'
@@ -319,8 +337,12 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                     )}
 
                     {sol.estado === 'aceptado' && (
-                      <span className="px-2 py-0.5 rounded text-[9px] font-bold uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shrink-0">
-                        Aceptado
+                      <span
+                        className="px-2 py-0.5 rounded text-[9px] font-bold uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1 shrink-0 font-mono"
+                        title="Visible por 30 minutos desde la aceptación"
+                      >
+                        <Check className="w-2.5 h-2.5 text-emerald-400 stroke-[3]" />
+                        <span>Aceptado · {acceptedMins}m</span>
                       </span>
                     )}
                   </div>
@@ -358,9 +380,14 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                       </button>
                     </div>
                   ) : (
-                    <p className="text-[10px] text-emerald-300 font-semibold truncate">
-                      Chofer: {sol.choferNombre || 'Asignado'}
-                    </p>
+                    <div className="pt-1 border-t border-emerald-500/20 flex items-center justify-between text-[10px]">
+                      <p className="text-emerald-300 font-semibold truncate">
+                        Chofer: {sol.choferNombre || 'Asignado'}
+                      </p>
+                      <span className="text-[9px] text-emerald-400/80 font-mono shrink-0 ml-1" title="Visibilidad de 30 minutos">
+                        {acceptedMins} min restantes
+                      </span>
+                    </div>
                   )}
                 </div>
               );

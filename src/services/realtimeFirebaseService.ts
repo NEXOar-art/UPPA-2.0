@@ -920,8 +920,10 @@ export async function reportarMensajeChat(salaId: string, mensajeId: string): Pr
 // ---------------------------------------------------------------------------
 // 4. SOLICITUDES DE TRANSPORTE ALTERNATIVO: solicitudes_transporte/{solicitudId}
 // Temporizador de 12 minutos exactos para ser aceptadas
+// Exposición de 30 minutos exactos tras ser aceptadas en pantalla
 // ---------------------------------------------------------------------------
 export const SOLICITUD_TIMEOUT_MS = 12 * 60 * 1000; // 12 minutos
+export const SOLICITUD_ACEPTADA_MAX_VISIBILITY_MS = 30 * 60 * 1000; // 30 minutos de visibilidad tras ser aceptada
 
 export function isSolicitudExpired(sol: SolicitudTransporteFirestore, now: number = Date.now()): boolean {
   if (sol.estado === 'expirada') return true;
@@ -944,6 +946,46 @@ export function getSolicitudRemainingSeconds(sol: SolicitudTransporteFirestore, 
     : Date.now();
   const limit = sol.expiresAt || (createdMs + SOLICITUD_TIMEOUT_MS);
   const diffMs = limit - now;
+  return Math.max(0, Math.floor(diffMs / 1000));
+}
+
+/**
+ * Valida si una solicitud aceptada ya superó los 30 minutos de visibilidad en pantalla.
+ * Al cumplirse los 30 minutos, debe desaparecer de la vista para dar lugar a otras.
+ */
+export function isSolicitudAceptadaExpired(sol: SolicitudTransporteFirestore, now: number = Date.now()): boolean {
+  if (sol.estado !== 'aceptado') return false;
+  const acceptedMs = typeof sol.fechaAceptado === 'number'
+    ? sol.fechaAceptado
+    : typeof sol.actualizadoEn === 'number'
+    ? sol.actualizadoEn
+    : typeof sol.actualizadoEn?.seconds === 'number'
+    ? sol.actualizadoEn.seconds * 1000
+    : typeof sol.fechaSolicitud === 'number'
+    ? sol.fechaSolicitud
+    : typeof sol.fechaSolicitud?.seconds === 'number'
+    ? sol.fechaSolicitud.seconds * 1000
+    : now;
+  return (now - acceptedMs) >= SOLICITUD_ACEPTADA_MAX_VISIBILITY_MS;
+}
+
+/**
+ * Calcula los segundos restantes de exposición de los 30 minutos para solicitudes aceptadas.
+ */
+export function getSolicitudAceptadaRemainingSeconds(sol: SolicitudTransporteFirestore, now: number = Date.now()): number {
+  if (sol.estado !== 'aceptado') return 0;
+  const acceptedMs = typeof sol.fechaAceptado === 'number'
+    ? sol.fechaAceptado
+    : typeof sol.actualizadoEn === 'number'
+    ? sol.actualizadoEn
+    : typeof sol.actualizadoEn?.seconds === 'number'
+    ? sol.actualizadoEn.seconds * 1000
+    : typeof sol.fechaSolicitud === 'number'
+    ? sol.fechaSolicitud
+    : typeof sol.fechaSolicitud?.seconds === 'number'
+    ? sol.fechaSolicitud.seconds * 1000
+    : now;
+  const diffMs = (acceptedMs + SOLICITUD_ACEPTADA_MAX_VISIBILITY_MS) - now;
   return Math.max(0, Math.floor(diffMs / 1000));
 }
 
@@ -1119,11 +1161,13 @@ export async function aceptarSolicitudTransporte(
     throw new Error('Esta solicitud ha expirado tras 12 minutos sin chofer asignado. El pasajero debe emitir una nueva solicitud.');
   }
 
+  const now = Date.now();
   const patch = {
     estado: 'aceptado' as const,
     choferId,
     choferNombre,
     choferTelefono,
+    fechaAceptado: now,
   };
 
   // Actualizar caché local
