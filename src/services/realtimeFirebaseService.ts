@@ -931,10 +931,10 @@ export async function reportarMensajeChat(salaId: string, mensajeId: string): Pr
 // ---------------------------------------------------------------------------
 // 4. SOLICITUDES DE TRANSPORTE ALTERNATIVO: solicitudes_transporte/{solicitudId}
 // Temporizador de 12 minutos exactos para ser aceptadas
-// Exposición de 30 minutos exactos tras ser aceptadas en pantalla
+// Exposición de 16 minutos exactos tras ser aceptadas en pantalla para mantener el panel limpio
 // ---------------------------------------------------------------------------
 export const SOLICITUD_TIMEOUT_MS = 12 * 60 * 1000; // 12 minutos
-export const SOLICITUD_ACEPTADA_MAX_VISIBILITY_MS = 30 * 60 * 1000; // 30 minutos de visibilidad tras ser aceptada
+export const SOLICITUD_ACEPTADA_MAX_VISIBILITY_MS = 16 * 60 * 1000; // 16 minutos de visibilidad tras ser aceptada (viaje realizado)
 
 export function isSolicitudExpired(sol: SolicitudTransporteFirestore, now: number = Date.now()): boolean {
   if (sol.estado === 'expirada') return true;
@@ -961,8 +961,8 @@ export function getSolicitudRemainingSeconds(sol: SolicitudTransporteFirestore, 
 }
 
 /**
- * Valida si una solicitud aceptada ya superó los 30 minutos de visibilidad en pantalla.
- * Al cumplirse los 30 minutos, debe desaparecer de la vista para dar lugar a otras.
+ * Valida si una solicitud aceptada ya superó los 16 minutos de visibilidad en pantalla.
+ * Al cumplirse los 16 minutos, debe desaparecer de la vista para dar lugar a nuevas peticiones.
  */
 export function isSolicitudAceptadaExpired(sol: SolicitudTransporteFirestore, now: number = Date.now()): boolean {
   if (sol.estado !== 'aceptado') return false;
@@ -981,7 +981,7 @@ export function isSolicitudAceptadaExpired(sol: SolicitudTransporteFirestore, no
 }
 
 /**
- * Calcula los segundos restantes de exposición de los 30 minutos para solicitudes aceptadas.
+ * Calcula los segundos restantes de exposición de los 16 minutos para solicitudes aceptadas.
  */
 export function getSolicitudAceptadaRemainingSeconds(sol: SolicitudTransporteFirestore, now: number = Date.now()): number {
   if (sol.estado !== 'aceptado') return 0;
@@ -1297,29 +1297,117 @@ const MOCK_INITIAL_HABILITACIONES: HabilitacionChofer[] = [
   },
 ];
 
+// In-Memory & Cross-Tab Broadcast Channel para habilitaciones de choferes
+const habilitacionesBroadcastChannel = typeof window !== 'undefined' && 'BroadcastChannel' in window
+  ? new BroadcastChannel('uppa_habilitaciones_chofer')
+  : null;
+
+const habilitacionesListeners = new Set<(habilitaciones: HabilitacionChofer[]) => void>();
+
+function notifyHabilitacionesListeners(list: HabilitacionChofer[]) {
+  habilitacionesListeners.forEach((cb) => {
+    try {
+      cb(list);
+    } catch (e) {
+      console.warn('Error in habilitaciones listener callback:', e);
+    }
+  });
+
+  try {
+    habilitacionesBroadcastChannel?.postMessage({
+      type: 'SYNC_HABILITACIONES',
+      list,
+    });
+  } catch {}
+
+  if (typeof window !== 'undefined') {
+    try {
+      window.dispatchEvent(new CustomEvent('uppa_habilitaciones_change', { detail: list }));
+    } catch {}
+  }
+}
+
+// Escuchar cambios de otras pestañas en tiempo real
+if (habilitacionesBroadcastChannel) {
+  habilitacionesBroadcastChannel.onmessage = (event) => {
+    if (event.data?.type === 'SYNC_HABILITACIONES' && Array.isArray(event.data.list)) {
+      setCached('habilitaciones', event.data.list);
+      habilitacionesListeners.forEach((cb) => cb(event.data.list));
+    }
+  };
+}
+
+export function obtenerHabilitacionesActuales(): HabilitacionChofer[] {
+  return getCached<HabilitacionChofer[]>('habilitaciones', MOCK_INITIAL_HABILITACIONES);
+}
+
 export function subscribeToHabilitacionesChofer(
   callback: (habilitaciones: HabilitacionChofer[]) => void,
   onError?: (error: any) => void
 ) {
+  // 1. Invocar inmediatamente con la caché local para 0ms de espera en la interfaz
+  const initialList = getCached<HabilitacionChofer[]>('habilitaciones', MOCK_INITIAL_HABILITACIONES);
+  callback(initialList);
+
+  // 2. Registrar en la lista de observadores activos
+  habilitacionesListeners.add(callback);
+
+  // 3. Escuchar evento custom de ventana
+  const windowHandler = (ev: Event) => {
+    const custom = ev as CustomEvent<HabilitacionChofer[]>;
+    if (custom.detail && Array.isArray(custom.detail)) {
+      callback(custom.detail);
+    }
+  };
+  if (typeof window !== 'undefined') {
+    window.addEventListener('uppa_habilitaciones_change', windowHandler);
+  }
+
+  // 4. Suscripción en tiempo real a Firestore
   const colRef = collection(db, COL_HABILITACIONES);
   const q = query(colRef, orderBy('createdAt', 'desc'));
 
-  return onSnapshot(
+  const unsubFirestore = onSnapshot(
     q,
     (snapshot) => {
-      const list: HabilitacionChofer[] = snapshot.docs.map((d) => ({
-        id: d.id,
-        ...(d.data() as Omit<HabilitacionChofer, 'id'>),
-      }));
-      setCached('habilitaciones', list);
-      callback(list);
+      const firestoreList: HabilitacionChofer[] = snapshot.docs.map((d) => {
+        const data = d.data();
+        const createdMs = typeof data.createdAt === 'number'
+          ? data.createdAt
+          : typeof data.createdAt?.seconds === 'number'
+          ? data.createdAt.seconds * 1000
+          : Date.now();
+        return {
+          id: d.id,
+          ...(data as Omit<HabilitacionChofer, 'id'>),
+          createdAt: createdMs,
+        };
+      });
+
+      // Fusionar inteligentemente con solicitudes pendientes locales
+      const currentCache = getCached<HabilitacionChofer[]>('habilitaciones', MOCK_INITIAL_HABILITACIONES);
+      const mergedMap = new Map<string, HabilitacionChofer>();
+      currentCache.forEach((h) => mergedMap.set(h.id, h));
+      firestoreList.forEach((h) => mergedMap.set(h.id, h));
+      const merged = Array.from(mergedMap.values()).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+
+      setCached('habilitaciones', merged);
+      notifyHabilitacionesListeners(merged);
     },
     (err) => {
-      console.warn('Firestore habilitaciones onSnapshot error/offline fallback:', err);
+      console.warn('Firestore habilitaciones onSnapshot offline fallback:', err);
       if (onError) onError(err);
       callback(getCached<HabilitacionChofer[]>('habilitaciones', MOCK_INITIAL_HABILITACIONES));
     }
   );
+
+  return () => {
+    habilitacionesListeners.delete(callback);
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('uppa_habilitaciones_change', windowHandler);
+    }
+    unsubFirestore();
+  };
 }
 
 export async function solicitarHabilitacionChofer(data: {
@@ -1333,75 +1421,59 @@ export async function solicitarHabilitacionChofer(data: {
   comprobanteUrl?: string;
   comprobanteFileName?: string;
 }): Promise<HabilitacionChofer> {
-  const path = COL_HABILITACIONES;
+  const localId = `hab-${Date.now()}`;
+  const cleanWhatsapp = data.whatsapp.replace(/\D/g, '');
+  const now = Date.now();
+
+  const newHab: HabilitacionChofer = {
+    id: localId,
+    driverId: data.driverId || `drv-${Date.now()}`,
+    driverName: data.driverName.trim(),
+    vehicleType: data.vehicleType,
+    vehicleModel: data.vehicleModel.trim(),
+    whatsapp: cleanWhatsapp.startsWith('54') ? cleanWhatsapp : `549${cleanWhatsapp}`,
+    zone: data.zone.trim() || 'Zárate ↔ Campana',
+    horas: data.horas || 12,
+    estado: 'pendiente',
+    activadoConClaveAdmin: false,
+    alias: 'luciaveronicag',
+    cvu: '0000003100020253501840',
+    titular: 'Lucia Veronica Gimenez',
+    comprobanteUrl: data.comprobanteUrl || '',
+    comprobanteFileName: data.comprobanteFileName || 'comprobante_luciaveronicag_whatsapp.pdf',
+    createdAt: now,
+    adminNotes: 'Solicitud para prestar servicio recibida. En espera de habilitación con clave 0608 en Administración UPPA.',
+  };
+
+  // 1. Actualizar inmediatamente la caché local y notificar en tiempo real a Administración UPPA
+  const current = getCached<HabilitacionChofer[]>('habilitaciones', MOCK_INITIAL_HABILITACIONES);
+  const updated = [newHab, ...current.filter((h) => h.id !== newHab.id)];
+  setCached('habilitaciones', updated);
+  notifyHabilitacionesListeners(updated);
+
+  // 2. Disparar notificación push interna para alertar a la administración
   try {
-    const colRef = collection(db, COL_HABILITACIONES);
-    const newDoc = doc(colRef);
-
-    const payload: any = {
-      driverId: data.driverId,
-      driverName: data.driverName.trim(),
-      vehicleType: data.vehicleType,
-      vehicleModel: data.vehicleModel.trim(),
-      whatsapp: data.whatsapp.replace(/\D/g, ''),
-      zone: data.zone.trim() || 'Zárate ↔ Campana',
-      horas: data.horas || 12,
-      estado: 'pendiente',
-      activadoConClaveAdmin: false,
-      alias: 'luciaveronicag',
-      cvu: '0000003100020253501840',
-      titular: 'Lucia Veronica Gimenez',
-      comprobanteUrl: data.comprobanteUrl || '',
-      comprobanteFileName: data.comprobanteFileName || 'comprobante_transferencia.pdf',
-      createdAt: serverTimestamp(),
-      adminNotes: 'Comprobante transferido a luciaveronicag. En espera de habilitación autorizada.',
-    };
-
-    await setDoc(newDoc, payload);
-
     triggerInAppPushNotification(
       '📋 Nueva Solicitud de Chofer Pendiente',
-      `${data.driverName} solicitó habilitar ${data.vehicleType === 'moto' ? 'Moto' : 'Auto'} por ${data.horas}h. Requiere habilitación de administración.`,
-      'admin',
-      { habilitacionId: newDoc.id }
-    );
-
-    return { id: newDoc.id, ...payload, createdAt: Date.now() };
-  } catch (error) {
-    console.warn('Firestore solicitarHabilitacionChofer notice (fallback local):', error);
-    const localId = `hab-local-${Date.now()}`;
-    const fallbackHab: HabilitacionChofer = {
-      id: localId,
-      driverId: data.driverId,
-      driverName: data.driverName.trim(),
-      vehicleType: data.vehicleType,
-      vehicleModel: data.vehicleModel.trim(),
-      whatsapp: data.whatsapp.replace(/\D/g, ''),
-      zone: data.zone.trim() || 'Zárate ↔ Campana',
-      horas: data.horas || 12,
-      estado: 'pendiente',
-      activadoConClaveAdmin: false,
-      alias: 'luciaveronicag',
-      cvu: '0000003100020253501840',
-      titular: 'Lucia Veronica Gimenez',
-      comprobanteUrl: data.comprobanteUrl || '',
-      comprobanteFileName: data.comprobanteFileName || 'comprobante_transferencia.pdf',
-      createdAt: Date.now(),
-      adminNotes: 'Comprobante transferido a luciaveronicag. En espera de habilitación autorizada.',
-    };
-
-    const cached = getCached<HabilitacionChofer[]>('habilitaciones', MOCK_INITIAL_HABILITACIONES);
-    setCached('habilitaciones', [fallbackHab, ...cached]);
-
-    triggerInAppPushNotification(
-      '📋 Nueva Solicitud de Chofer Pendiente',
-      `${data.driverName} solicitó habilitar ${data.vehicleType === 'moto' ? 'Moto' : 'Auto'} por ${data.horas}h. Requiere habilitación de administración.`,
+      `${data.driverName} envió solicitud para prestar servicio (${data.vehicleType === 'moto' ? 'Moto' : 'Auto'}) por ${data.horas}h en Administración UPPA.`,
       'admin',
       { habilitacionId: localId }
     );
+  } catch {}
 
-    return fallbackHab;
+  // 3. Escribir en Firestore de forma resiliente
+  try {
+    const colRef = collection(db, COL_HABILITACIONES);
+    const docRef = doc(colRef, localId);
+    await setDoc(docRef, {
+      ...newHab,
+      createdAt: serverTimestamp(),
+    });
+  } catch (err) {
+    console.warn('Firestore solicitarHabilitacionChofer notice (persisted in local cache):', err);
   }
+
+  return newHab;
 }
 
 /**
@@ -1464,6 +1536,26 @@ export async function habilitarChoferConClaveAdmin(
       console.warn('Update doc warning, maintaining session:', e);
     }
 
+    // Actualizar caché local y notificar a Administración UPPA en vivo
+    const currentList = getCached<HabilitacionChofer[]>('habilitaciones', MOCK_INITIAL_HABILITACIONES);
+    const updatedList = currentList.map((h) =>
+      h.id === habilitacionId
+        ? {
+            ...h,
+            estado: 'activo' as const,
+            horas: hours,
+            activadoConClaveAdmin: true,
+            claveAdminUsada: ADMIN_MASTER_PIN,
+            activationCode,
+            startsAt: now,
+            endsAt,
+            habilitadoPor: 'Administrador (Clave 0608)',
+          }
+        : h
+    );
+    setCached('habilitaciones', updatedList);
+    notifyHabilitacionesListeners(updatedList);
+
     // Save and activate live driver session with running countdown timer
     const session: ActiveDriverSession = {
       driverId: docData.driverId || `tx-${Date.now()}`,
@@ -1501,6 +1593,13 @@ export async function habilitarChoferConClaveAdmin(
 }
 
 export async function revocarHabilitacionChofer(habilitacionId: string): Promise<void> {
+  const currentList = getCached<HabilitacionChofer[]>('habilitaciones', MOCK_INITIAL_HABILITACIONES);
+  const updatedList = currentList.map((h) =>
+    h.id === habilitacionId ? { ...h, estado: 'revocado' as const } : h
+  );
+  setCached('habilitaciones', updatedList);
+  notifyHabilitacionesListeners(updatedList);
+
   const path = `${COL_HABILITACIONES}/${habilitacionId}`;
   try {
     const docRef = doc(db, COL_HABILITACIONES, habilitacionId);
@@ -1758,7 +1857,7 @@ export function suscribirCodigosHabilitacion(
 
 // ---------------------------------------------------------------------------
 // 8. SISTEMA DE CALIFICACIÓN DE PRESTADORES Y RANKING EN VIVO (ÚLTIMAS 3 HORAS)
-// - Escala: 1 a 5 (1 = Muy Bueno, 5 = Muy Malo)
+// - Escala: 1 a 5 (1 = Malo, 5 = Muy Bueno)
 // - Ranking con lista de los últimos 20 prestadores
 // - Publicados solo por 3 horas, renovándose automáticamente con nuevos integrantes
 // ---------------------------------------------------------------------------
@@ -1772,19 +1871,19 @@ export function getCalificacionInfo(puntuacion: number): {
   description: string;
 } {
   switch (puntuacion) {
-    case 1:
+    case 5:
       return {
         label: 'Muy Bueno',
         badgeClass: 'bg-emerald-500/20 text-emerald-300 border-emerald-400/40',
         stars: '★★★★★',
-        description: 'Puntaje máximo de excelencia',
+        description: 'Puntaje máximo de excelencia y puntualidad',
       };
-    case 2:
+    case 4:
       return {
         label: 'Bueno',
         badgeClass: 'bg-cyan-500/20 text-cyan-300 border-cyan-400/40',
         stars: '★★★★☆',
-        description: 'Servicio satisfactorio',
+        description: 'Servicio satisfactorio y viaje correcto',
       };
     case 3:
       return {
@@ -1793,17 +1892,17 @@ export function getCalificacionInfo(puntuacion: number): {
         stars: '★★★☆☆',
         description: 'Servicio estándar con aspectos a mejorar',
       };
-    case 4:
+    case 2:
       return {
-        label: 'Malo',
+        label: 'Insuficiente',
         badgeClass: 'bg-orange-500/20 text-orange-300 border-orange-400/40',
         stars: '★★☆☆☆',
-        description: 'Demoras o inconvenientes en el viaje',
+        description: 'Inconvenientes o demoras en el servicio',
       };
-    case 5:
+    case 1:
     default:
       return {
-        label: 'Muy Malo',
+        label: 'Malo',
         badgeClass: 'bg-rose-500/20 text-rose-300 border-rose-400/40',
         stars: '★☆☆☆☆',
         description: 'Deficiente o sin cumplir lo acordado',
@@ -1820,7 +1919,7 @@ const MOCK_INITIAL_RATINGS: CalificacionChoferFirestore[] = [
     driverName: 'Gaston Gimenez',
     pasajeroId: 'usr-samanta',
     pasajeroNombre: 'Samanta',
-    puntuacion: 1, // Muy Bueno
+    puntuacion: 5, // Muy Bueno
     comentario: 'Excelente viaje, puntual y muy atento.',
     timestamp: nowRef - 22 * 60 * 1000, // Hace 22 min
     expiresAt: nowRef - 22 * 60 * 1000 + RANKING_WINDOW_MS,
@@ -1831,7 +1930,7 @@ const MOCK_INITIAL_RATINGS: CalificacionChoferFirestore[] = [
     driverName: 'Lucia Veronica Gimenez',
     pasajeroId: 'usr-p1',
     pasajeroNombre: 'Carla Gomez',
-    puntuacion: 1, // Muy Bueno
+    puntuacion: 5, // Muy Bueno
     comentario: 'Viaje impecable en auto taxi.',
     timestamp: nowRef - 45 * 60 * 1000, // Hace 45 min
     expiresAt: nowRef - 45 * 60 * 1000 + RANKING_WINDOW_MS,
@@ -1842,7 +1941,7 @@ const MOCK_INITIAL_RATINGS: CalificacionChoferFirestore[] = [
     driverName: 'Franco Colapinto',
     pasajeroId: 'usr-roberto',
     pasajeroNombre: 'Roberto Fernandez',
-    puntuacion: 1, // Muy Bueno
+    puntuacion: 5, // Muy Bueno
     comentario: 'Rápido y seguro en moto taxi.',
     timestamp: nowRef - 75 * 60 * 1000, // Hace 1h 15m
     expiresAt: nowRef - 75 * 60 * 1000 + RANKING_WINDOW_MS,
@@ -1853,7 +1952,7 @@ const MOCK_INITIAL_RATINGS: CalificacionChoferFirestore[] = [
     driverName: 'Marcos Fernandez',
     pasajeroId: 'usr-p3',
     pasajeroNombre: 'Martin Diaz',
-    puntuacion: 2, // Bueno
+    puntuacion: 4, // Bueno
     comentario: 'Buen servicio y trato cordial.',
     timestamp: nowRef - 110 * 60 * 1000, // Hace 1h 50m
     expiresAt: nowRef - 110 * 60 * 1000 + RANKING_WINDOW_MS,
@@ -1936,10 +2035,10 @@ export function subscribeToRankingChoferes(
     const now = Date.now();
     // Filtro estricto: solo calificaciones de las últimas 3 horas (10800000 ms)
     const valid3Hours = list.filter((item) => (now - item.timestamp) < RANKING_WINDOW_MS);
-    // Ordenar: primero los mejores (1 es muy bueno, 5 es muy malo), luego por más reciente
+    // Ordenar: primero los mejores (5 es muy bueno, 1 es malo), luego por más reciente
     const sorted = [...valid3Hours].sort((a, b) => {
       if (a.puntuacion !== b.puntuacion) {
-        return a.puntuacion - b.puntuacion; // 1 antes que 2, etc.
+        return b.puntuacion - a.puntuacion; // 5 antes que 4, etc. (más alto primero)
       }
       return b.timestamp - a.timestamp;
     });

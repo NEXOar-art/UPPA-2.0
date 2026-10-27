@@ -97,8 +97,8 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
   }, []);
   // Solicitudes visibles en pantalla:
   // - Solicitudes pendientes (y expiradas de 12 min si esperan reemisión)
-  // - Solicitudes aceptadas: VISIBLES POR 30 MINUTOS exactos desde su aceptación.
-  //   Pasados los 30 minutos desaparecen para dar lugar a nuevas solicitudes.
+  // - Solicitudes aceptadas (viajes realizados): VISIBLES POR 16 MINUTOS exactos desde su aceptación.
+  //   Pasados los 16 minutos desaparecen automáticamente para que quede limpio y entren las nuevas peticiones.
   const visibleSolicitudes = useMemo(() => {
     return solicitudes.filter((sol) => {
       if (sol.estado === 'aceptado') {
@@ -267,85 +267,53 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
           </div>
         )}
 
-        {/* Desplegable de Ranking de Prestadores (Top 20 - Últimas 3 Horas) */}
-        <div className="mt-3 rounded-2xl border border-amber-500/35 bg-gradient-to-r from-amber-950/30 via-[#0c121e] to-orange-950/25 overflow-hidden shadow-lg transition-all">
+        {/* Desplegable de Ranking de Prestadores */}
+        <div className="mt-3 rounded-2xl border border-amber-500/30 bg-[#0c121e]/90 overflow-hidden shadow-md transition-all">
           <button
             type="button"
             onClick={() => setIsRankingDropdownOpen(!isRankingDropdownOpen)}
-            className="w-full p-3 flex items-center justify-between text-left hover:bg-white/[0.03] transition-colors cursor-pointer gap-2"
+            className="w-full px-3.5 py-2.5 flex items-center justify-between text-left hover:bg-white/[0.04] transition-colors cursor-pointer"
           >
-            <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-300 border border-amber-400/40 flex items-center justify-center shrink-0 shadow-sm">
-                <Trophy className="w-4 h-4 text-amber-300" />
+            <div className="flex items-center gap-2.5">
+              <div className="w-7 h-7 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-400/40 flex items-center justify-center shrink-0">
+                <Trophy className="w-3.5 h-3.5 text-amber-300" />
               </div>
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-xs font-black text-white tracking-wide flex items-center gap-1.5">
-                    <span>Ranking de Prestadores</span>
-                  </span>
-                  <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-amber-400/20 text-amber-300 border border-amber-400/40">
-                    Últimas 3 hs · {rankingList.length} en lista
-                  </span>
-                  <span className="text-[10px] text-slate-400 font-normal hidden sm:inline">
-                    (1 = Muy Bueno · 5 = Muy Malo)
-                  </span>
-                </div>
-                <p className="text-[11px] text-slate-400 truncate mt-0.5">
-                  Calificaciones comunitarias de los últimos 20 choferes · Se renueva cada 3 horas
-                </p>
-              </div>
+              <span className="text-xs font-bold text-white tracking-wide">
+                Ranking de Prestadores
+              </span>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-400/20 text-amber-300 border border-amber-400/30">
+                {rankingList.length}
+              </span>
             </div>
 
-            <div className="flex items-center gap-2 shrink-0">
-              <span className="text-[10px] font-bold text-amber-300 bg-amber-500/10 px-2 py-1 rounded-lg border border-amber-500/30 hidden md:inline">
-                {isRankingDropdownOpen ? 'Cerrar Ranking' : 'Ver Ranking (Top 20)'}
-              </span>
-              <div className="w-7 h-7 rounded-xl bg-white/5 flex items-center justify-center text-slate-300">
-                {isRankingDropdownOpen ? (
-                  <ChevronUp className="w-4 h-4 text-amber-400" />
-                ) : (
-                  <ChevronDown className="w-4 h-4 text-amber-400" />
-                )}
-              </div>
+            <div className="w-6 h-6 rounded-lg bg-white/5 flex items-center justify-center text-amber-400">
+              {isRankingDropdownOpen ? (
+                <ChevronUp className="w-4 h-4" />
+              ) : (
+                <ChevronDown className="w-4 h-4" />
+              )}
             </div>
           </button>
 
-          {/* Contenido desplegable: Lista con SOLO el nombre del prestador y su calificación */}
+          {/* Lista desplegable al apretar */}
           {isRankingDropdownOpen && (
-            <div className="border-t border-white/5 p-3 sm:p-4 bg-[#090d16]/95 space-y-2 animate-in slide-in-from-top-2 duration-200">
-              <div className="flex items-center justify-between text-[11px] text-slate-400 pb-2 border-b border-white/5">
-                <span className="font-semibold text-slate-300 flex items-center gap-1">
-                  <Award className="w-3.5 h-3.5 text-amber-400" />
-                  <span>Últimos prestadores calificados (Publicados solo por 3 horas):</span>
-                </span>
-                <span className="text-[10px] font-mono text-amber-300/80">
-                  Renovación continua
-                </span>
-              </div>
-
+            <div className="border-t border-white/5 p-2.5 bg-[#090d16]/95 animate-in slide-in-from-top-2 duration-200">
               {rankingList.length === 0 ? (
-                <div className="p-4 text-center text-xs text-slate-400">
-                  No hay calificaciones registradas en las últimas 3 horas. Al calificar a un chofer aparecerá en este ranking.
+                <div className="py-3 text-center text-xs text-slate-400">
+                  Sin calificaciones registradas
                 </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-72 overflow-y-auto pr-1">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-64 overflow-y-auto pr-1">
                   {rankingList.slice(0, 20).map((item, idx) => {
                     const info = getCalificacionInfo(item.puntuacion);
-                    const elapsedMs = nowTimestamp - item.timestamp;
-                    const elapsedMins = Math.floor(elapsedMs / (60 * 1000));
-                    const remainingMs = Math.max(0, RANKING_WINDOW_MS - elapsedMs);
-                    const remainingMins = Math.floor(remainingMs / (60 * 1000));
-                    const remainingHrs = Math.floor(remainingMins / 60);
-                    const remainingMinsOnly = remainingMins % 60;
-
                     return (
                       <div
                         key={item.id}
-                        className="p-2.5 rounded-xl bg-white/[0.02] border border-white/5 hover:border-amber-400/30 flex items-center justify-between gap-2 text-xs transition-colors"
+                        className="px-2.5 py-2 rounded-xl bg-white/[0.02] border border-white/5 hover:border-amber-400/30 flex items-center justify-between gap-2 text-xs transition-colors"
                       >
-                        <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="flex items-center gap-2 min-w-0">
                           <span
-                            className={`w-6 h-6 rounded-lg font-mono font-bold text-[11px] flex items-center justify-center shrink-0 ${
+                            className={`w-5 h-5 rounded-md font-mono font-bold text-[10px] flex items-center justify-center shrink-0 ${
                               idx === 0
                                 ? 'bg-amber-400 text-slate-950 font-black'
                                 : idx === 1
@@ -357,29 +325,16 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                           >
                             #{idx + 1}
                           </span>
-
-                          {/* SOLO CON EL NOMBRE DEL PRESTADOR DEL SERVICIO */}
-                          <div className="min-w-0">
-                            <span className="font-bold text-white block truncate text-xs">
-                              {item.driverName}
-                            </span>
-                            <span className="text-[10px] text-slate-400 font-mono">
-                              Hace {elapsedMins} min · Expira en {remainingHrs}h {remainingMinsOnly}m
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Calificación de 1 a 5 donde 1 es Muy Bueno y 5 es Muy Malo */}
-                        <div className="flex flex-col items-end shrink-0">
-                          <span
-                            className={`px-2 py-0.5 rounded-lg text-[10px] font-extrabold uppercase border flex items-center gap-1 ${info.badgeClass}`}
-                          >
-                            <span>{item.puntuacion} - {info.label}</span>
-                          </span>
-                          <span className="text-[9px] font-mono text-amber-300/80 mt-0.5">
-                            {info.stars}
+                          <span className="font-bold text-white truncate text-xs">
+                            {item.driverName}
                           </span>
                         </div>
+
+                        <span
+                          className={`px-2 py-0.5 rounded-lg text-[10px] font-extrabold uppercase border flex items-center gap-1 shrink-0 ${info.badgeClass}`}
+                        >
+                          <span>{item.puntuacion} - {info.label}</span>
+                        </span>
                       </div>
                     );
                   })}
@@ -426,7 +381,7 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
         </div>
       </div>
 
-      {/* Alternative Transport Live Requests Carousel with 12-min acceptance and 30-min visibility */}
+      {/* Alternative Transport Live Requests Carousel with 12-min acceptance and 16-min visibility */}
       {visibleSolicitudes.length > 0 && (
         <div className="p-3 sm:px-5 bg-blue-950/20 border-b border-blue-500/20 space-y-2">
           <div className="flex items-center justify-between text-xs gap-2 flex-wrap">
@@ -500,7 +455,7 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                     {sol.estado === 'aceptado' && (
                       <span
                         className="px-2 py-0.5 rounded text-[9px] font-bold uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1 shrink-0 font-mono"
-                        title="Visible por 30 minutos desde la aceptación"
+                        title="Visible por 16 minutos desde la aceptación (luego desaparece para mantener limpio el panel)"
                       >
                         <Check className="w-2.5 h-2.5 text-emerald-400 stroke-[3]" />
                         <span>Aceptado · {acceptedMins}m</span>
@@ -545,7 +500,7 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                       <p className="text-emerald-300 font-semibold truncate">
                         Chofer: {sol.choferNombre || 'Asignado'}
                       </p>
-                      <span className="text-[9px] text-emerald-400/80 font-mono shrink-0 ml-1" title="Visibilidad de 30 minutos">
+                      <span className="text-[9px] text-emerald-400/80 font-mono shrink-0 ml-1" title="Visibilidad de 16 minutos tras aceptación">
                         {acceptedMins} min restantes
                       </span>
                     </div>
@@ -663,7 +618,7 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                   <button
                     onClick={() => setCalificarDriver(taxi)}
                     className="px-3 py-2 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-400/40 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer active:scale-95 shadow-sm"
-                    title="Calificar a este prestador (de 1 a 5 donde 1 es Muy Bueno)"
+                    title="Calificar a este prestador (de 1 a 5 donde 1 es Malo y 5 es Muy Bueno)"
                   >
                     <Star className="w-3.5 h-3.5 fill-amber-300 text-amber-300" />
                     <span>Calificar</span>

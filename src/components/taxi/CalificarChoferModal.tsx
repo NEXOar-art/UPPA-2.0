@@ -22,7 +22,7 @@ export const CalificarChoferModal: React.FC<CalificarChoferModalProps> = ({
   pasajeroNombre,
   onSuccess,
 }) => {
-  const [selectedRating, setSelectedRating] = useState<1 | 2 | 3 | 4 | 5>(1);
+  const [selectedRating, setSelectedRating] = useState<1 | 2 | 3 | 4 | 5>(5);
   const [comentario, setComentario] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successNotice, setSuccessNotice] = useState<string | null>(null);
@@ -57,11 +57,11 @@ export const CalificarChoferModal: React.FC<CalificarChoferModalProps> = ({
   };
 
   const scaleOptions: Array<{ score: 1 | 2 | 3 | 4 | 5; label: string; desc: string }> = [
-    { score: 1, label: '1 - Muy Bueno', desc: 'Excelente atención, puntualidad y vehículo' },
-    { score: 2, label: '2 - Bueno', desc: 'Servicio satisfactorio y viaje correcto' },
+    { score: 5, label: '5 - Muy Bueno', desc: 'Excelente atención, puntualidad y vehículo (Puntaje Máximo)' },
+    { score: 4, label: '4 - Bueno', desc: 'Servicio satisfactorio y viaje correcto' },
     { score: 3, label: '3 - Regular', desc: 'Servicio estándar con aspectos a mejorar' },
-    { score: 4, label: '4 - Malo', desc: 'Inconvenientes o demoras en el servicio' },
-    { score: 5, label: '5 - Muy Malo', desc: 'Deficiente, descortés o cobro indebido' },
+    { score: 2, label: '2 - Insuficiente', desc: 'Inconvenientes o demoras en el servicio' },
+    { score: 1, label: '1 - Malo', desc: 'Deficiente, descortés o cobro indebido' },
   ];
 
   return (
@@ -93,7 +93,7 @@ export const CalificarChoferModal: React.FC<CalificarChoferModalProps> = ({
             Escala oficial de 1 a 5:
           </span>
           <p className="text-slate-300 text-[11px]">
-            <strong className="text-emerald-300">1 es Muy Bueno</strong> y <strong className="text-rose-300">5 es Muy Malo</strong>. Tu voto aparecerá en el ranking en vivo de las últimas 3 horas.
+            <strong className="text-rose-300">1 es Malo</strong> y <strong className="text-emerald-300">5 es Muy Bueno</strong>. Tu voto aparecerá en el ranking en vivo de las últimas 3 horas.
           </p>
         </div>
 

@@ -31,6 +31,7 @@ import {
   triggerInAppPushNotification,
   crearCodigoHabilitacion,
   suscribirCodigosHabilitacion,
+  obtenerHabilitacionesActuales,
 } from '../../services/realtimeFirebaseService';
 import { getTimerState } from '../../services/driverActivationService';
 import { UppaDatabaseViewer } from './UppaDatabaseViewer';
@@ -170,7 +171,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   // Subscribe to real-time collections when unlocked
   useEffect(() => {
-    if (!isAdminUnlocked) return;
+    if (!effectiveUnlocked) return;
 
     const unsubUsuarios = subscribeToUsuarios((list) => setUsuarios(list));
     const unsubReportes = subscribeToReportes((list) => setReportes(list));
@@ -187,14 +188,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       unsubHabilitaciones();
       unsubCodigos();
     };
-  }, [isAdminUnlocked]);
+  }, [effectiveUnlocked]);
 
   // Subscribe to chat channel
   useEffect(() => {
-    if (!isAdminUnlocked) return;
+    if (!effectiveUnlocked) return;
     const unsubChat = subscribeToChat(activeChatChannel, (msgs) => setChatMessages(msgs));
     return () => unsubChat();
-  }, [isAdminUnlocked, activeChatChannel]);
+  }, [effectiveUnlocked, activeChatChannel]);
 
   // Handle PIN Unlock
   const handleUnlockWithPin = (e?: React.FormEvent) => {
@@ -331,10 +332,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               setIsRefreshing(true);
               const m = await obtenerMetricasEnTiempoReal();
               setMetricas(m);
+              setHabilitaciones(obtenerHabilitacionesActuales());
               setIsRefreshing(false);
-              showSuccessBanner('Métricas y datos sincronizados con Firestore');
+              showSuccessBanner('Métricas y solicitudes sincronizadas con Firestore');
             }}
-            className="h-8 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold flex items-center gap-1.5 transition-all"
+            className="h-8 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer"
             disabled={isRefreshing}
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />

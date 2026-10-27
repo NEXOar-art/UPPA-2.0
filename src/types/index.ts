@@ -219,7 +219,7 @@ export interface CalificacionChoferFirestore {
   driverName: string;
   pasajeroId: string;
   pasajeroNombre: string;
-  puntuacion: 1 | 2 | 3 | 4 | 5; // 1 = Muy Bueno, 2 = Bueno, 3 = Regular, 4 = Malo, 5 = Muy Malo
+  puntuacion: 1 | 2 | 3 | 4 | 5; // 1 = Malo, 2 = Insuficiente, 3 = Regular, 4 = Bueno, 5 = Muy Bueno
   comentario?: string;
   timestamp: number;
   expiresAt: number; // Vigencia de 3 horas en el ranking

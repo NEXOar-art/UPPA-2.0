@@ -131,7 +131,7 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
     }
   };
 
-  // Step 1: Submit Transfer and automatically record in Firestore
+  // Step 1: Submit Transfer and automatically record in Firestore & Administración UPPA
   const handleTransferSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setErrorMsg('');
@@ -160,7 +160,7 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
       hours: selectedHours,
     });
 
-    // 2. Register driver request in Firestore
+    // 2. Register driver request in Firestore and notify Administración UPPA immediately
     try {
       await solicitarHabilitacionChofer({
         driverId: currentUserId || `usr-driver-${Date.now()}`,
@@ -168,9 +168,9 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
         vehicleType,
         vehicleModel: vehicleModel.trim(),
         whatsapp: cleanWhatsapp.startsWith('54') ? cleanWhatsapp : `549${cleanWhatsapp}`,
-        zone: zone.trim(),
+        zone: zone.trim() || 'Zárate ↔ Campana',
         horas: selectedHours,
-        comprobanteFileName: proofFileName || 'comprobante_luciaveronicag_whatsapp.pdf',
+        comprobanteFileName: proofFileName || 'Comprobante WhatsApp 3489690058',
       });
     } catch (err) {
       console.warn('Sync driver request warning:', err);
@@ -184,7 +184,7 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
         vehicleType,
         vehicleModel: vehicleModel.trim(),
         whatsapp: cleanWhatsapp.startsWith('54') ? cleanWhatsapp : `549${cleanWhatsapp}`,
-        zone: zone.trim(),
+        zone: zone.trim() || 'Zárate ↔ Campana',
         lat: -34.175 + (Math.random() - 0.5) * 0.03,
         lng: -58.965 + (Math.random() - 0.5) * 0.03,
         hoursPaid: selectedHours,
@@ -196,7 +196,7 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
         whatsapp: cleanWhatsapp,
         vehicleType,
         vehicleModel: vehicleModel.trim(),
-        zone: zone.trim(),
+        zone: zone.trim() || 'Zárate ↔ Campana',
         amount: totalAmount,
         hours: selectedHours,
         proofUrl: 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?auto=format&fit=crop&w=600&q=80',
@@ -205,6 +205,20 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
         activationCode: generatedCodeObj.code,
       }
     );
+
+    // 4. Open WhatsApp to send proof
+    const waText = encodeURIComponent(
+      `Hola Lucia Veronica Gimenez! Te envío los datos y el comprobante de transferencia para la Habilitación de Chofer en UPPA.\n\n` +
+      `• Chofer: ${driverName.trim()}\n` +
+      `• Vehículo: ${vehicleType === 'moto' ? 'Moto Taxi' : 'Auto Taxi'} (${vehicleModel.trim()})\n` +
+      `• WhatsApp de contacto: ${whatsapp.trim()}\n` +
+      `• Plan: ${selectedHours} horas ($${totalAmount.toLocaleString('es-AR')} ARS)\n` +
+      `• Código generado: ${generatedCodeObj.code}\n` +
+      `• Transferencia enviada a: Alias: luciaveronicag | CVU: 0000003100020253501840 | Titular: Lucia Veronica Gimenez`
+    );
+    try {
+      window.open(`https://wa.me/5493489690058?text=${waText}`, '_blank');
+    } catch {}
 
     // Show generated code to user
     setGeneratedCodeResult(generatedCodeObj.code);
@@ -679,30 +693,15 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
                   Nombre: <strong className="text-white">Lucia Veronica Gimenez</strong>
                 </div>
 
-                {/* Envío de datos y comprobante con enlace directo de WhatsApp a 3489690058 */}
+                {/* Envío de solicitud y comprobante al sistema y a WhatsApp 3489690058 */}
                 <div className="pt-2 space-y-2">
-                  <a
-                    href={`https://wa.me/5493489690058?text=${encodeURIComponent(
-                      `Hola Lucia Veronica Gimenez! Te envío los datos y el comprobante de transferencia bancaria para la Habilitación de Chofer en UPPA.\n\n` +
-                      `• Chofer: ${driverName.trim() || 'Por definir'}\n` +
-                      `• Vehículo: ${vehicleType === 'moto' ? 'Moto Taxi' : 'Auto Taxi'} (${vehicleModel.trim() || 'A definir'})\n` +
-                      `• WhatsApp de contacto: ${whatsapp.trim() || 'No especificado'}\n` +
-                      `• Plan: ${selectedHours} horas ($${totalAmount.toLocaleString('es-AR')} ARS)\n` +
-                      `• Datos transferencia: Alias: luciaveronicag | CVU: 0000003100020253501840 | Titular: Lucia Veronica Gimenez`
-                    )}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={() => {
-                      if (!proofFileName) {
-                        setProofFileName('Comprobante enviado por WhatsApp a 3489690058');
-                      }
-                      handleTransferSubmit();
-                    }}
+                  <button
+                    type="submit"
                     className="w-full flex items-center justify-center gap-2 px-3 sm:px-4 py-2.5 sm:py-3 bg-gradient-to-r from-emerald-500 via-green-500 to-emerald-600 hover:from-emerald-400 hover:to-green-500 text-slate-950 font-black text-[11px] sm:text-xs uppercase tracking-wider rounded-xl sm:rounded-2xl shadow-xl shadow-emerald-500/25 transition-all cursor-pointer active:scale-97 text-center leading-snug"
                   >
                     <MessageCircle className="w-4 h-4 fill-slate-950 shrink-0" />
-                    <span>Enviar Datos y Adjuntar Comprobante (WhatsApp 3489690058)</span>
-                  </a>
+                    <span>Enviar Solicitud y Adjuntar Comprobante (WhatsApp 3489690058)</span>
+                  </button>
 
                   <div className="flex items-center justify-between text-[10px] text-slate-400 px-1 pt-0.5">
                     <span className="truncate max-w-[210px]">
