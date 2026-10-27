@@ -7,6 +7,7 @@ import {
   eliminarMensajeChat,
   reportarMensajeChat,
   getMessageTimestampMs,
+  isRealChatMessage,
 } from '../../services/realtimeFirebaseService';
 import {
   Send,
@@ -159,10 +160,10 @@ export const CommunityChat: React.FC<CommunityChatProps> = ({
     }
   }, [activeContextEvent]);
 
-  // Filtrado de mensajes por canal, rol, búsqueda y límite estricto de 20 minutos de exposición
+  // Filtrado de mensajes por canal, rol, búsqueda y límite estricto de 20 minutos de exposición (solo mensajes 100% reales)
   const filteredMessages = useMemo(() => {
     const twentyMinMs = 20 * 60 * 1000;
-    let list = messages.filter((m) => (nowTimestamp - getMessageTimestampMs(m.enviadoEn)) < twentyMinMs);
+    let list = messages.filter((m) => isRealChatMessage(m) && (nowTimestamp - getMessageTimestampMs(m.enviadoEn)) < twentyMinMs);
 
     // Si hay un canal específico seleccionado, mostrar mensajes de ese canal y también los avisos comunitarios de 'todos'
     if (selectedChannel !== 'todos') {
@@ -605,12 +606,12 @@ export const CommunityChat: React.FC<CommunityChatProps> = ({
               <Sparkles className="w-6 h-6 animate-pulse" />
             </div>
             <h3 className="font-extrabold text-sm text-slate-200">
-              {searchQuery ? 'No hay mensajes que coincidan' : 'Comunidad de Campana & Zárate Conectada'}
+              {searchQuery ? 'No hay mensajes que coincidan' : 'Chat Comunitario en Vivo (100% Real)'}
             </h3>
             <p className="text-[11.5px] leading-relaxed text-slate-400">
               {searchQuery
                 ? 'Probá buscando con otra palabra o limpiando el filtro.'
-                : 'Sé el primero en consultar el estado de tu colectivo o coordinar un viaje con los choferes de Moto y Auto Taxi.'}
+                : 'Sin bots ni mensajes simulados. Todo lo publicado aquí proviene de vecinos y choferes reales de Campana y Zárate. ¡Escribí el primer mensaje para consultar el estado del micro o pedir transporte!'}
             </p>
           </div>
         ) : (

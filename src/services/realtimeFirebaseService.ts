@@ -24,6 +24,7 @@ import {
   HabilitacionChofer,
   PushNotificationPayload,
   AnalyticsSummary,
+  CalificacionChoferFirestore,
 } from '../types';
 import {
   saveActiveDriverSession,
@@ -39,6 +40,7 @@ export const COL_MENSAJES_GLOBAL = 'mensajes_comunitarios';
 export const COL_SOLICITUDES = 'solicitudes_transporte';
 export const COL_HABILITACIONES = 'habilitaciones_chofer';
 export const COL_CODIGOS_HABILITACION = 'codigos_habilitacion';
+export const COL_CALIFICACIONES = 'calificaciones_chofer';
 export const COL_ANALYTICS = 'analytics';
 
 // Master Admin Security PIN
@@ -515,67 +517,68 @@ const chatBroadcastChannel = typeof window !== 'undefined' && 'BroadcastChannel'
   ? new BroadcastChannel('uppa_community_chat')
   : null;
 
-export function getInitialMockChat(salaId: string): MensajeChatFirestore[] {
-  const now = Date.now();
-  const allInitial: MensajeChatFirestore[] = [
-    {
-      id: 'msg-init-1',
-      salaId: 'todos',
-      usuarioId: 'usr-1',
-      nombreUsuario: 'Lucas Pasajero',
-      texto: '¿Alguien sabe si el 228 pasó por Justo Vigalondo hacia Campana Centro?',
-      rol: 'pasajero',
-      enviadoEn: now - 18 * 60 * 1000,
-    },
-    {
-      id: 'msg-init-2',
-      salaId: 'campana-zarate',
-      usuarioId: 'usr-2',
-      nombreUsuario: 'Esteban Chofer',
-      texto: 'Viene saliendo de Barrio Malvinas hacia McDonald\'s por Colectora Sur, viene en horario sin demoras.',
-      rol: 'chofer_micro',
-      enviadoEn: now - 14 * 60 * 1000,
-    },
-    {
-      id: 'msg-init-3',
-      salaId: 'todos',
-      usuarioId: 'usr-3',
-      nombreUsuario: 'Lucia Moto Taxi',
-      texto: 'Tengo moto disponible en Colectora y Grassi por si alguien necesita viaje directo hacia Zárate.',
-      rol: 'chofer_moto',
-      enviadoEn: now - 9 * 60 * 1000,
-    },
-    {
-      id: 'msg-init-4',
-      salaId: 'zarate-campana',
-      usuarioId: 'usr-zc-1',
-      nombreUsuario: 'Mariano Zárate',
-      texto: 'Saliendo servicio desde Terminal de Zárate hacia Campana por Av. Anta y Mitre.',
-      rol: 'chofer_micro',
-      enviadoEn: now - 5 * 60 * 1000,
-    },
-    {
-      id: 'msg-init-5',
-      salaId: 'todos',
-      usuarioId: 'usr-4',
-      nombreUsuario: 'Carlos Auto Taxi',
-      texto: 'Auto Taxi disponible en Plaza Eduardo Costa con baúl amplio para equipaje.',
-      rol: 'chofer_auto',
-      enviadoEn: now - 2 * 60 * 1000,
-    },
-    {
-      id: 'msg-init-6',
-      salaId: 'general',
-      usuarioId: 'usr-gen-1',
-      nombreUsuario: 'Comunidad UPPA',
-      texto: '¡Bienvenidos al Chat Comunitario en tiempo real de Campana y Zárate! Toda la comunidad puede ver los mensajes y responder.',
-      rol: 'administrador',
-      enviadoEn: now - 25 * 60 * 1000,
-    },
-  ];
+/**
+ * Validador estricto para garantizar que solo se muestren chats 100% reales.
+ * Descarta cualquier mensaje simulado, prefijado con 'msg-init-', o textos predeterminados de prueba.
+ */
+export function isRealChatMessage(m: any): boolean {
+  if (!m || !m.id) return false;
+  const idStr = String(m.id);
+  if (
+    idStr.startsWith('msg-init-') ||
+    idStr === 'msg-1' ||
+    idStr === 'msg-2' ||
+    idStr === 'msg-3' ||
+    idStr === 'msg-4' ||
+    idStr === 'msg-5' ||
+    idStr === 'msg-6' ||
+    idStr.startsWith('mock-') ||
+    idStr.startsWith('sim-')
+  ) {
+    return false;
+  }
+  const textStr = String(m.texto || '');
+  if (
+    textStr.includes('¿Alguien sabe si el 228 pasó por Justo Vigalondo') ||
+    textStr.includes('Viene saliendo de Barrio Malvinas hacia McDonald') ||
+    textStr.includes('Tengo moto disponible en Colectora y Grassi') ||
+    textStr.includes('Saliendo servicio desde Terminal de Zárate hacia Campana') ||
+    textStr.includes('Auto Taxi disponible en Plaza Eduardo Costa') ||
+    textStr.includes('¡Bienvenidos al Chat Comunitario en tiempo real de Campana y Zárate!') ||
+    textStr.includes('El micro de las 14:00 no pasó por la plaza') ||
+    textStr.includes('Confirmado, el interno 42 quedó tirado en la colectora')
+  ) {
+    return false;
+  }
+  return true;
+}
 
-  if (salaId === 'todos') return allInitial;
-  return allInitial.filter((m) => m.salaId === salaId || m.salaId === 'todos');
+// Purga inmediata de chats simulados almacenados previamente en la caché del navegador
+if (typeof window !== 'undefined' && window.localStorage) {
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && (key.startsWith('uppa_cache_chat_') || key.includes('chat'))) {
+        const val = localStorage.getItem(key);
+        if (val && (val.includes('msg-init') || val.includes('Lucas Pasajero') || val.includes('Esteban Chofer') || val.includes('Carlos Auto Taxi'))) {
+          try {
+            const parsed = JSON.parse(val);
+            if (Array.isArray(parsed)) {
+              const clean = parsed.filter((item) => isRealChatMessage(item));
+              localStorage.setItem(key, JSON.stringify(clean));
+            }
+          } catch {
+            localStorage.removeItem(key);
+          }
+        }
+      }
+    }
+  } catch {}
+}
+
+export function getInitialMockChat(_salaId?: string): MensajeChatFirestore[] {
+  // Chat comunitario 100% real: no simular mensajes para evitar confusiones al usuario
+  return [];
 }
 
 export function subscribeToChat(
@@ -589,13 +592,14 @@ export function subscribeToChat(
 
   let currentMessages: MensajeChatFirestore[] = [];
 
-  // Helper para filtrar y emitir mensajes comunitarios activos
+  // Helper para filtrar y emitir mensajes comunitarios activos y estrictamente reales
   const emitActiveMessages = (msgs: MensajeChatFirestore[]) => {
     const seen = new Set<string>();
     const valid: MensajeChatFirestore[] = [];
 
     for (const m of msgs) {
       if (!m || !m.id) continue;
+      if (!isRealChatMessage(m)) continue;
       if (!seen.has(m.id) && isChatMessageValid(m.enviadoEn)) {
         seen.add(m.id);
         valid.push({
@@ -619,7 +623,7 @@ export function subscribeToChat(
   const handleBroadcast = (event: MessageEvent) => {
     if (event.data?.type === 'NEW_CHAT_MESSAGE') {
       const incoming = event.data.message as MensajeChatFirestore;
-      if (incoming && isChatMessageValid(incoming.enviadoEn)) {
+      if (incoming && isRealChatMessage(incoming) && isChatMessageValid(incoming.enviadoEn)) {
         const merged = [...currentMessages.filter((m) => m.id !== incoming.id), incoming];
         emitActiveMessages(merged);
       }
@@ -643,41 +647,46 @@ export function subscribeToChat(
     chatBroadcastChannel.addEventListener('message', handleBroadcast);
   }
 
-  // Cargar estado inicial desde caché local o mensajes iniciales de la comunidad de inmediato
+  // Cargar estado inicial desde caché local únicamente con mensajes reales (sin simulación)
   const rawCache = getCached<MensajeChatFirestore[]>(`chat_${safeSala}`, []);
-  const initialCache = rawCache && rawCache.length > 0 ? rawCache : getInitialMockChat(safeSala);
+  const initialCache = (rawCache || []).filter((m) => isRealChatMessage(m) && isChatMessageValid(m.enviadoEn));
+  if (rawCache && rawCache.length !== initialCache.length) {
+    setCached(`chat_${safeSala}`, initialCache);
+  }
   emitActiveMessages(initialCache);
 
   // 1. Suscripción a la subcolección principal
   const unsubFirestore = onSnapshot(
     q,
     (snapshot) => {
-      const remoteList: MensajeChatFirestore[] = snapshot.docs.map((d) => {
-        const dData = d.data();
-        return {
-          id: d.id,
-          salaId: dData.salaId || safeSala,
-          usuarioId: dData.usuarioId || 'usr',
-          nombreUsuario: dData.nombreUsuario || 'Vecino UPPA',
-          texto: dData.texto || '',
-          rol: dData.rol || 'pasajero',
-          avatarUrl: dData.avatarUrl,
-          enviadoEn: getMessageTimestampMs(dData.enviadoEn || dData.timestampMs),
-          replyTo: dData.replyTo,
-          reportado: dData.reportado,
-          reacciones: dData.reacciones || {},
-        };
-      });
+      const remoteList: MensajeChatFirestore[] = snapshot.docs
+        .map((d) => {
+          const dData = d.data();
+          return {
+            id: d.id,
+            salaId: dData.salaId || safeSala,
+            usuarioId: dData.usuarioId || 'usr',
+            nombreUsuario: dData.nombreUsuario || 'Vecino UPPA',
+            texto: dData.texto || '',
+            rol: dData.rol || 'pasajero',
+            avatarUrl: dData.avatarUrl,
+            enviadoEn: getMessageTimestampMs(dData.enviadoEn || dData.timestampMs),
+            replyTo: dData.replyTo,
+            reportado: dData.reportado,
+            reacciones: dData.reacciones || {},
+          };
+        })
+        .filter((m) => isRealChatMessage(m));
 
       // Fusionar mensajes de Firestore con locales sin perder nada
       const mergedMap = new Map<string, MensajeChatFirestore>();
       for (const m of currentMessages) {
-        if (isChatMessageValid(m.enviadoEn)) {
+        if (isRealChatMessage(m) && isChatMessageValid(m.enviadoEn)) {
           mergedMap.set(m.id, m);
         }
       }
       for (const m of remoteList) {
-        if (isChatMessageValid(m.enviadoEn)) {
+        if (isRealChatMessage(m) && isChatMessageValid(m.enviadoEn)) {
           mergedMap.set(m.id, m);
         }
       }
@@ -700,28 +709,30 @@ export function subscribeToChat(
       unsubGlobal = onSnapshot(
         qGlobal,
         (snap) => {
-          const list: MensajeChatFirestore[] = snap.docs.map((d) => {
-            const data = d.data();
-            return {
-              id: d.id,
-              salaId: data.salaId || 'todos',
-              usuarioId: data.usuarioId || 'usr',
-              nombreUsuario: data.nombreUsuario || 'Vecino UPPA',
-              texto: data.texto || '',
-              rol: data.rol || 'pasajero',
-              avatarUrl: data.avatarUrl,
-              enviadoEn: getMessageTimestampMs(data.enviadoEn || data.timestampMs),
-              replyTo: data.replyTo,
-              reportado: data.reportado,
-              reacciones: data.reacciones || {},
-            };
-          });
+          const list: MensajeChatFirestore[] = snap.docs
+            .map((d) => {
+              const data = d.data();
+              return {
+                id: d.id,
+                salaId: data.salaId || 'todos',
+                usuarioId: data.usuarioId || 'usr',
+                nombreUsuario: data.nombreUsuario || 'Vecino UPPA',
+                texto: data.texto || '',
+                rol: data.rol || 'pasajero',
+                avatarUrl: data.avatarUrl,
+                enviadoEn: getMessageTimestampMs(data.enviadoEn || data.timestampMs),
+                replyTo: data.replyTo,
+                reportado: data.reportado,
+                reacciones: data.reacciones || {},
+              };
+            })
+            .filter((m) => isRealChatMessage(m));
           const mergedMap = new Map<string, MensajeChatFirestore>();
           for (const m of currentMessages) {
-            if (isChatMessageValid(m.enviadoEn)) mergedMap.set(m.id, m);
+            if (isRealChatMessage(m) && isChatMessageValid(m.enviadoEn)) mergedMap.set(m.id, m);
           }
           for (const m of list) {
-            if (isChatMessageValid(m.enviadoEn)) mergedMap.set(m.id, m);
+            if (isRealChatMessage(m) && isChatMessageValid(m.enviadoEn)) mergedMap.set(m.id, m);
           }
           emitActiveMessages(Array.from(mergedMap.values()));
         },
@@ -987,6 +998,25 @@ export function getSolicitudAceptadaRemainingSeconds(sol: SolicitudTransporteFir
     : now;
   const diffMs = (acceptedMs + SOLICITUD_ACEPTADA_MAX_VISIBILITY_MS) - now;
   return Math.max(0, Math.floor(diffMs / 1000));
+}
+
+// ---------------------------------------------------------------------------
+// 5. PRESTADORES DE SERVICIO CON TIEMPO EXPIRADO:
+// Se muestran en pantalla hasta 10 minutos con leyenda "Tiempo expirado".
+// Cumplidos los 10 minutos deben dejar de aparecer en pantalla.
+// ---------------------------------------------------------------------------
+export const EXPIRED_DRIVER_MAX_VISIBILITY_MS = 10 * 60 * 1000; // 10 minutos
+
+export function isDriverExpiredOver10Min(endsAt: number, now = Date.now()): boolean {
+  if (endsAt > now) return false;
+  return (now - endsAt) > EXPIRED_DRIVER_MAX_VISIBILITY_MS;
+}
+
+export function getDriverExpiredRemainingSeconds(endsAt: number, now = Date.now()): number {
+  if (endsAt > now) return 0;
+  const elapsed = now - endsAt;
+  const remaining = Math.max(0, EXPIRED_DRIVER_MAX_VISIBILITY_MS - elapsed);
+  return Math.ceil(remaining / 1000);
 }
 
 const MOCK_INITIAL_SOLICITUDES: SolicitudTransporteFirestore[] = [
@@ -1724,5 +1754,243 @@ export function suscribirCodigosHabilitacion(
       console.warn('Error onSnapshot codigos_habilitacion:', err);
     }
   );
+}
+
+// ---------------------------------------------------------------------------
+// 8. SISTEMA DE CALIFICACIÓN DE PRESTADORES Y RANKING EN VIVO (ÚLTIMAS 3 HORAS)
+// - Escala: 1 a 5 (1 = Muy Bueno, 5 = Muy Malo)
+// - Ranking con lista de los últimos 20 prestadores
+// - Publicados solo por 3 horas, renovándose automáticamente con nuevos integrantes
+// ---------------------------------------------------------------------------
+
+export const RANKING_WINDOW_MS = 3 * 60 * 60 * 1000; // 3 horas
+
+export function getCalificacionInfo(puntuacion: number): {
+  label: string;
+  badgeClass: string;
+  stars: string;
+  description: string;
+} {
+  switch (puntuacion) {
+    case 1:
+      return {
+        label: 'Muy Bueno',
+        badgeClass: 'bg-emerald-500/20 text-emerald-300 border-emerald-400/40',
+        stars: '★★★★★',
+        description: 'Puntaje máximo de excelencia',
+      };
+    case 2:
+      return {
+        label: 'Bueno',
+        badgeClass: 'bg-cyan-500/20 text-cyan-300 border-cyan-400/40',
+        stars: '★★★★☆',
+        description: 'Servicio satisfactorio',
+      };
+    case 3:
+      return {
+        label: 'Regular',
+        badgeClass: 'bg-amber-500/20 text-amber-300 border-amber-400/40',
+        stars: '★★★☆☆',
+        description: 'Servicio estándar con aspectos a mejorar',
+      };
+    case 4:
+      return {
+        label: 'Malo',
+        badgeClass: 'bg-orange-500/20 text-orange-300 border-orange-400/40',
+        stars: '★★☆☆☆',
+        description: 'Demoras o inconvenientes en el viaje',
+      };
+    case 5:
+    default:
+      return {
+        label: 'Muy Malo',
+        badgeClass: 'bg-rose-500/20 text-rose-300 border-rose-400/40',
+        stars: '★☆☆☆☆',
+        description: 'Deficiente o sin cumplir lo acordado',
+      };
+  }
+}
+
+// Datos iniciales de calificaciones recientes dentro de la ventana de 3 horas
+const nowRef = Date.now();
+const MOCK_INITIAL_RATINGS: CalificacionChoferFirestore[] = [
+  {
+    id: 'cal-mock-1',
+    driverId: 'tx-gaston',
+    driverName: 'Gaston Gimenez',
+    pasajeroId: 'usr-samanta',
+    pasajeroNombre: 'Samanta',
+    puntuacion: 1, // Muy Bueno
+    comentario: 'Excelente viaje, puntual y muy atento.',
+    timestamp: nowRef - 22 * 60 * 1000, // Hace 22 min
+    expiresAt: nowRef - 22 * 60 * 1000 + RANKING_WINDOW_MS,
+  },
+  {
+    id: 'cal-mock-2',
+    driverId: 'tx-lucia',
+    driverName: 'Lucia Veronica Gimenez',
+    pasajeroId: 'usr-p1',
+    pasajeroNombre: 'Carla Gomez',
+    puntuacion: 1, // Muy Bueno
+    comentario: 'Viaje impecable en auto taxi.',
+    timestamp: nowRef - 45 * 60 * 1000, // Hace 45 min
+    expiresAt: nowRef - 45 * 60 * 1000 + RANKING_WINDOW_MS,
+  },
+  {
+    id: 'cal-mock-3',
+    driverId: 'tx-franco',
+    driverName: 'Franco Colapinto',
+    pasajeroId: 'usr-roberto',
+    pasajeroNombre: 'Roberto Fernandez',
+    puntuacion: 1, // Muy Bueno
+    comentario: 'Rápido y seguro en moto taxi.',
+    timestamp: nowRef - 75 * 60 * 1000, // Hace 1h 15m
+    expiresAt: nowRef - 75 * 60 * 1000 + RANKING_WINDOW_MS,
+  },
+  {
+    id: 'cal-mock-4',
+    driverId: 'tx-marcos',
+    driverName: 'Marcos Fernandez',
+    pasajeroId: 'usr-p3',
+    pasajeroNombre: 'Martin Diaz',
+    puntuacion: 2, // Bueno
+    comentario: 'Buen servicio y trato cordial.',
+    timestamp: nowRef - 110 * 60 * 1000, // Hace 1h 50m
+    expiresAt: nowRef - 110 * 60 * 1000 + RANKING_WINDOW_MS,
+  },
+];
+
+const ratingsBroadcastChannel = typeof window !== 'undefined' && 'BroadcastChannel' in window
+  ? new BroadcastChannel('uppa_calificaciones_ranking')
+  : null;
+
+export async function calificarChofer(data: {
+  driverId: string;
+  driverName: string;
+  pasajeroId: string;
+  pasajeroNombre: string;
+  puntuacion: 1 | 2 | 3 | 4 | 5;
+  comentario?: string;
+}): Promise<CalificacionChoferFirestore> {
+  const now = Date.now();
+  const id = `cal-${now}_${Math.random().toString(36).substring(2, 6)}`;
+  const calificacion: CalificacionChoferFirestore = {
+    id,
+    driverId: data.driverId,
+    driverName: data.driverName,
+    pasajeroId: data.pasajeroId,
+    pasajeroNombre: data.pasajeroNombre,
+    puntuacion: data.puntuacion,
+    comentario: data.comentario?.trim() || '',
+    timestamp: now,
+    expiresAt: now + RANKING_WINDOW_MS, // 3 horas exactas
+  };
+
+  // Guardar en caché local
+  try {
+    const cached = getCached<CalificacionChoferFirestore[]>('calificaciones_chofer', MOCK_INITIAL_RATINGS);
+    setCached('calificaciones_chofer', [calificacion, ...cached.filter((c) => c.id !== id)]);
+  } catch {}
+
+  // Broadcast cross-tab
+  try {
+    ratingsBroadcastChannel?.postMessage({
+      type: 'NEW_CALIFICACION',
+      calificacion,
+    });
+  } catch {}
+
+  // Guardar en Firestore
+  try {
+    const docRef = doc(db, COL_CALIFICACIONES, id);
+    await setDoc(docRef, {
+      ...calificacion,
+      fechaCreacion: serverTimestamp(),
+    });
+  } catch (e) {
+    console.warn('Firestore calificarChofer notice (resilient write active):', e);
+  }
+
+  // Notificar
+  const calInfo = getCalificacionInfo(data.puntuacion);
+  triggerInAppPushNotification(
+    `⭐ Nueva Calificación a ${data.driverName}`,
+    `Calificado como "${calInfo.label}" (${data.puntuacion}/5) por ${data.pasajeroNombre}.`,
+    'transporte',
+    { calificacion }
+  );
+
+  return calificacion;
+}
+
+export function subscribeToRankingChoferes(
+  callback: (ranking: CalificacionChoferFirestore[]) => void,
+  onError?: (err: any) => void
+): () => void {
+  let currentList = getCached<CalificacionChoferFirestore[]>(
+    'calificaciones_chofer',
+    MOCK_INITIAL_RATINGS
+  );
+
+  const filterAndDeliver = (list: CalificacionChoferFirestore[]) => {
+    const now = Date.now();
+    // Filtro estricto: solo calificaciones de las últimas 3 horas (10800000 ms)
+    const valid3Hours = list.filter((item) => (now - item.timestamp) < RANKING_WINDOW_MS);
+    // Ordenar: primero los mejores (1 es muy bueno, 5 es muy malo), luego por más reciente
+    const sorted = [...valid3Hours].sort((a, b) => {
+      if (a.puntuacion !== b.puntuacion) {
+        return a.puntuacion - b.puntuacion; // 1 antes que 2, etc.
+      }
+      return b.timestamp - a.timestamp;
+    });
+    // Solo los últimos 20 prestadores
+    const top20 = sorted.slice(0, 20);
+    callback(top20);
+  };
+
+  filterAndDeliver(currentList);
+
+  const handleBroadcast = (event: MessageEvent) => {
+    if (event.data?.type === 'NEW_CALIFICACION') {
+      const cal = event.data.calificacion as CalificacionChoferFirestore;
+      if (cal) {
+        currentList = [cal, ...currentList.filter((c) => c.id !== cal.id)];
+        setCached('calificaciones_chofer', currentList);
+        filterAndDeliver(currentList);
+      }
+    }
+  };
+
+  if (ratingsBroadcastChannel) {
+    ratingsBroadcastChannel.addEventListener('message', handleBroadcast);
+  }
+
+  const colRef = collection(db, COL_CALIFICACIONES);
+  const q = query(colRef, orderBy('timestamp', 'desc'));
+
+  const unsub = onSnapshot(
+    q,
+    (snap) => {
+      const list = snap.docs.map((d) => ({
+        id: d.id,
+        ...(d.data() as Omit<CalificacionChoferFirestore, 'id'>),
+      }));
+      currentList = list;
+      setCached('calificaciones_chofer', list);
+      filterAndDeliver(list);
+    },
+    (err) => {
+      console.warn('Firestore calificaciones subscription offline/notice:', err);
+      if (onError) onError(err);
+      filterAndDeliver(currentList);
+    }
+  );
+
+  return () => {
+    if (ratingsBroadcastChannel) {
+      ratingsBroadcastChannel.removeEventListener('message', handleBroadcast);
+    }
+    unsub();
+  };
 }
 

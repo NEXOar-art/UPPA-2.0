@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { TaxiListing, SolicitudTransporteFirestore } from '../../types';
+import { TaxiListing, SolicitudTransporteFirestore, CalificacionChoferFirestore } from '../../types';
 import {
   subscribeToSolicitudesTransporte,
   crearSolicitudTransporte,
@@ -10,6 +10,12 @@ import {
   getSolicitudAceptadaRemainingSeconds,
   SOLICITUD_TIMEOUT_MS,
   SOLICITUD_ACEPTADA_MAX_VISIBILITY_MS,
+  subscribeToRankingChoferes,
+  getCalificacionInfo,
+  isDriverExpiredOver10Min,
+  getDriverExpiredRemainingSeconds,
+  EXPIRED_DRIVER_MAX_VISIBILITY_MS,
+  RANKING_WINDOW_MS,
 } from '../../services/realtimeFirebaseService';
 import {
   Car,
@@ -34,8 +40,13 @@ import {
   AlertCircle,
   RotateCcw,
   Timer,
+  Trophy,
+  ChevronDown,
+  ChevronUp,
+  Award,
 } from 'lucide-react';
 import { PoliticasTransporteModal } from './PoliticasTransporteModal';
+import { CalificarChoferModal } from './CalificarChoferModal';
 
 interface TaxiMarketplaceProps {
   taxis: TaxiListing[];
@@ -141,9 +152,37 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
     }
   };
 
-  const filteredTaxis = taxis.filter(
-    (t) => t.status === 'active' && (vehicleFilter === 'all' || t.vehicleType === vehicleFilter)
-  );
+  // Ranking en vivo de los últimos 20 prestadores (publicados por 3 horas)
+  const [rankingList, setRankingList] = useState<CalificacionChoferFirestore[]>([]);
+  const [isRankingDropdownOpen, setIsRankingDropdownOpen] = useState(false);
+
+  // Prestador seleccionado para calificar
+  const [calificarDriver, setCalificarDriver] = useState<TaxiListing | null>(null);
+
+  // Suscripción al ranking de prestadores en vivo (últimas 3 hs)
+  useEffect(() => {
+    const unsub = subscribeToRankingChoferes((list) => {
+      setRankingList(list);
+    });
+    return () => unsub();
+  }, []);
+
+  // Prestadores visibles en pantalla:
+  // - Choferes activos con tiempo restante
+  // - Choferes con "Tiempo expirado": visibles HASTA 10 MINUTOS exactos
+  // - Pasados los 10 minutos dejan de aparecer en pantalla
+  const visibleTaxis = useMemo(() => {
+    return taxis.filter((t) => {
+      if (vehicleFilter !== 'all' && t.vehicleType !== vehicleFilter) {
+        return false;
+      }
+      if (t.endsAt > nowTimestamp) {
+        return true;
+      }
+      const expiredElapsed = nowTimestamp - t.endsAt;
+      return expiredElapsed <= EXPIRED_DRIVER_MAX_VISIBILITY_MS;
+    });
+  }, [taxis, vehicleFilter, nowTimestamp]);
 
   const formatRemainingTime = (endsAt: number) => {
     const diff = endsAt - Date.now();
@@ -228,6 +267,128 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
           </div>
         )}
 
+        {/* Desplegable de Ranking de Prestadores (Top 20 - Últimas 3 Horas) */}
+        <div className="mt-3 rounded-2xl border border-amber-500/35 bg-gradient-to-r from-amber-950/30 via-[#0c121e] to-orange-950/25 overflow-hidden shadow-lg transition-all">
+          <button
+            type="button"
+            onClick={() => setIsRankingDropdownOpen(!isRankingDropdownOpen)}
+            className="w-full p-3 flex items-center justify-between text-left hover:bg-white/[0.03] transition-colors cursor-pointer gap-2"
+          >
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-300 border border-amber-400/40 flex items-center justify-center shrink-0 shadow-sm">
+                <Trophy className="w-4 h-4 text-amber-300" />
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs font-black text-white tracking-wide flex items-center gap-1.5">
+                    <span>Ranking de Prestadores</span>
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-amber-400/20 text-amber-300 border border-amber-400/40">
+                    Últimas 3 hs · {rankingList.length} en lista
+                  </span>
+                  <span className="text-[10px] text-slate-400 font-normal hidden sm:inline">
+                    (1 = Muy Bueno · 5 = Muy Malo)
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400 truncate mt-0.5">
+                  Calificaciones comunitarias de los últimos 20 choferes · Se renueva cada 3 horas
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="text-[10px] font-bold text-amber-300 bg-amber-500/10 px-2 py-1 rounded-lg border border-amber-500/30 hidden md:inline">
+                {isRankingDropdownOpen ? 'Cerrar Ranking' : 'Ver Ranking (Top 20)'}
+              </span>
+              <div className="w-7 h-7 rounded-xl bg-white/5 flex items-center justify-center text-slate-300">
+                {isRankingDropdownOpen ? (
+                  <ChevronUp className="w-4 h-4 text-amber-400" />
+                ) : (
+                  <ChevronDown className="w-4 h-4 text-amber-400" />
+                )}
+              </div>
+            </div>
+          </button>
+
+          {/* Contenido desplegable: Lista con SOLO el nombre del prestador y su calificación */}
+          {isRankingDropdownOpen && (
+            <div className="border-t border-white/5 p-3 sm:p-4 bg-[#090d16]/95 space-y-2 animate-in slide-in-from-top-2 duration-200">
+              <div className="flex items-center justify-between text-[11px] text-slate-400 pb-2 border-b border-white/5">
+                <span className="font-semibold text-slate-300 flex items-center gap-1">
+                  <Award className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Últimos prestadores calificados (Publicados solo por 3 horas):</span>
+                </span>
+                <span className="text-[10px] font-mono text-amber-300/80">
+                  Renovación continua
+                </span>
+              </div>
+
+              {rankingList.length === 0 ? (
+                <div className="p-4 text-center text-xs text-slate-400">
+                  No hay calificaciones registradas en las últimas 3 horas. Al calificar a un chofer aparecerá en este ranking.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-72 overflow-y-auto pr-1">
+                  {rankingList.slice(0, 20).map((item, idx) => {
+                    const info = getCalificacionInfo(item.puntuacion);
+                    const elapsedMs = nowTimestamp - item.timestamp;
+                    const elapsedMins = Math.floor(elapsedMs / (60 * 1000));
+                    const remainingMs = Math.max(0, RANKING_WINDOW_MS - elapsedMs);
+                    const remainingMins = Math.floor(remainingMs / (60 * 1000));
+                    const remainingHrs = Math.floor(remainingMins / 60);
+                    const remainingMinsOnly = remainingMins % 60;
+
+                    return (
+                      <div
+                        key={item.id}
+                        className="p-2.5 rounded-xl bg-white/[0.02] border border-white/5 hover:border-amber-400/30 flex items-center justify-between gap-2 text-xs transition-colors"
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <span
+                            className={`w-6 h-6 rounded-lg font-mono font-bold text-[11px] flex items-center justify-center shrink-0 ${
+                              idx === 0
+                                ? 'bg-amber-400 text-slate-950 font-black'
+                                : idx === 1
+                                ? 'bg-slate-300 text-slate-950 font-bold'
+                                : idx === 2
+                                ? 'bg-amber-700 text-amber-100 font-bold'
+                                : 'bg-white/5 text-slate-400'
+                            }`}
+                          >
+                            #{idx + 1}
+                          </span>
+
+                          {/* SOLO CON EL NOMBRE DEL PRESTADOR DEL SERVICIO */}
+                          <div className="min-w-0">
+                            <span className="font-bold text-white block truncate text-xs">
+                              {item.driverName}
+                            </span>
+                            <span className="text-[10px] text-slate-400 font-mono">
+                              Hace {elapsedMins} min · Expira en {remainingHrs}h {remainingMinsOnly}m
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Calificación de 1 a 5 donde 1 es Muy Bueno y 5 es Muy Malo */}
+                        <div className="flex flex-col items-end shrink-0">
+                          <span
+                            className={`px-2 py-0.5 rounded-lg text-[10px] font-extrabold uppercase border flex items-center gap-1 ${info.badgeClass}`}
+                          >
+                            <span>{item.puntuacion} - {info.label}</span>
+                          </span>
+                          <span className="text-[9px] font-mono text-amber-300/80 mt-0.5">
+                            {info.stars}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
         {/* Filter Pills */}
         <div className="flex items-center gap-2 mt-3 pt-3 border-t border-white/5">
           <button
@@ -238,7 +399,7 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                 : 'text-slate-400 hover:text-white'
             }`}
           >
-            Todos ({taxis.filter((t) => t.status === 'active').length})
+            Todos ({visibleTaxis.length})
           </button>
           <button
             onClick={() => setVehicleFilter('auto')}
@@ -249,7 +410,7 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
             }`}
           >
             <Car className="w-3.5 h-3.5" />
-            <span>Autos ({taxis.filter((t) => t.status === 'active' && t.vehicleType === 'auto').length})</span>
+            <span>Autos ({visibleTaxis.filter((t) => t.vehicleType === 'auto').length})</span>
           </button>
           <button
             onClick={() => setVehicleFilter('moto')}
@@ -260,7 +421,7 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
             }`}
           >
             <Bike className="w-3.5 h-3.5" />
-            <span>Motos ({taxis.filter((t) => t.status === 'active' && t.vehicleType === 'moto').length})</span>
+            <span>Motos ({visibleTaxis.filter((t) => t.vehicleType === 'moto').length})</span>
           </button>
         </div>
       </div>
@@ -398,7 +559,7 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
 
       {/* Driver Cards Stream */}
       <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-2.5">
-        {filteredTaxis.length === 0 ? (
+        {visibleTaxis.length === 0 ? (
           <div className="p-8 text-center text-xs text-slate-500 rounded-2xl bg-white/[0.02] border border-white/5 space-y-3">
             <p>No hay vehículos de esta categoría disponibles en este momento.</p>
             <button
@@ -409,13 +570,22 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
             </button>
           </div>
         ) : (
-          filteredTaxis.map((taxi) => {
+          visibleTaxis.map((taxi) => {
             const isMoto = taxi.vehicleType === 'moto';
-            const isExpired = taxi.endsAt <= Date.now();
+            const isExpired = taxi.endsAt <= nowTimestamp;
+            const expiredElapsed = Math.max(0, nowTimestamp - taxi.endsAt);
+            const remaining10MinSec = Math.max(0, Math.ceil((EXPIRED_DRIVER_MAX_VISIBILITY_MS - expiredElapsed) / 1000));
+            const expMins = Math.floor(remaining10MinSec / 60);
+            const expSecs = remaining10MinSec % 60;
+
             return (
               <div
                 key={taxi.id}
-                className="glass-card hover:bg-white/[0.06] rounded-2xl p-4 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-blue-500/20 bg-[#0d121f]"
+                className={`glass-card hover:bg-white/[0.06] rounded-2xl p-4 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 border ${
+                  isExpired
+                    ? 'border-rose-500/30 bg-[#160d14]'
+                    : 'border-blue-500/20 bg-[#0d121f]'
+                }`}
               >
                 {/* Left driver badge */}
                 <div className="flex items-center gap-3">
@@ -434,13 +604,13 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                     </div>
                     <span
                       className={`absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full ring-2 ring-[#07090e] ${
-                        isExpired ? 'bg-rose-500' : 'bg-emerald-400 animate-pulse'
+                        isExpired ? 'bg-rose-500 animate-pulse' : 'bg-emerald-400 animate-pulse'
                       }`}
                     />
                   </div>
 
                   <div className="space-y-1">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <h3 className="text-sm font-bold text-white">{taxi.driverName}</h3>
                       <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-200 border border-blue-400/30 font-bold uppercase tracking-wide">
                         {isMoto ? '🏍️ Moto Taxi' : '🚕 Auto Taxi'}
@@ -463,24 +633,42 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
 
                       <span>·</span>
 
-                      {/* Countdown Timer Badge */}
+                      {/* Countdown Timer Badge con regla de 10 minutos para expirados */}
                       <span
                         className={`flex items-center gap-1 font-mono font-semibold px-2 py-0.5 rounded-lg text-[10px] ${
                           isExpired
-                            ? 'bg-rose-950/80 border border-rose-500/50 text-rose-300'
+                            ? 'bg-rose-950/90 border border-rose-500/60 text-rose-300 animate-pulse'
                             : 'bg-emerald-950/60 border border-emerald-500/40 text-emerald-300'
                         }`}
-                        title="Temporizador de servicio pagado"
+                        title={
+                          isExpired
+                            ? 'Tiempo expirado: visible por hasta 10 minutos en pantalla antes de desaparecer'
+                            : 'Temporizador de servicio pagado'
+                        }
                       >
                         <Clock className="w-3 h-3" />
-                        <span>{isExpired ? 'Tiempo expirado' : `Quedan ${formatRemainingTime(taxi.endsAt)}`}</span>
+                        <span>
+                          {isExpired
+                            ? `Tiempo expirado (${expMins}:${expSecs.toString().padStart(2, '0')})`
+                            : `Quedan ${formatRemainingTime(taxi.endsAt)}`}
+                        </span>
                       </span>
                     </div>
                   </div>
                 </div>
 
-                {/* Right Action Button */}
-                <div className="flex items-center gap-2 pt-2 sm:pt-0 border-t sm:border-t-0 border-white/5">
+                {/* Right Action Buttons */}
+                <div className="flex items-center gap-2 pt-2 sm:pt-0 border-t sm:border-t-0 border-white/5 flex-wrap">
+                  {/* Botón para calificar al prestador */}
+                  <button
+                    onClick={() => setCalificarDriver(taxi)}
+                    className="px-3 py-2 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-400/40 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer active:scale-95 shadow-sm"
+                    title="Calificar a este prestador (de 1 a 5 donde 1 es Muy Bueno)"
+                  >
+                    <Star className="w-3.5 h-3.5 fill-amber-300 text-amber-300" />
+                    <span>Calificar</span>
+                  </button>
+
                   {onSelectTaxiOnMap && (
                     <button
                       onClick={() => onSelectTaxiOnMap(taxi)}
@@ -621,6 +809,18 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
         </div>
       )}
 
+      {/* Modal de Calificación a Prestador de Servicios */}
+      {calificarDriver && (
+        <CalificarChoferModal
+          isOpen={!!calificarDriver}
+          onClose={() => setCalificarDriver(null)}
+          driverId={calificarDriver.userId || calificarDriver.id}
+          driverName={calificarDriver.driverName}
+          pasajeroId={currentUserId}
+          pasajeroNombre={currentUserName}
+        />
+      )}
+
       {/* Politicas & Descargo Modal */}
       <PoliticasTransporteModal
         isOpen={isPoliticasOpen}
@@ -629,4 +829,5 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
     </div>
   );
 };
+
 

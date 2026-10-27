@@ -415,53 +415,8 @@ export const MOCK_PAYMENTS: PaymentProof[] = [
   },
 ];
 
-export const MOCK_CHAT_MESSAGES: ChatMessage[] = [
-  {
-    id: 'msg-1',
-    channel: 'zarate-malvinas',
-    userId: 'usr-44',
-    userName: 'Carlos Benítez',
-    content: 'El micro de las 14:00 no pasó por la plaza. Estamos hace 30 minutos esperando.',
-    timestamp: '14:32',
-    sentiment: 'negative',
-  },
-  {
-    id: 'msg-2',
-    channel: 'zarate-malvinas',
-    userId: 'usr-55',
-    userName: 'María López',
-    content: 'Confirmado, el interno 42 quedó tirado en la colectora por Tenaris. Se rompió.',
-    timestamp: '14:35',
-    sentiment: 'negative',
-  },
-  {
-    id: 'msg-3',
-    channel: 'zarate-malvinas',
-    userId: 'usr-66',
-    userName: 'Gabriel R.',
-    content: '¿Alguien sabe si el taxi de Juan está libre por Malvinas? Necesito llegar antes de las 15:15 al trabajo.',
-    timestamp: '14:38',
-    sentiment: 'neutral',
-  },
-  {
-    id: 'msg-4',
-    channel: 'zarate-malvinas',
-    userId: 'usr-d1',
-    userName: 'Juan Manuel (Taxi UPPA)',
-    content: 'Hola Gabriel! Sí, estoy en la plaza de Malvinas libre ahora. Escribime por WhatsApp en el botón verde.',
-    timestamp: '14:39',
-    sentiment: 'positive',
-  },
-  {
-    id: 'msg-5',
-    channel: 'zarate-malvinas',
-    userId: 'usr-77',
-    userName: 'Lucía Santillán',
-    content: 'Viene saliendo el interno 38 de Zárate Centro recién! Viene con lugar.',
-    timestamp: '14:41',
-    sentiment: 'positive',
-  },
-];
+export const MOCK_CHAT_MESSAGES: ChatMessage[] = [];
+
 
 export const MOCK_ADS: AdListing[] = [
   {

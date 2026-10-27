@@ -213,6 +213,18 @@ export interface SolicitudTransporteFirestore {
   distanciaKm?: number;
 }
 
+export interface CalificacionChoferFirestore {
+  id: string;
+  driverId: string;
+  driverName: string;
+  pasajeroId: string;
+  pasajeroNombre: string;
+  puntuacion: 1 | 2 | 3 | 4 | 5; // 1 = Muy Bueno, 2 = Bueno, 3 = Regular, 4 = Malo, 5 = Muy Malo
+  comentario?: string;
+  timestamp: number;
+  expiresAt: number; // Vigencia de 3 horas en el ranking
+}
+
 export interface PaymentProof {
   id: string;
   userId: string;
