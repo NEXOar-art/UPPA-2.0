@@ -13,7 +13,6 @@ import {
   subscribeToRankingChoferes,
   getCalificacionInfo,
   getDriversDisponibilidadMap,
-  setDriverDisponibilidad,
   subscribeToDriversDisponibilidad,
   RANKING_WINDOW_MS,
 } from '../../services/realtimeFirebaseService';
@@ -187,16 +186,6 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
       taxi.disponibilidad ||
       'desocupado'
     );
-  };
-
-  const handleToggleDisponibilidad = (taxi: TaxiListing) => {
-    const current = getTaxiDisponibilidad(taxi);
-    const next = current === 'ocupado' ? 'desocupado' : 'ocupado';
-    setDriverDisponibilidad(taxi.id, next);
-    setDriverDisponibilidad(taxi.driverName, next);
-    if (taxi.whatsapp) {
-      setDriverDisponibilidad(taxi.whatsapp, next);
-    }
   };
 
   // Prestadores visibles en pantalla:
@@ -637,33 +626,6 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
 
                 {/* Right Action Buttons */}
                 <div className="flex items-center gap-2 pt-2 sm:pt-0 border-t sm:border-t-0 border-white/5 flex-wrap">
-                  {/* Botón para que el prestador cambie su estado (ocupado -> desocupado) */}
-                  <button
-                    onClick={() => handleToggleDisponibilidad(taxi)}
-                    className={`px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer active:scale-95 shadow-sm border ${
-                      isOcupado
-                        ? 'bg-emerald-500/25 hover:bg-emerald-500/35 text-emerald-200 border-emerald-400/50 shadow-emerald-500/20'
-                        : 'bg-amber-500/15 hover:bg-amber-500/25 text-amber-200 border-amber-400/30'
-                    }`}
-                    title={
-                      isOcupado
-                        ? 'Hacé clic para cambiar a Desocupado'
-                        : 'Hacé clic para marcar como Ocupado'
-                    }
-                  >
-                    {isOcupado ? (
-                      <>
-                        <CheckCircle className="w-3.5 h-3.5 text-emerald-300" />
-                        <span>Pasar a Desocupado</span>
-                      </>
-                    ) : (
-                      <>
-                        <Zap className="w-3.5 h-3.5 text-amber-300" />
-                        <span>Pasar a Ocupado</span>
-                      </>
-                    )}
-                  </button>
-
                   {/* Botón para calificar al prestador */}
                   <button
                     onClick={() => setCalificarDriver(taxi)}

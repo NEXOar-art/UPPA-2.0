@@ -22,6 +22,8 @@ interface DriverConnectionBarProps {
   vehicleType: 'auto' | 'moto';
   endsAt?: number;
   activationCode?: string;
+  disponibilidad?: 'desocupado' | 'ocupado';
+  onToggleDisponibilidad?: () => void;
   onCenterMap: () => void;
   onOpenRenewModal?: () => void;
 }
@@ -34,6 +36,8 @@ export const DriverConnectionBar: React.FC<DriverConnectionBarProps> = ({
   vehicleType,
   endsAt = Date.now() + 12 * 3600 * 1000,
   activationCode,
+  disponibilidad = 'desocupado',
+  onToggleDisponibilidad,
   onCenterMap,
   onOpenRenewModal,
 }) => {
@@ -102,6 +106,38 @@ export const DriverConnectionBar: React.FC<DriverConnectionBarProps> = ({
             )}
           </span>
         </div>
+
+        {/* Botón de Disponibilidad (Ocupado / Desocupado) accesible solo al prestador activo */}
+        {onToggleDisponibilidad && (
+          <button
+            onClick={onToggleDisponibilidad}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold text-xs transition-all active:scale-95 shadow-sm cursor-pointer border ${
+              disponibilidad === 'ocupado'
+                ? 'bg-amber-500/30 hover:bg-amber-500/40 border-amber-400 text-amber-200 animate-pulse ring-1 ring-amber-400/50'
+                : 'bg-emerald-500/20 hover:bg-emerald-500/30 border-emerald-400/50 text-emerald-300'
+            }`}
+            title={
+              disponibilidad === 'ocupado'
+                ? 'Estás en estado OCUPADO. Clic para pasar a DESOCUPADO'
+                : 'Estás en estado DESOCUPADO. Clic para pasar a OCUPADO'
+            }
+          >
+            {disponibilidad === 'ocupado' ? (
+              <>
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-80" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500" />
+                </span>
+                <span>Pasar a Desocupado</span>
+              </>
+            ) : (
+              <>
+                <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                <span>Desocupado (Listo)</span>
+              </>
+            )}
+          </button>
+        )}
       </div>
 
       {/* Real-time Countdown Timer Badge */}

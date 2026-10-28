@@ -25,7 +25,12 @@ import {
   Car,
   LogOut,
   ArrowRight,
+  Zap,
 } from 'lucide-react';
+import {
+  setDriverDisponibilidad,
+  subscribeToDriversDisponibilidad,
+} from '../../services/realtimeFirebaseService';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -130,6 +135,56 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const currentRol = authUser?.rol || currentUser?.rol || (currentUser?.role === 'admin' ? 'administrador' : 'pasajero');
   const currentEstado = authUser?.estado || currentUser?.estado || 'activo';
   const currentFecha = authUser?.fechaRegistro || currentUser?.fechaRegistro || 'Reciente';
+
+  // Disponibilidad de prestador (Desocupado / Ocupado) gestionada únicamente por el titular desde su perfil
+  const [driverDisponibilidad, setDriverDisponibilidadState] = useState<'desocupado' | 'ocupado'>('desocupado');
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const unsub = subscribeToDriversDisponibilidad((map) => {
+      const keys = [
+        currentUid,
+        authUser?.uid,
+        currentUser?.uid,
+        currentUser?.id,
+        authUser?.nombre,
+        currentUser?.name,
+        currentUser?.nombre,
+        authUser?.phone,
+        currentUser?.phone,
+      ].filter(Boolean) as string[];
+
+      for (const k of keys) {
+        const val = map[k] || map[k.toLowerCase()];
+        if (val) {
+          setDriverDisponibilidadState(val);
+          return;
+        }
+      }
+      setDriverDisponibilidadState('desocupado');
+    });
+    return () => unsub();
+  }, [isOpen, currentUid, authUser, currentUser]);
+
+  const handleToggleDriverDisponibilidad = () => {
+    const nextState = driverDisponibilidad === 'ocupado' ? 'desocupado' : 'ocupado';
+    const keys = [
+      currentUid,
+      authUser?.uid,
+      currentUser?.uid,
+      currentUser?.id,
+      authUser?.nombre,
+      currentUser?.name,
+      currentUser?.nombre,
+      authUser?.phone,
+      currentUser?.phone,
+    ].filter(Boolean) as string[];
+
+    keys.forEach((k) => {
+      setDriverDisponibilidad(k, nextState);
+    });
+    setDriverDisponibilidadState(nextState);
+  };
 
   // Handler: Crear nuevo perfil en Firebase y disparar email de verificación
   const handleRegisterProfile = async (e: React.FormEvent) => {
@@ -789,6 +844,76 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         {/* ------------------------------------------------------------------- */}
         {mode === 'profile' && (
           <div className="mt-4 space-y-3.5 animate-in fade-in">
+            {/* Control Exclusivo de Disponibilidad del Chofer / Prestador de Servicio */}
+            <div className={`p-4 rounded-2xl border transition-all ${
+              driverDisponibilidad === 'ocupado'
+                ? 'bg-amber-950/40 border-amber-500/60 shadow-lg shadow-amber-500/10'
+                : 'bg-emerald-950/30 border-emerald-500/40 shadow-sm'
+            }`}>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="space-y-1.5 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs font-bold text-white">
+                      Disponibilidad de Servicio
+                    </span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/10 text-slate-300 font-semibold">
+                      Control Exclusivo del Chofer
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-0.5">
+                    {driverDisponibilidad === 'ocupado' ? (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black tracking-wider uppercase bg-amber-500/25 text-amber-300 border border-amber-400/70 shadow-sm shadow-amber-500/30 animate-pulse">
+                        <span className="relative flex h-2.5 w-2.5">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-80" />
+                          <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500" />
+                        </span>
+                        <span>OCUPADO (EN VIAJE)</span>
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black tracking-wider uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-400/40">
+                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
+                        <span>DESOCUPADO (DISPONIBLE)</span>
+                      </span>
+                    )}
+                  </div>
+
+                  <p className="text-[11px] text-slate-400 leading-snug">
+                    🔒 <strong>Solo vos podés accionar este botón desde tu perfil.</strong> Al aceptar un viaje pasás automáticamente a <em>Ocupado</em> (titilando en la pantalla pública de Taxis & Motos). Cuando finalices tu viaje, presioná este botón para volver a <em>Desocupado</em>. Nadie más puede cambiar este estado por vos.
+                  </p>
+                </div>
+
+                <div className="shrink-0 pt-1 sm:pt-0">
+                  <button
+                    type="button"
+                    onClick={handleToggleDriverDisponibilidad}
+                    className={`w-full sm:w-auto px-4 py-2.5 rounded-xl text-xs font-black flex items-center justify-center gap-2 transition-all cursor-pointer active:scale-95 shadow-md border ${
+                      driverDisponibilidad === 'ocupado'
+                        ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 border-emerald-400 shadow-emerald-500/25 ring-2 ring-emerald-400/50'
+                        : 'bg-amber-500 hover:bg-amber-400 text-slate-950 border-amber-400 shadow-amber-500/25 ring-2 ring-amber-400/50'
+                    }`}
+                    title={
+                      driverDisponibilidad === 'ocupado'
+                        ? 'Hacé clic para pasar a Desocupado al terminar tu viaje'
+                        : 'Hacé clic para marcarte como Ocupado'
+                    }
+                  >
+                    {driverDisponibilidad === 'ocupado' ? (
+                      <>
+                        <CheckCircle2 className="w-4 h-4 text-slate-950" />
+                        <span>Pasar a Desocupado</span>
+                      </>
+                    ) : (
+                      <>
+                        <Zap className="w-4 h-4 fill-slate-950 text-slate-950" />
+                        <span>Pasar a Ocupado</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+
             {/* Status Card */}
             <div className="p-3.5 rounded-2xl bg-white/[0.03] border border-white/5 space-y-2 text-xs">
               <div className="flex items-center justify-between">

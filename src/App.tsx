@@ -52,6 +52,8 @@ import {
   onPushNotification,
   triggerInAppPushNotification,
   crearReporte,
+  subscribeToDriversDisponibilidad,
+  setDriverDisponibilidad,
 } from './services/realtimeFirebaseService';
 
 import {
@@ -209,6 +211,50 @@ export default function App() {
 
     return tieneSesionChofer || esChoferActivo;
   }, [driverSession, currentUser]);
+
+  // Disponibilidad de prestador (Desocupado / Ocupado) gestionada únicamente por el titular
+  const [driverDisponibilidad, setDriverDisponibilidadState] = useState<'desocupado' | 'ocupado'>('desocupado');
+
+  useEffect(() => {
+    const unsub = subscribeToDriversDisponibilidad((map) => {
+      const keys = [
+        currentUser?.uid,
+        currentUser?.id,
+        currentUser?.nombre,
+        currentUser?.name,
+        currentUser?.phone,
+        driverSession?.driverName,
+      ].filter(Boolean) as string[];
+
+      for (const k of keys) {
+        const val = map[k] || map[k.toLowerCase()];
+        if (val) {
+          setDriverDisponibilidadState(val);
+          return;
+        }
+      }
+      setDriverDisponibilidadState('desocupado');
+    });
+    return () => unsub();
+  }, [currentUser, driverSession]);
+
+  const handleToggleDriverDisponibilidad = () => {
+    const nextState = driverDisponibilidad === 'ocupado' ? 'desocupado' : 'ocupado';
+    const keys = [
+      currentUser?.uid,
+      currentUser?.id,
+      currentUser?.nombre,
+      currentUser?.name,
+      currentUser?.phone,
+      driverSession?.driverName,
+    ].filter(Boolean) as string[];
+
+    keys.forEach((k) => {
+      setDriverDisponibilidad(k, nextState);
+    });
+    setDriverDisponibilidadState(nextState);
+    showToast(nextState === 'ocupado' ? '🟡 Estado de prestador: OCUPADO' : '🟢 Estado de prestador: DESOCUPADO');
+  };
 
   // Active View / Tabs
   const [activeTab, setActiveTab] = useState<'map' | 'taxi' | 'chat' | 'admin'>('map');
@@ -974,6 +1020,8 @@ export default function App() {
           vehicleType={((driverSession?.vehicleType || currentUser.tipoVehiculo || (currentUser.rol === 'chofer_moto' ? 'moto' : 'auto')) === 'moto' ? 'moto' : 'auto')}
           endsAt={driverSession?.endsAt || (Date.now() + 12 * 3600 * 1000)}
           activationCode={driverSession?.activationCode}
+          disponibilidad={driverDisponibilidad}
+          onToggleDisponibilidad={handleToggleDriverDisponibilidad}
           onCenterMap={() => setActiveTab('map')}
           onOpenRenewModal={() => setIsPublishTaxiOpen(true)}
         />
