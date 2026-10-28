@@ -31,6 +31,7 @@ import {
   setDriverDisponibilidad,
   subscribeToDriversDisponibilidad,
 } from '../../services/realtimeFirebaseService';
+import { getActiveDriverSession } from '../../services/driverActivationService';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -38,6 +39,7 @@ interface AuthModalProps {
   currentUser: User;
   onUpdateUser: (updated: User) => void;
   defaultMode?: 'register' | 'login' | 'profile';
+  isHabilitado?: boolean;
 }
 
 export const AuthModal: React.FC<AuthModalProps> = ({
@@ -46,6 +48,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   currentUser,
   onUpdateUser,
   defaultMode,
+  isHabilitado,
 }) => {
   const {
     user: authUser,
@@ -135,6 +138,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const currentRol = authUser?.rol || currentUser?.rol || (currentUser?.role === 'admin' ? 'administrador' : 'pasajero');
   const currentEstado = authUser?.estado || currentUser?.estado || 'activo';
   const currentFecha = authUser?.fechaRegistro || currentUser?.fechaRegistro || 'Reciente';
+
+  // Verificar si el usuario está activamente habilitado para prestar servicio
+  const activeDriverSession = getActiveDriverSession();
+  const driverIsHabilitado = Boolean(
+    isHabilitado ?? (
+      (activeDriverSession && activeDriverSession.endsAt > Date.now()) ||
+      (currentUser.estado === 'activo' && currentUser.esChofer)
+    )
+  );
 
   // Disponibilidad de prestador (Desocupado / Ocupado) gestionada únicamente por el titular desde su perfil
   const [driverDisponibilidad, setDriverDisponibilidadState] = useState<'desocupado' | 'ocupado'>('desocupado');
@@ -845,10 +857,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         {mode === 'profile' && (
           <div className="mt-4 space-y-3.5 animate-in fade-in">
             {/* Control Exclusivo de Disponibilidad del Chofer / Prestador de Servicio */}
+            {/* Titila en verde si está habilitado; si no está habilitado, NO titila */}
             <div className={`p-4 rounded-2xl border transition-all ${
-              driverDisponibilidad === 'ocupado'
-                ? 'bg-amber-950/40 border-amber-500/60 shadow-lg shadow-amber-500/10'
-                : 'bg-emerald-950/30 border-emerald-500/40 shadow-sm'
+              driverIsHabilitado
+                ? 'bg-emerald-950/40 border-emerald-400 text-slate-100 shadow-xl shadow-emerald-500/25 ring-2 ring-emerald-400/60 animate-pulse'
+                : 'bg-slate-900/40 border-slate-700/60 text-slate-400'
             }`}>
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="space-y-1.5 min-w-0">
@@ -856,14 +869,27 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     <span className="text-xs font-bold text-white">
                       Disponibilidad de Servicio
                     </span>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/10 text-slate-300 font-semibold">
-                      Control Exclusivo del Chofer
-                    </span>
+
+                    {/* Indicador de Habilitación: Titila en verde si está habilitado */}
+                    {driverIsHabilitado ? (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/25 text-emerald-300 border border-emerald-400 shadow-sm shadow-emerald-500/30">
+                        <span className="relative flex h-2 w-2">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-80" />
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                        </span>
+                        <span>HABILITADO ACTIVO</span>
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase bg-slate-800 text-slate-400 border border-slate-700">
+                        <span className="w-1.5 h-1.5 rounded-full bg-slate-500" />
+                        <span>NO HABILITADO</span>
+                      </span>
+                    )}
                   </div>
 
                   <div className="flex items-center gap-2 pt-0.5">
                     {driverDisponibilidad === 'ocupado' ? (
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black tracking-wider uppercase bg-amber-500/25 text-amber-300 border border-amber-400/70 shadow-sm shadow-amber-500/30 animate-pulse">
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black tracking-wider uppercase bg-amber-500/25 text-amber-300 border border-amber-400/70 shadow-sm shadow-amber-500/30">
                         <span className="relative flex h-2.5 w-2.5">
                           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-80" />
                           <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500" />
@@ -879,7 +905,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   </div>
 
                   <p className="text-[11px] text-slate-400 leading-snug">
-                    🔒 <strong>Solo vos podés accionar este botón desde tu perfil.</strong> Al aceptar un viaje pasás automáticamente a <em>Ocupado</em> (titilando en la pantalla pública de Taxis & Motos). Cuando finalices tu viaje, presioná este botón para volver a <em>Desocupado</em>. Nadie más puede cambiar este estado por vos.
+                    {driverIsHabilitado ? (
+                      <>
+                        🟢 <strong>Prestador Habilitado:</strong> Tu perfil titila en verde indicando que tu cuenta está habilitada y activa. Al aceptar un viaje pasás automáticamente a <em>Ocupado</em> (titilando en la pantalla pública de Taxis & Motos). Al finalizar tu viaje, presioná <em>Pasar a Desocupado</em>.
+                      </>
+                    ) : (
+                      <>
+                        ⚪ <strong>Sin Habilitación Activa:</strong> Tu perfil no está habilitado actualmente para prestar servicio (por eso no titila). Podés habilitarte ingresando un código o comprobante en "Prestar Servicio".
+                      </>
+                    )}
                   </p>
                 </div>
 
@@ -887,13 +921,18 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   <button
                     type="button"
                     onClick={handleToggleDriverDisponibilidad}
-                    className={`w-full sm:w-auto px-4 py-2.5 rounded-xl text-xs font-black flex items-center justify-center gap-2 transition-all cursor-pointer active:scale-95 shadow-md border ${
-                      driverDisponibilidad === 'ocupado'
-                        ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 border-emerald-400 shadow-emerald-500/25 ring-2 ring-emerald-400/50'
-                        : 'bg-amber-500 hover:bg-amber-400 text-slate-950 border-amber-400 shadow-amber-500/25 ring-2 ring-amber-400/50'
+                    disabled={!driverIsHabilitado}
+                    className={`w-full sm:w-auto px-4 py-2.5 rounded-xl text-xs font-black flex items-center justify-center gap-2 transition-all active:scale-95 shadow-md border ${
+                      !driverIsHabilitado
+                        ? 'opacity-40 cursor-not-allowed bg-slate-800 text-slate-500 border-slate-700'
+                        : driverDisponibilidad === 'ocupado'
+                        ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 border-emerald-400 shadow-emerald-500/25 ring-2 ring-emerald-400/50 cursor-pointer'
+                        : 'bg-amber-500 hover:bg-amber-400 text-slate-950 border-amber-400 shadow-amber-500/25 ring-2 ring-amber-400/50 cursor-pointer'
                     }`}
                     title={
-                      driverDisponibilidad === 'ocupado'
+                      !driverIsHabilitado
+                        ? 'Habilitá tu servicio para cambiar disponibilidad'
+                        : driverDisponibilidad === 'ocupado'
                         ? 'Hacé clic para pasar a Desocupado al terminar tu viaje'
                         : 'Hacé clic para marcarte como Ocupado'
                     }

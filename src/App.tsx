@@ -212,6 +212,33 @@ export default function App() {
     return tieneSesionChofer || esChoferActivo;
   }, [driverSession, currentUser]);
 
+  // Verificar si el usuario presta servicio y si su habilitación está activa
+  const isDriverUser = useMemo(() => {
+    return Boolean(
+      currentUser.esChofer ||
+      currentUser.rol === 'chofer_moto' ||
+      currentUser.rol === 'chofer_auto' ||
+      currentUser.role === 'driver' ||
+      Boolean(driverSession) ||
+      taxis.some((t) => t.driverName === currentUser.name || t.id === currentUser.id)
+    );
+  }, [currentUser, driverSession, taxis]);
+
+  const isDriverHabilitado = useMemo(() => {
+    if (!isDriverUser) return false;
+    const now = Date.now();
+    const hasActiveSession = Boolean(driverSession && driverSession.endsAt > now);
+    const hasActiveTaxi = taxis.some(
+      (t) =>
+        (t.driverName === currentUser.name ||
+          t.id === currentUser.id ||
+          (currentUser.phone && t.whatsapp?.includes(currentUser.phone))) &&
+        t.endsAt > now
+    );
+    const hasActiveUserStatus = Boolean(currentUser.estado === 'activo' && currentUser.esChofer);
+    return hasActiveSession || hasActiveTaxi || hasActiveUserStatus;
+  }, [isDriverUser, driverSession, taxis, currentUser]);
+
   // Disponibilidad de prestador (Desocupado / Ocupado) gestionada únicamente por el titular
   const [driverDisponibilidad, setDriverDisponibilidadState] = useState<'desocupado' | 'ocupado'>('desocupado');
 
@@ -957,19 +984,55 @@ export default function App() {
             <>
               <button
                 onClick={() => setIsAuthModalOpen(true)}
-                className="relative px-2.5 py-1.5 rounded-xl glass-button text-xs text-slate-300 hover:text-white cursor-pointer flex items-center gap-1.5 transition-all"
-                title={isEmailVerified ? `Mi Perfil: ${currentUser.name} (Email Autenticado)` : `Mi Perfil: ${currentUser.name} (Email Pendiente de Autenticación)`}
+                className={`relative px-2.5 py-1.5 rounded-xl text-xs cursor-pointer flex items-center gap-1.5 transition-all ${
+                  isDriverUser && isDriverHabilitado
+                    ? 'bg-emerald-950/70 border border-emerald-400 text-emerald-200 shadow-lg shadow-emerald-500/25 ring-2 ring-emerald-400/60 animate-pulse'
+                    : isDriverUser && !isDriverHabilitado
+                    ? 'glass-button border border-slate-700/60 text-slate-300 hover:text-white'
+                    : 'glass-button text-slate-300 hover:text-white'
+                }`}
+                title={
+                  isDriverUser
+                    ? isDriverHabilitado
+                      ? `Mi Perfil: ${currentUser.name} (Chofer Habilitado - Clic para ver botón Ocupado/Desocupado)`
+                      : `Mi Perfil: ${currentUser.name} (Chofer No Habilitado)`
+                    : isEmailVerified
+                    ? `Mi Perfil: ${currentUser.name} (Email Autenticado)`
+                    : `Mi Perfil: ${currentUser.name} (Email Pendiente de Autenticación)`
+                }
               >
-                <span className="text-sm">
-                  {currentUser.role === 'admin' || isFirebaseAdmin || currentUser.rol === 'administrador'
-                    ? '🛡️'
-                    : currentUser.role === 'driver' || driverSession
-                    ? '🚕'
-                    : '👤'}
-                </span>
+                {/* Si es prestador de servicio y está habilitado, titila en verde con punto pulsante */}
+                {isDriverUser && isDriverHabilitado ? (
+                  <span className="relative flex h-3 w-3 mr-0.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-80" />
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500 ring-2 ring-[#07090e]" />
+                  </span>
+                ) : (
+                  <span className="text-sm">
+                    {currentUser.role === 'admin' || isFirebaseAdmin || currentUser.rol === 'administrador'
+                      ? '🛡️'
+                      : currentUser.role === 'driver' || driverSession
+                      ? '🚕'
+                      : '👤'}
+                  </span>
+                )}
+
                 <span className="text-xs font-bold text-white max-w-[110px] truncate hidden md:inline">
                   {currentUser.name}
                 </span>
+
+                {isDriverUser && isDriverHabilitado && (
+                  <span className="text-[10px] font-black uppercase tracking-wider text-emerald-300 hidden sm:inline px-1.5 py-0.5 rounded bg-emerald-500/25 border border-emerald-400/50">
+                    Habilitado
+                  </span>
+                )}
+
+                {isDriverUser && !isDriverHabilitado && (
+                  <span className="text-[10px] font-semibold text-slate-400 hidden sm:inline px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700">
+                    No Habilitado
+                  </span>
+                )}
+
                 {!isEmailVerified && (
                   <span
                     className="w-2 h-2 rounded-full bg-amber-400 border border-[#0a0d14] animate-pulse shrink-0"
@@ -1230,6 +1293,7 @@ export default function App() {
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
         currentUser={currentUser}
+        isHabilitado={isDriverHabilitado}
         onUpdateUser={(updated) => {
           const roleChanged = updated.role !== currentUser.role;
           setCurrentUser(updated);
