@@ -1224,6 +1224,11 @@ export async function aceptarSolicitudTransporte(
     { solicitudId, choferId }
   );
 
+  // Cuando un prestador acepta un servicio, pasa automáticamente a estado OCUPADO
+  if (choferId) setDriverDisponibilidad(choferId, 'ocupado');
+  if (choferNombre) setDriverDisponibilidad(choferNombre, 'ocupado');
+  if (choferTelefono) setDriverDisponibilidad(choferTelefono, 'ocupado');
+
   try {
     const docRef = doc(db, COL_SOLICITUDES, solicitudId);
     await updateDoc(docRef, {
@@ -1233,6 +1238,94 @@ export async function aceptarSolicitudTransporte(
   } catch (error) {
     console.warn('Firestore aceptarSolicitud notice (resilient mode active):', error);
   }
+}
+
+// ---------------------------------------------------------------------------
+// GESTIÓN DE DISPONIBILIDAD DE PRESTADORES (DESOCUPADO / OCUPADO CON TITILADO)
+// ---------------------------------------------------------------------------
+const disponibilidadBroadcastChannel = typeof window !== 'undefined' && 'BroadcastChannel' in window
+  ? new BroadcastChannel('uppa_driver_disponibilidad')
+  : null;
+
+const disponibilidadListeners = new Set<(map: Record<string, 'desocupado' | 'ocupado'>) => void>();
+
+export function getDriversDisponibilidadMap(): Record<string, 'desocupado' | 'ocupado'> {
+  return getCached<Record<string, 'desocupado' | 'ocupado'>>('driver_disponibilidad', {});
+}
+
+export function getDriverDisponibilidad(key: string): 'desocupado' | 'ocupado' {
+  if (!key) return 'desocupado';
+  const map = getDriversDisponibilidadMap();
+  const normalizedKey = key.trim().toLowerCase();
+  return map[normalizedKey] || map[key] || 'desocupado';
+}
+
+export function setDriverDisponibilidad(key: string, estado: 'desocupado' | 'ocupado'): void {
+  if (!key) return;
+  const current = getDriversDisponibilidadMap();
+  const normalizedKey = key.trim().toLowerCase();
+  const updated: Record<string, 'desocupado' | 'ocupado'> = {
+    ...current,
+    [key]: estado,
+    [normalizedKey]: estado,
+  };
+  setCached('driver_disponibilidad', updated);
+
+  disponibilidadListeners.forEach((cb) => {
+    try {
+      cb(updated);
+    } catch {}
+  });
+
+  try {
+    disponibilidadBroadcastChannel?.postMessage({
+      type: 'DISPONIBILIDAD_UPDATE',
+      map: updated,
+    });
+  } catch {}
+
+  if (typeof window !== 'undefined') {
+    try {
+      window.dispatchEvent(new CustomEvent('uppa_disponibilidad_change', { detail: updated }));
+    } catch {}
+  }
+}
+
+if (disponibilidadBroadcastChannel) {
+  disponibilidadBroadcastChannel.onmessage = (event) => {
+    if (event.data?.type === 'DISPONIBILIDAD_UPDATE' && event.data.map) {
+      setCached('driver_disponibilidad', event.data.map);
+      disponibilidadListeners.forEach((cb) => {
+        try {
+          cb(event.data.map);
+        } catch {}
+      });
+    }
+  };
+}
+
+export function subscribeToDriversDisponibilidad(
+  callback: (map: Record<string, 'desocupado' | 'ocupado'>) => void
+): () => void {
+  callback(getDriversDisponibilidadMap());
+  disponibilidadListeners.add(callback);
+
+  const windowHandler = (ev: Event) => {
+    const custom = ev as CustomEvent<Record<string, 'desocupado' | 'ocupado'>>;
+    if (custom.detail) {
+      callback(custom.detail);
+    }
+  };
+  if (typeof window !== 'undefined') {
+    window.addEventListener('uppa_disponibilidad_change', windowHandler);
+  }
+
+  return () => {
+    disponibilidadListeners.delete(callback);
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('uppa_disponibilidad_change', windowHandler);
+    }
+  };
 }
 
 export async function actualizarEstadoSolicitud(

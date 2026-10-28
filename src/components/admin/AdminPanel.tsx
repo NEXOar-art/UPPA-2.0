@@ -87,19 +87,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   onBroadcastAlert,
   currentUser,
 }) => {
-  // Check if current user is an authenticated administrator
-  const isUserAdmin = currentUser?.role === 'admin' || currentUser?.rol === 'administrador';
-
-  // Authentication & PIN State
-  const [isAdminUnlocked, setIsAdminUnlocked] = useState<boolean>(() => {
-    try {
-      return localStorage.getItem('UPPA_ADMIN_UNLOCKED') === 'true';
-    } catch {
-      return false;
-    }
-  });
-
-  const effectiveUnlocked = isAdminUnlocked || isUserAdmin;
+  // Acceso estrictamente bloqueado por Clave PIN ("0608"). Nadie entra sin clave.
+  const [isAdminUnlocked, setIsAdminUnlocked] = useState<boolean>(false);
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState<string | null>(null);
 
@@ -169,9 +158,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     setTimeout(() => setActionSuccessMessage(null), 4000);
   };
 
-  // Subscribe to real-time collections when unlocked
+  // Subscribe to real-time collections when unlocked with PIN 0608
   useEffect(() => {
-    if (!effectiveUnlocked) return;
+    if (!isAdminUnlocked) return;
 
     const unsubUsuarios = subscribeToUsuarios((list) => setUsuarios(list));
     const unsubReportes = subscribeToReportes((list) => setReportes(list));
@@ -188,14 +177,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       unsubHabilitaciones();
       unsubCodigos();
     };
-  }, [effectiveUnlocked]);
+  }, [isAdminUnlocked]);
 
   // Subscribe to chat channel
   useEffect(() => {
-    if (!effectiveUnlocked) return;
+    if (!isAdminUnlocked) return;
     const unsubChat = subscribeToChat(activeChatChannel, (msgs) => setChatMessages(msgs));
     return () => unsubChat();
-  }, [effectiveUnlocked, activeChatChannel]);
+  }, [isAdminUnlocked, activeChatChannel]);
 
   // Handle PIN Unlock
   const handleUnlockWithPin = (e?: React.FormEvent) => {
@@ -203,9 +192,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     if (pinInput.trim() === ADMIN_MASTER_PIN) {
       setIsAdminUnlocked(true);
       setPinError(null);
-      try {
-        localStorage.setItem('UPPA_ADMIN_UNLOCKED', 'true');
-      } catch {}
       showSuccessBanner('Acceso administrativo concedido');
     } else {
       setPinError('Clave incorrecta. Por favor verificá el código e intentá nuevamente.');
@@ -214,9 +200,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   const handleLockAdmin = () => {
     setIsAdminUnlocked(false);
-    try {
-      localStorage.removeItem('UPPA_ADMIN_UNLOCKED');
-    } catch {}
     setPinInput('');
   };
 
@@ -246,8 +229,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     setTimeout(() => setCopiedKey(null), 2000);
   };
 
-  // PIN Unlock Screen if locked (or auto-unlocked if current user is admin)
-  if (!effectiveUnlocked) {
+  // PIN Unlock Screen if locked (nadie entra sin clave)
+  if (!isAdminUnlocked) {
     return (
       <div className="flex-1 overflow-y-auto bg-[#07090e] p-4 flex items-center justify-center">
         <div className="w-full max-w-md bg-[#0f1422] border border-purple-500/30 rounded-3xl p-6 sm:p-8 shadow-2xl relative overflow-hidden backdrop-blur-xl">

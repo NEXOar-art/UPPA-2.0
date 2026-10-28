@@ -189,6 +189,7 @@ export interface TaxiListing {
   avatarUrl?: string;
   activationCode?: string;
   isOnline?: boolean;
+  disponibilidad?: 'desocupado' | 'ocupado';
 }
 
 export interface SolicitudTransporteFirestore {
