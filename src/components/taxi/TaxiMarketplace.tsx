@@ -8,8 +8,11 @@ import {
   getSolicitudRemainingSeconds,
   isSolicitudAceptadaExpired,
   getSolicitudAceptadaRemainingSeconds,
+  isSolicitudExpiradaOver3Min,
+  getSolicitudExpiradaRemainingSeconds,
   SOLICITUD_TIMEOUT_MS,
   SOLICITUD_ACEPTADA_MAX_VISIBILITY_MS,
+  SOLICITUD_EXPIRADA_MAX_VISIBILITY_MS,
   subscribeToRankingChoferes,
   getCalificacionInfo,
   getDriversDisponibilidadMap,
@@ -95,13 +98,16 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
     return () => unsub();
   }, []);
   // Solicitudes visibles en pantalla:
-  // - Solicitudes pendientes (y expiradas de 12 min si esperan reemisión)
   // - Solicitudes aceptadas (viajes realizados): VISIBLES POR 16 MINUTOS exactos desde su aceptación.
-  //   Pasados los 16 minutos desaparecen automáticamente para que quede limpio y entren las nuevas peticiones.
+  // - Solicitudes pendientes: activas por 12 minutos. Si expiran, permanecen únicamente por 3 MINUTOS más
+  //   para que el pasajero pueda reemitir; pasados esos 3 minutos de expirada, desaparecen de la pantalla.
   const visibleSolicitudes = useMemo(() => {
     return solicitudes.filter((sol) => {
       if (sol.estado === 'aceptado') {
         return !isSolicitudAceptadaExpired(sol, nowTimestamp);
+      }
+      if (isSolicitudExpired(sol, nowTimestamp)) {
+        return !isSolicitudExpiradaOver3Min(sol, nowTimestamp);
       }
       return true;
     });
@@ -375,137 +381,156 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
 
       {/* Main Scrollable Area (Scrolling Web) */}
       <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
-        {/* Alternative Transport Live Requests - Scrolling Web */}
-        {visibleSolicitudes.length > 0 && (
-          <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-blue-950/40 via-[#0a1122] to-indigo-950/30 border border-blue-500/25 shadow-md space-y-2.5">
-            <div className="flex items-center justify-between text-xs gap-2 flex-wrap">
-              <span className="font-bold text-blue-300 flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-blue-400 animate-ping" />
-                Solicitudes de Pasajeros ({visibleSolicitudes.filter((s) => s.estado === 'pendiente' && !isSolicitudExpired(s, nowTimestamp)).length} activas · {visibleSolicitudes.filter((s) => s.estado === 'aceptado').length} aceptadas)
-              </span>
-              <button
-                type="button"
-                onClick={() => setIsPoliticasOpen(true)}
-                className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold text-amber-300 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/50 shadow-[0_0_8px_rgba(245,158,11,0.4)] transition-all cursor-pointer"
-                title="Ver Políticas de Uso y Descargo de Responsabilidad"
-              >
-                <ShieldAlert className="w-3 h-3 text-amber-300" />
-                <span>Políticas & Descargo</span>
-              </button>
-            </div>
+        {/* Alternative Transport Live Requests - Siempre visible para mostrar Políticas & Descargo */}
+        {(() => {
+          const activeSolicitudesCount = visibleSolicitudes.filter((s) => s.estado === 'pendiente' && !isSolicitudExpired(s, nowTimestamp)).length;
+          const acceptedSolicitudesCount = visibleSolicitudes.filter((s) => s.estado === 'aceptado').length;
 
-            {/* Scrolling horizontal web para solicitudes */}
-            <div className="flex gap-2.5 overflow-x-auto pb-2 pt-0.5 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
-              {visibleSolicitudes.map((sol) => {
-                const isExpired = isSolicitudExpired(sol, nowTimestamp);
-                const remainingSec = getSolicitudRemainingSeconds(sol, nowTimestamp);
-                const mins = Math.floor(remainingSec / 60);
-                const secs = remainingSec % 60;
-                const formattedTimer = `${mins}:${secs.toString().padStart(2, '0')}`;
+          return (
+            <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-blue-950/40 via-[#0a1122] to-indigo-950/30 border border-blue-500/25 shadow-md space-y-2.5">
+              <div className="flex items-center justify-between text-xs gap-2 flex-wrap">
+                <span className="font-bold text-blue-300 flex items-center gap-1.5">
+                  <span className={`w-2 h-2 rounded-full ${activeSolicitudesCount > 0 ? 'bg-blue-400 animate-ping' : 'bg-slate-500'}`} />
+                  Solicitudes de Pasajeros ({activeSolicitudesCount} activas · {acceptedSolicitudesCount} aceptadas)
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsPoliticasOpen(true)}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold text-amber-300 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/50 shadow-[0_0_8px_rgba(245,158,11,0.4)] transition-all cursor-pointer shrink-0"
+                  title="Ver Políticas de Uso y Descargo de Responsabilidad"
+                >
+                  <ShieldAlert className="w-3.5 h-3.5 text-amber-300" />
+                  <span>Políticas & Descargo</span>
+                </button>
+              </div>
 
-                const remainingAcceptedSec = getSolicitudAceptadaRemainingSeconds(sol, nowTimestamp);
-                const acceptedMins = Math.floor(remainingAcceptedSec / 60);
+              {visibleSolicitudes.length > 0 ? (
+                /* Scrolling horizontal web para solicitudes */
+                <div className="flex gap-2.5 overflow-x-auto pb-2 pt-0.5 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
+                  {visibleSolicitudes.map((sol) => {
+                    const isExpired = isSolicitudExpired(sol, nowTimestamp);
+                    const remainingSec = getSolicitudRemainingSeconds(sol, nowTimestamp);
+                    const mins = Math.floor(remainingSec / 60);
+                    const secs = remainingSec % 60;
+                    const formattedTimer = `${mins}:${secs.toString().padStart(2, '0')}`;
 
-                return (
-                  <div
-                    key={sol.id}
-                    className={`p-3 rounded-xl border text-xs min-w-[270px] max-w-[310px] shrink-0 space-y-1.5 ${
-                      sol.estado === 'aceptado'
-                        ? 'bg-[#0c1322] border-emerald-500/40 text-blue-200'
-                        : isExpired
-                        ? 'bg-[#180f14] border-rose-500/30 text-rose-200'
-                        : 'bg-[#0f1424] border-amber-500/30 text-slate-200'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-1.5">
-                      <div className="flex items-center gap-1.5 font-bold text-white min-w-0">
-                        {sol.tipoVehiculoRequerido === 'moto' ? (
-                          <Bike className="w-3.5 h-3.5 text-amber-300 shrink-0" />
-                        ) : (
-                          <Car className="w-3.5 h-3.5 text-cyan-300 shrink-0" />
-                        )}
-                        <span className="truncate">{sol.nombrePasajero}</span>
-                      </div>
+                    const remainingAcceptedSec = getSolicitudAceptadaRemainingSeconds(sol, nowTimestamp);
+                    const acceptedMins = Math.floor(remainingAcceptedSec / 60);
 
-                      {sol.estado === 'pendiente' && !isExpired && (
-                        <span
-                          className={`px-2 py-0.5 rounded text-[9px] font-bold font-mono flex items-center gap-1 shrink-0 ${
-                            remainingSec <= 180
-                              ? 'bg-rose-500/20 text-rose-300 border border-rose-400/40 animate-pulse'
-                              : 'bg-amber-500/20 text-amber-300 border border-amber-400/30'
-                          }`}
-                          title="Tiempo restante para aceptar viaje (límite 12 minutos)"
-                        >
-                          <Clock className="w-2.5 h-2.5" />
-                          <span>{formattedTimer}</span>
-                        </span>
-                      )}
+                    const remainingExpSec = getSolicitudExpiradaRemainingSeconds(sol, nowTimestamp);
+                    const expMins = Math.floor(remainingExpSec / 60);
+                    const expSecs = remainingExpSec % 60;
+                    const formattedExpTimer = `${expMins}:${expSecs.toString().padStart(2, '0')}`;
 
-                      {sol.estado === 'pendiente' && isExpired && (
-                        <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/40 shrink-0">
-                          EXPIRADA (12m)
-                        </span>
-                      )}
-
-                      {sol.estado === 'aceptado' && (
-                        <span
-                          className="px-2 py-0.5 rounded text-[9px] font-bold uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1 shrink-0 font-mono"
-                          title="Visible por 16 minutos desde la aceptación (luego desaparece para mantener limpio el panel)"
-                        >
-                          <Check className="w-2.5 h-2.5 text-emerald-400 stroke-[3]" />
-                          <span>Aceptado · {acceptedMins}m</span>
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="text-[11px] text-slate-300 space-y-0.5">
-                      <p className="truncate">📍 {sol.origen}</p>
-                      <p className="truncate">🏁 {sol.destino}</p>
-                    </div>
-
-                    {sol.estado === 'pendiente' && !isExpired ? (
-                      <button
-                        onClick={() => handleAcceptRide(sol.id)}
-                        className="w-full py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-[11px] flex items-center justify-center gap-1 shadow transition-all cursor-pointer active:scale-95"
+                    return (
+                      <div
+                        key={sol.id}
+                        className={`p-3 rounded-xl border text-xs min-w-[270px] max-w-[310px] shrink-0 space-y-1.5 ${
+                          sol.estado === 'aceptado'
+                            ? 'bg-[#0c1322] border-emerald-500/40 text-blue-200'
+                            : isExpired
+                            ? 'bg-[#180f14] border-rose-500/30 text-rose-200'
+                            : 'bg-[#0f1424] border-amber-500/30 text-slate-200'
+                        }`}
                       >
-                        <Check className="w-3 h-3" />
-                        <span>Aceptar Viaje ({formattedTimer})</span>
-                      </button>
-                    ) : sol.estado === 'pendiente' && isExpired ? (
-                      <div className="space-y-1 pt-0.5">
-                        <div className="text-[10px] text-rose-300/90 flex items-center gap-1 leading-tight">
-                          <AlertCircle className="w-3 h-3 text-rose-400 shrink-0" />
-                          <span>12 min cumplidos sin chofer</span>
+                        <div className="flex items-center justify-between gap-1.5">
+                          <div className="flex items-center gap-1.5 font-bold text-white min-w-0">
+                            {sol.tipoVehiculoRequerido === 'moto' ? (
+                              <Bike className="w-3.5 h-3.5 text-amber-300 shrink-0" />
+                            ) : (
+                              <Car className="w-3.5 h-3.5 text-cyan-300 shrink-0" />
+                            )}
+                            <span className="truncate">{sol.nombrePasajero}</span>
+                          </div>
+
+                          {sol.estado === 'pendiente' && !isExpired && (
+                            <span
+                              className={`px-2 py-0.5 rounded text-[9px] font-bold font-mono flex items-center gap-1 shrink-0 ${
+                                remainingSec <= 180
+                                  ? 'bg-rose-500/20 text-rose-300 border border-rose-400/40 animate-pulse'
+                                  : 'bg-amber-500/20 text-amber-300 border border-amber-400/30'
+                              }`}
+                              title="Tiempo restante para aceptar viaje (límite 12 minutos)"
+                            >
+                              <Clock className="w-2.5 h-2.5" />
+                              <span>{formattedTimer}</span>
+                            </span>
+                          )}
+
+                          {sol.estado === 'pendiente' && isExpired && (
+                            <span
+                              className="px-2 py-0.5 rounded text-[9px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/40 shrink-0 font-mono"
+                              title="Desaparece luego de 3 minutos de expirada"
+                            >
+                              EXPIRADA ({formattedExpTimer})
+                            </span>
+                          )}
+
+                          {sol.estado === 'aceptado' && (
+                            <span
+                              className="px-2 py-0.5 rounded text-[9px] font-bold uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1 shrink-0 font-mono"
+                              title="Visible por 16 minutos desde la aceptación (luego desaparece para mantener limpio el panel)"
+                            >
+                              <Check className="w-2.5 h-2.5 text-emerald-400 stroke-[3]" />
+                              <span>Aceptado · {acceptedMins}m</span>
+                            </span>
+                          )}
                         </div>
-                        <button
-                          onClick={() => {
-                            setReqOrigin(sol.origen);
-                            setReqDestination(sol.destino);
-                            setReqType(sol.tipoVehiculoRequerido);
-                            setIsRequestRideOpen(true);
-                          }}
-                          className="w-full py-1 rounded-lg bg-blue-600/90 hover:bg-blue-500 text-white font-bold text-[10px] flex items-center justify-center gap-1 transition-all cursor-pointer active:scale-95 shadow-sm"
-                        >
-                          <RotateCcw className="w-3 h-3" />
-                          <span>Emitir Nueva Solicitud</span>
-                        </button>
+
+                        <div className="text-[11px] text-slate-300 space-y-0.5">
+                          <p className="truncate">📍 {sol.origen}</p>
+                          <p className="truncate">🏁 {sol.destino}</p>
+                        </div>
+
+                        {sol.estado === 'pendiente' && !isExpired ? (
+                          <button
+                            onClick={() => handleAcceptRide(sol.id)}
+                            className="w-full py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-[11px] flex items-center justify-center gap-1 shadow transition-all cursor-pointer active:scale-95"
+                          >
+                            <Check className="w-3 h-3" />
+                            <span>Aceptar Viaje ({formattedTimer})</span>
+                          </button>
+                        ) : sol.estado === 'pendiente' && isExpired ? (
+                          <div className="space-y-1 pt-0.5">
+                            <div className="text-[10px] text-rose-300/90 flex items-center gap-1 leading-tight">
+                              <AlertCircle className="w-3 h-3 text-rose-400 shrink-0" />
+                              <span>12 min cumplidos (desaparece en {formattedExpTimer})</span>
+                            </div>
+                            <button
+                              onClick={() => {
+                                setReqOrigin(sol.origen);
+                                setReqDestination(sol.destino);
+                                setReqType(sol.tipoVehiculoRequerido);
+                                setIsRequestRideOpen(true);
+                              }}
+                              className="w-full py-1 rounded-lg bg-blue-600/90 hover:bg-blue-500 text-white font-bold text-[10px] flex items-center justify-center gap-1 transition-all cursor-pointer active:scale-95 shadow-sm"
+                            >
+                              <RotateCcw className="w-3 h-3" />
+                              <span>Emitir Nueva Solicitud</span>
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="pt-1 border-t border-emerald-500/20 flex items-center justify-between text-[10px]">
+                            <p className="text-emerald-300 font-semibold truncate">
+                              Chofer: {sol.choferNombre || 'Asignado'}
+                            </p>
+                            <span className="text-[9px] text-emerald-400/80 font-mono shrink-0 ml-1" title="Visibilidad de 16 minutos tras aceptación">
+                              {acceptedMins} min restantes
+                            </span>
+                          </div>
+                        )}
                       </div>
-                    ) : (
-                      <div className="pt-1 border-t border-emerald-500/20 flex items-center justify-between text-[10px]">
-                        <p className="text-emerald-300 font-semibold truncate">
-                          Chofer: {sol.choferNombre || 'Asignado'}
-                        </p>
-                        <span className="text-[9px] text-emerald-400/80 font-mono shrink-0 ml-1" title="Visibilidad de 16 minutos tras aceptación">
-                          {acceptedMins} min restantes
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="py-2 px-3 rounded-xl bg-white/[0.02] border border-white/5 text-center text-[11px] text-slate-400">
+                  No hay solicitudes de pasajeros activas en este momento.
+                </div>
+              )}
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* Prestadores de Servicio Habilitados Header */}
         <div className="flex items-center justify-between pt-1 pb-0.5">

@@ -961,6 +961,39 @@ export function getSolicitudRemainingSeconds(sol: SolicitudTransporteFirestore, 
 }
 
 /**
+ * Las solicitudes de pasajeros que expiran tras 12 minutos sin chofer asignado
+ * permanecen en pantalla únicamente hasta 3 minutos luego de expiradas.
+ * Al cumplirse los 3 minutos de expirada, desaparecen de la vista para mantener limpio el panel.
+ */
+export const SOLICITUD_EXPIRADA_MAX_VISIBILITY_MS = 3 * 60 * 1000; // 3 minutos
+
+export function isSolicitudExpiradaOver3Min(sol: SolicitudTransporteFirestore, now: number = Date.now()): boolean {
+  if (sol.estado === 'aceptado') return false;
+  const createdMs = typeof sol.fechaSolicitud === 'number'
+    ? sol.fechaSolicitud
+    : typeof sol.fechaSolicitud?.seconds === 'number'
+    ? sol.fechaSolicitud.seconds * 1000
+    : Date.now();
+  const limit = sol.expiresAt || (createdMs + SOLICITUD_TIMEOUT_MS);
+  if (now < limit) return false;
+  const expiredElapsed = now - limit;
+  return expiredElapsed >= SOLICITUD_EXPIRADA_MAX_VISIBILITY_MS;
+}
+
+export function getSolicitudExpiradaRemainingSeconds(sol: SolicitudTransporteFirestore, now: number = Date.now()): number {
+  const createdMs = typeof sol.fechaSolicitud === 'number'
+    ? sol.fechaSolicitud
+    : typeof sol.fechaSolicitud?.seconds === 'number'
+    ? sol.fechaSolicitud.seconds * 1000
+    : Date.now();
+  const limit = sol.expiresAt || (createdMs + SOLICITUD_TIMEOUT_MS);
+  if (now < limit) return 0;
+  const expiredElapsed = now - limit;
+  const remaining = Math.max(0, SOLICITUD_EXPIRADA_MAX_VISIBILITY_MS - expiredElapsed);
+  return Math.ceil(remaining / 1000);
+}
+
+/**
  * Valida si una solicitud aceptada ya superó los 16 minutos de visibilidad en pantalla.
  * Al cumplirse los 16 minutos, debe desaparecer de la vista para dar lugar a nuevas peticiones.
  */

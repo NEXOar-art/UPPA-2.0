@@ -139,8 +139,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const currentEstado = authUser?.estado || currentUser?.estado || 'activo';
   const currentFecha = authUser?.fechaRegistro || currentUser?.fechaRegistro || 'Reciente';
 
-  // Verificar si el usuario está activamente habilitado para prestar servicio
+  // Verificar si el usuario es prestador de servicio
   const activeDriverSession = getActiveDriverSession();
+  const isDriverUser = Boolean(
+    currentUser.esChofer ||
+    currentUser.rol === 'chofer_moto' ||
+    currentUser.rol === 'chofer_auto' ||
+    currentUser.role === 'driver' ||
+    Boolean(activeDriverSession) ||
+    isHabilitado
+  );
   const driverIsHabilitado = Boolean(
     isHabilitado ?? (
       (activeDriverSession && activeDriverSession.endsAt > Date.now()) ||
@@ -857,101 +865,79 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         {mode === 'profile' && (
           <div className="mt-4 space-y-3.5 animate-in fade-in">
             {/* Control Exclusivo de Disponibilidad del Chofer / Prestador de Servicio */}
-            {/* Titila en verde si está habilitado; si no está habilitado, NO titila */}
-            <div className={`p-4 rounded-2xl border transition-all ${
-              driverIsHabilitado
-                ? 'bg-emerald-950/40 border-emerald-400 text-slate-100 shadow-xl shadow-emerald-500/25 ring-2 ring-emerald-400/60 animate-pulse'
-                : 'bg-slate-900/40 border-slate-700/60 text-slate-400'
-            }`}>
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="space-y-1.5 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-xs font-bold text-white">
-                      Disponibilidad de Servicio
-                    </span>
+            {/* Solo se muestra en el perfil del usuario que presta servicio; siempre titila en verde para que pueda accionar Ocupado/Desocupado */}
+            {isDriverUser && (
+              <div className="p-4 rounded-2xl border transition-all bg-emerald-950/40 border-emerald-400 text-slate-100 shadow-xl shadow-emerald-500/25 ring-2 ring-emerald-400/60 animate-pulse">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="space-y-1.5 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-bold text-white">
+                        Disponibilidad de Servicio
+                      </span>
 
-                    {/* Indicador de Habilitación: Titila en verde si está habilitado */}
-                    {driverIsHabilitado ? (
+                      {/* Indicador de Prestador con titilado en verde */}
                       <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/25 text-emerald-300 border border-emerald-400 shadow-sm shadow-emerald-500/30">
                         <span className="relative flex h-2 w-2">
                           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-80" />
                           <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
                         </span>
-                        <span>HABILITADO ACTIVO</span>
+                        <span>PRESTADOR ACTIVO</span>
                       </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase bg-slate-800 text-slate-400 border border-slate-700">
-                        <span className="w-1.5 h-1.5 rounded-full bg-slate-500" />
-                        <span>NO HABILITADO</span>
-                      </span>
-                    )}
-                  </div>
+                    </div>
 
-                  <div className="flex items-center gap-2 pt-0.5">
-                    {driverDisponibilidad === 'ocupado' ? (
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black tracking-wider uppercase bg-amber-500/25 text-amber-300 border border-amber-400/70 shadow-sm shadow-amber-500/30">
-                        <span className="relative flex h-2.5 w-2.5">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-80" />
-                          <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500" />
+                    <div className="flex items-center gap-2 pt-0.5">
+                      {driverDisponibilidad === 'ocupado' ? (
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black tracking-wider uppercase bg-amber-500/25 text-amber-300 border border-amber-400/70 shadow-sm shadow-amber-500/30">
+                          <span className="relative flex h-2.5 w-2.5">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-80" />
+                            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500" />
+                          </span>
+                          <span>OCUPADO (EN VIAJE)</span>
                         </span>
-                        <span>OCUPADO (EN VIAJE)</span>
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black tracking-wider uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-400/40">
-                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
-                        <span>DESOCUPADO (DISPONIBLE)</span>
-                      </span>
-                    )}
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black tracking-wider uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-400/40">
+                          <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
+                          <span>DESOCUPADO (DISPONIBLE)</span>
+                        </span>
+                      )}
+                    </div>
+
+                    <p className="text-[11px] text-slate-300 leading-snug">
+                      🟢 <strong>Control exclusivo del prestador:</strong> Tu perfil siempre titila en verde para que sepas dónde accionar tu estado. Al aceptar un viaje pasás automáticamente a <em>Ocupado</em> (titilando en la pantalla pública de Taxis & Motos). Cuando finalices tu viaje, presioná este botón para volver a <em>Desocupado</em>. Nadie más puede cambiar este estado por vos.
+                    </p>
                   </div>
 
-                  <p className="text-[11px] text-slate-400 leading-snug">
-                    {driverIsHabilitado ? (
-                      <>
-                        🟢 <strong>Prestador Habilitado:</strong> Tu perfil titila en verde indicando que tu cuenta está habilitada y activa. Al aceptar un viaje pasás automáticamente a <em>Ocupado</em> (titilando en la pantalla pública de Taxis & Motos). Al finalizar tu viaje, presioná <em>Pasar a Desocupado</em>.
-                      </>
-                    ) : (
-                      <>
-                        ⚪ <strong>Sin Habilitación Activa:</strong> Tu perfil no está habilitado actualmente para prestar servicio (por eso no titila). Podés habilitarte ingresando un código o comprobante en "Prestar Servicio".
-                      </>
-                    )}
-                  </p>
-                </div>
-
-                <div className="shrink-0 pt-1 sm:pt-0">
-                  <button
-                    type="button"
-                    onClick={handleToggleDriverDisponibilidad}
-                    disabled={!driverIsHabilitado}
-                    className={`w-full sm:w-auto px-4 py-2.5 rounded-xl text-xs font-black flex items-center justify-center gap-2 transition-all active:scale-95 shadow-md border ${
-                      !driverIsHabilitado
-                        ? 'opacity-40 cursor-not-allowed bg-slate-800 text-slate-500 border-slate-700'
-                        : driverDisponibilidad === 'ocupado'
-                        ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 border-emerald-400 shadow-emerald-500/25 ring-2 ring-emerald-400/50 cursor-pointer'
-                        : 'bg-amber-500 hover:bg-amber-400 text-slate-950 border-amber-400 shadow-amber-500/25 ring-2 ring-amber-400/50 cursor-pointer'
-                    }`}
-                    title={
-                      !driverIsHabilitado
-                        ? 'Habilitá tu servicio para cambiar disponibilidad'
-                        : driverDisponibilidad === 'ocupado'
-                        ? 'Hacé clic para pasar a Desocupado al terminar tu viaje'
-                        : 'Hacé clic para marcarte como Ocupado'
-                    }
-                  >
-                    {driverDisponibilidad === 'ocupado' ? (
-                      <>
-                        <CheckCircle2 className="w-4 h-4 text-slate-950" />
-                        <span>Pasar a Desocupado</span>
-                      </>
-                    ) : (
-                      <>
-                        <Zap className="w-4 h-4 fill-slate-950 text-slate-950" />
-                        <span>Pasar a Ocupado</span>
-                      </>
-                    )}
-                  </button>
+                  <div className="shrink-0 pt-1 sm:pt-0">
+                    <button
+                      type="button"
+                      onClick={handleToggleDriverDisponibilidad}
+                      className={`w-full sm:w-auto px-4 py-2.5 rounded-xl text-xs font-black flex items-center justify-center gap-2 transition-all cursor-pointer active:scale-95 shadow-md border ${
+                        driverDisponibilidad === 'ocupado'
+                          ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 border-emerald-400 shadow-emerald-500/25 ring-2 ring-emerald-400/50'
+                          : 'bg-amber-500 hover:bg-amber-400 text-slate-950 border-amber-400 shadow-amber-500/25 ring-2 ring-amber-400/50'
+                      }`}
+                      title={
+                        driverDisponibilidad === 'ocupado'
+                          ? 'Hacé clic para pasar a Desocupado al terminar tu viaje'
+                          : 'Hacé clic para marcarte como Ocupado'
+                      }
+                    >
+                      {driverDisponibilidad === 'ocupado' ? (
+                        <>
+                          <CheckCircle2 className="w-4 h-4 text-slate-950" />
+                          <span>Pasar a Desocupado</span>
+                        </>
+                      ) : (
+                        <>
+                          <Zap className="w-4 h-4 fill-slate-950 text-slate-950" />
+                          <span>Pasar a Ocupado</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
 
             {/* Status Card */}
             <div className="p-3.5 rounded-2xl bg-white/[0.03] border border-white/5 space-y-2 text-xs">
