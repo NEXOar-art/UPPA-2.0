@@ -21,6 +21,7 @@ import {
   User,
   PushNotificationPayload,
   mapFirestoreRolToAppRole,
+  HabilitacionChofer,
 } from './types';
 import { computeLineSentiment } from './utils/sentiment';
 import { UserLocation, reverseGeocode } from './utils/geolocation';
@@ -48,6 +49,7 @@ import {
 import {
   subscribeToReportes,
   subscribeToHabilitacionesChofer,
+  obtenerHabilitacionesActuales,
   subscribeToChat,
   onPushNotification,
   triggerInAppPushNotification,
@@ -189,55 +191,97 @@ export default function App() {
   const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
   const [isDriverOnline, setIsDriverOnline] = useState(true);
 
-  // Solo colocar el botón de "conductor en línea" si está prestando servicio de moto taxi o auto taxi
-  const isPrestandoServicioTaxi = useMemo(() => {
-    // 1. Determinar el tipo de vehículo (estrictamente moto o auto)
-    const vehicle =
-      driverSession?.vehicleType ||
-      currentUser.tipoVehiculo ||
-      (currentUser.rol === 'chofer_moto' ? 'moto' : currentUser.rol === 'chofer_auto' ? 'auto' : null);
+  // Habilitaciones de Choferes gestionadas por el Administrador UPPA (en tiempo real)
+  const [habilitacionesList, setHabilitacionesList] = useState<HabilitacionChofer[]>(() =>
+    obtenerHabilitacionesActuales()
+  );
 
-    const isMotoOrAuto = vehicle === 'moto' || vehicle === 'auto';
-    if (!isMotoOrAuto) return false;
+  useEffect(() => {
+    const unsub = subscribeToHabilitacionesChofer((list) => {
+      setHabilitacionesList(list);
+    });
+    return () => unsub();
+  }, []);
 
-    // 2. Determinar si está prestando servicio activamente
-    const tieneSesionChofer = Boolean(driverSession && driverSession.endsAt > Date.now());
-    const esChoferActivo = Boolean(
-      currentUser.esChofer ||
-      currentUser.rol === 'chofer_moto' ||
-      currentUser.rol === 'chofer_auto' ||
-      (currentUser.role === 'driver' && isMotoOrAuto)
+  // Habilitación específica del usuario actual (si existe en el registro del Administrador)
+  const userHabilitacionRecord = useMemo(() => {
+    return (
+      habilitacionesList.find((h) => {
+        const matchId =
+          (currentUser.id && h.driverId === currentUser.id) ||
+          (currentUser.uid && h.driverId === currentUser.uid);
+        const matchName =
+          currentUser.name &&
+          h.driverName &&
+          h.driverName.trim().toLowerCase() === currentUser.name.trim().toLowerCase();
+        const cleanPhone = currentUser.phone ? currentUser.phone.replace(/\D/g, '') : '';
+        const matchPhone = cleanPhone && h.whatsapp && h.whatsapp.replace(/\D/g, '').includes(cleanPhone);
+        return Boolean(matchId || matchName || matchPhone);
+      }) || null
     );
+  }, [habilitacionesList, currentUser]);
 
-    return tieneSesionChofer || esChoferActivo;
-  }, [driverSession, currentUser]);
-
-  // Verificar si el usuario presta servicio y si su habilitación está activa
+  // Verificar si el usuario es prestador de servicio (chofer registrado o con solicitud de servicio)
   const isDriverUser = useMemo(() => {
-    return Boolean(
+    const hasDriverRole = Boolean(
       currentUser.esChofer ||
       currentUser.rol === 'chofer_moto' ||
       currentUser.rol === 'chofer_auto' ||
-      currentUser.role === 'driver' ||
-      Boolean(driverSession) ||
-      taxis.some((t) => t.driverName === currentUser.name || t.id === currentUser.id)
+      currentUser.role === 'driver'
     );
-  }, [currentUser, driverSession, taxis]);
+    const hasDriverHabilitacion = Boolean(userHabilitacionRecord);
+    const hasSession = Boolean(
+      driverSession &&
+      (driverSession.driverName === currentUser.name || driverSession.driverId === currentUser.id)
+    );
+    return hasDriverRole || hasDriverHabilitacion || hasSession;
+  }, [currentUser, userHabilitacionRecord, driverSession]);
 
+  // HABILITADO POR EL ADMINISTRADOR:
+  // Condición lógica indispensable: Solo aparece como habilitado cuando el Administrador
+  // valida y completa su habilitación con la clave autorizada en Administración UPPA,
+  // y mientras esté dentro del período de tiempo abonado (endsAt > now).
   const isDriverHabilitado = useMemo(() => {
     if (!isDriverUser) return false;
     const now = Date.now();
-    const hasActiveSession = Boolean(driverSession && driverSession.endsAt > now);
-    const hasActiveTaxi = taxis.some(
-      (t) =>
-        (t.driverName === currentUser.name ||
-          t.id === currentUser.id ||
-          (currentUser.phone && t.whatsapp?.includes(currentUser.phone))) &&
-        t.endsAt > now
-    );
-    const hasActiveUserStatus = Boolean(currentUser.estado === 'activo' && currentUser.esChofer);
-    return hasActiveSession || hasActiveTaxi || hasActiveUserStatus;
-  }, [isDriverUser, driverSession, taxis, currentUser]);
+
+    // 1. Verificación primaria: Registro de Habilitación aprobado por el Administrador
+    if (userHabilitacionRecord) {
+      const isActivo = userHabilitacionRecord.estado === 'activo';
+      const isApprovedByAdmin = Boolean(
+        userHabilitacionRecord.activadoConClaveAdmin || userHabilitacionRecord.habilitadoPor
+      );
+      const isWithinTime = (userHabilitacionRecord.endsAt || 0) > now;
+      return isActivo && isApprovedByAdmin && isWithinTime;
+    }
+
+    // 2. Si tiene sesión activa de chofer, validar que esté respaldada por código y tiempo vigente
+    if (driverSession && driverSession.endsAt > now && driverSession.activationCode) {
+      const sessionHab = habilitacionesList.find(
+        (h) =>
+          h.activationCode === driverSession.activationCode ||
+          (driverSession.driverName && h.driverName === driverSession.driverName)
+      );
+      if (sessionHab) {
+        return sessionHab.estado === 'activo' && (sessionHab.endsAt || 0) > now;
+      }
+      return true;
+    }
+
+    return false;
+  }, [isDriverUser, userHabilitacionRecord, driverSession, habilitacionesList]);
+
+  // Conductor en línea transmitiendo GPS: SOLO si está habilitado por el administrador y tiene moto o auto
+  const isPrestandoServicioTaxi = useMemo(() => {
+    if (!isDriverHabilitado) return false;
+    const vehicle =
+      userHabilitacionRecord?.vehicleType ||
+      driverSession?.vehicleType ||
+      currentUser.tipoVehiculo ||
+      (currentUser.rol === 'chofer_moto' ? 'moto' : 'auto');
+
+    return vehicle === 'moto' || vehicle === 'auto';
+  }, [isDriverHabilitado, userHabilitacionRecord, driverSession, currentUser]);
 
   // Disponibilidad de prestador (Desocupado / Ocupado) gestionada únicamente por el titular
   const [driverDisponibilidad, setDriverDisponibilidadState] = useState<'desocupado' | 'ocupado'>('desocupado');
@@ -634,6 +678,70 @@ export default function App() {
     }).catch((err) => console.warn('Firestore report write notice:', err));
   };
 
+  // Prestadores de Servicio Habilitados por el Administrador UPPA (Tiempo Real)
+  // Solo se visualizan los prestadores cuya habilitación fue aprobada por el Administrador
+  // y que están dentro de su tiempo abonado (endsAt > now).
+  const marketplaceTaxis = useMemo(() => {
+    const now = Date.now();
+    const result: TaxiListing[] = [];
+    const seen = new Set<string>();
+
+    // 1. Prestadores habilitados por el Administrador en 'habilitaciones'
+    habilitacionesList.forEach((hab) => {
+      const isActivo = hab.estado === 'activo';
+      const isApprovedByAdmin = Boolean(hab.activadoConClaveAdmin || hab.habilitadoPor);
+      const isWithinTime = (hab.endsAt || 0) > now;
+
+      if (isActivo && isApprovedByAdmin && isWithinTime) {
+        const keyName = hab.driverName.trim().toLowerCase();
+        seen.add(keyName);
+        if (hab.whatsapp) seen.add(hab.whatsapp.replace(/\D/g, ''));
+        if (hab.activationCode) seen.add(hab.activationCode.toUpperCase());
+
+        result.push({
+          id: hab.id,
+          userId: hab.driverId || hab.id,
+          driverName: hab.driverName,
+          vehicleType: hab.vehicleType,
+          vehicleModel: hab.vehicleModel,
+          whatsapp: hab.whatsapp,
+          zone: hab.zone || 'Zárate ↔ Campana',
+          lat: userLocation ? userLocation.lat : -34.175 + (Math.random() - 0.5) * 0.02,
+          lng: userLocation ? userLocation.lng : -58.965 + (Math.random() - 0.5) * 0.02,
+          hoursPaid: hab.horas || 12,
+          startsAt: hab.startsAt || now,
+          endsAt: hab.endsAt || now + 12 * 3600 * 1000,
+          status: 'active',
+          rating: 5.0,
+          completedRides: 10,
+          activationCode: hab.activationCode,
+        });
+      }
+    });
+
+    // 2. Taxis iniciales vigentes que no colisionen con solicitudes pendientes
+    taxis.forEach((t) => {
+      const keyName = t.driverName.trim().toLowerCase();
+      const keyWa = t.whatsapp ? t.whatsapp.replace(/\D/g, '') : '';
+      const keyCode = t.activationCode ? t.activationCode.toUpperCase() : '';
+
+      if (t.endsAt > now) {
+        if (!seen.has(keyName) && (!keyWa || !seen.has(keyWa)) && (!keyCode || !seen.has(keyCode))) {
+          const isPendingInHab = habilitacionesList.some(
+            (h) =>
+              h.estado === 'pendiente' &&
+              (h.driverName.trim().toLowerCase() === keyName || (keyWa && h.whatsapp.includes(keyWa)))
+          );
+          if (!isPendingInHab) {
+            result.push(t);
+          }
+        }
+      }
+    });
+
+    return result;
+  }, [habilitacionesList, taxis]);
+
   const handlePublishTaxi = (
     listingData: Omit<TaxiListing, 'id' | 'startsAt' | 'endsAt' | 'status' | 'rating' | 'completedRides'>,
     paymentData: Omit<PaymentProof, 'id' | 'createdAt' | 'status'>
@@ -646,23 +754,9 @@ export default function App() {
       createdAt: 'Recién',
     };
 
-    const startsAt = Date.now();
-    const endsAt = startsAt + listingData.hoursPaid * 3600 * 1000;
-
-    const newListing: TaxiListing = {
-      ...listingData,
-      id: `tx-${Date.now()}`,
-      startsAt,
-      endsAt,
-      status: 'active',
-      rating: 5.0,
-      completedRides: 0,
-    };
-
-    setPayments([newPayment, ...payments]);
-    setTaxis([newListing, ...taxis]);
+    setPayments((prev) => [newPayment, ...prev]);
     setActiveTab('taxi');
-    showToast(`Taxi publicado por ${listingData.hoursPaid}h`);
+    showToast(`Solicitud de ${listingData.driverName} enviada a Administración UPPA (Pendiente de Habilitación)`);
   };
 
   const handleSendMessage = (channel: ChatMessage['channel'], text: string) => {
@@ -995,7 +1089,7 @@ export default function App() {
                   isDriverUser
                     ? isDriverHabilitado
                       ? `Mi Perfil: ${currentUser.name} (Chofer Habilitado - Clic para ver botón Ocupado/Desocupado)`
-                      : `Mi Perfil: ${currentUser.name} (Chofer No Habilitado)`
+                      : `Mi Perfil: ${currentUser.name} (Chofer Pendiente de Habilitación del Administrador)`
                     : isEmailVerified
                     ? `Mi Perfil: ${currentUser.name} (Email Autenticado)`
                     : `Mi Perfil: ${currentUser.name} (Email Pendiente de Autenticación)`
@@ -1028,8 +1122,8 @@ export default function App() {
                 )}
 
                 {isDriverUser && !isDriverHabilitado && (
-                  <span className="text-[10px] font-semibold text-slate-400 hidden sm:inline px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700">
-                    No Habilitado
+                  <span className="text-[10px] font-bold text-amber-300 hidden sm:inline px-1.5 py-0.5 rounded bg-amber-500/15 border border-amber-400/30">
+                    Pendiente Habilitación
                   </span>
                 )}
 
@@ -1099,7 +1193,7 @@ export default function App() {
                 routes={routes}
                 events={events}
                 liveBuses={liveBuses}
-                taxis={taxis}
+                taxis={marketplaceTaxis}
                 selectedEvent={selectedEvent}
                 onSelectEvent={(ev) => setSelectedEvent(ev)}
                 onSelectTaxi={(tx) => {
@@ -1135,11 +1229,12 @@ export default function App() {
 
         {activeTab === 'taxi' && (
           <TaxiMarketplace
-            taxis={taxis}
+            taxis={marketplaceTaxis}
             currentUserId={currentUser.id}
             currentUserName={currentUser.name}
             currentUserPhone={currentUser.phone}
             currentUserRole={currentUser.role}
+            isDriverHabilitado={isDriverHabilitado}
             onOpenPublishModal={(tab) => {
               setPublishTaxiInitialTab(tab || 'transfer');
               setIsPublishTaxiOpen(true);

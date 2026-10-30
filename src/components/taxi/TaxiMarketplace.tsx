@@ -58,6 +58,7 @@ interface TaxiMarketplaceProps {
   currentUserName?: string;
   currentUserPhone?: string;
   currentUserRole?: string;
+  isDriverHabilitado?: boolean;
 }
 
 export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
@@ -68,6 +69,7 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
   currentUserName = 'Pasajero',
   currentUserPhone = '',
   currentUserRole = 'passenger',
+  isDriverHabilitado = false,
 }) => {
   const [vehicleFilter, setVehicleFilter] = useState<'all' | 'auto' | 'moto'>('all');
   const [solicitudes, setSolicitudes] = useState<SolicitudTransporteFirestore[]>([]);
@@ -138,6 +140,11 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
   };
 
   const handleAcceptRide = async (solId: string) => {
+    if (!isDriverHabilitado) {
+      alert('Solo los prestadores de servicio habilitados por el Administrador pueden aceptar viajes.');
+      return;
+    }
+
     const target = solicitudes.find((s) => s.id === solId);
     if (target && isSolicitudExpired(target, Date.now())) {
       alert('Esta solicitud ha expirado tras 12 minutos sin chofer asignado. El pasajero debe emitir una nueva solicitud.');
