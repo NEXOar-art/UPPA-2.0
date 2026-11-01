@@ -981,6 +981,43 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
       });
 
       const stopMarker = L.marker([stop.lat, stop.lng], { icon: stopTitilandoIcon });
+
+      // Tooltip visible al pasar el cursor o interactuar con la cartografía
+      stopMarker.bindTooltip(
+        `<div style="display:flex;align-items:center;gap:5px;">
+          <span style="background:rgba(6,182,212,0.25);color:#22d3ee;font-weight:900;padding:1px 5px;border-radius:4px;font-family:monospace;font-size:10px;">#${stop.sequence}</span>
+          <span style="font-weight:700;color:#f8fafc;font-size:11px;">${stop.name}</span>
+        </div>`,
+        {
+          direction: 'top',
+          offset: [0, -anchor - 2],
+          opacity: 0.98,
+          className: 'uppa-stop-leaflet-tooltip',
+        }
+      );
+
+      // Popup cartográfico con coordenadas de alta precisión y enlace de guía
+      stopMarker.bindPopup(`
+        <div style="font-family: inherit; padding: 4px; color: #0f172a; max-width: 250px;">
+          <div style="display: flex; align-items: center; justify-between; gap: 4px; margin-bottom: 2px;">
+            <span style="background: #0284c7; color: #fff; font-size: 10px; font-weight: 900; padding: 2px 6px; border-radius: 6px; font-family: monospace;">PARADA #${stop.sequence}</span>
+            <span style="font-size: 10px; color: #64748b; font-weight: 700;">${stop.zone || 'Línea 228'}</span>
+          </div>
+          <div style="font-size: 13px; font-weight: 800; color: #0f172a; margin-top: 4px; line-height: 1.25;">
+            🚏 ${stop.name}
+          </div>
+          ${stop.description ? `<div style="font-size: 10.5px; color: #475569; margin-top: 4px; background: #f1f5f9; padding: 4px 6px; border-radius: 6px;">${stop.description}</div>` : ''}
+          <div style="margin-top: 5px; font-family: monospace; font-size: 9.5px; color: #64748b; background: #f8fafc; padding: 3px 6px; border-radius: 4px; border: 1px solid #e2e8f0;">
+            📍 Coordenadas: ${stop.lat.toFixed(6)}, ${stop.lng.toFixed(6)}
+          </div>
+          <div style="margin-top: 8px;">
+            <a href="https://www.google.com/maps/dir/?api=1&destination=${stop.lat},${stop.lng}" target="_blank" rel="noopener noreferrer" style="display: block; text-align: center; background: #06b6d4; color: #021a24; font-size: 11px; font-weight: 800; padding: 6px 10px; border-radius: 8px; text-decoration: none;">
+              Guía GPS a esta Parada ➔
+            </a>
+          </div>
+        </div>
+      `);
+
       stopMarker.on('click', () => {
         // Mostrar la tarjeta con la información de la parada y el botón 'Llevarme a esta ubicación'
         resetHideTimer();

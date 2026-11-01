@@ -905,8 +905,38 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       </div>
 
                       <p className="text-[11px] text-slate-300 leading-snug">
-                        🟢 <strong>Control exclusivo del prestador:</strong> Tu perfil titila en verde para que sepas dónde accionar tu estado. Al aceptar un viaje pasás automáticamente a <em>Ocupado</em> (titilando en la pantalla pública de Taxis & Motos). Cuando finalices tu viaje, presioná este botón para volver a <em>Desocupado</em>. Nadie más puede cambiar este estado por vos.
+                        🟢 <strong>Control exclusivo del prestador:</strong> Tu perfil titila cuando estás activo para que sepas dónde accionar tu estado. Al aceptar un viaje pasás automáticamente a <em>Ocupado</em> (titilando en la pantalla pública de Taxis & Motos). Cuando finalices tu viaje, usá este desplegable o botón para volver a <em>Desocupado</em>. Nadie más puede cambiar este estado por vos.
                       </p>
+
+                      {/* Desplegable de selección directa de estado */}
+                      <div className="pt-1">
+                        <label className="text-[10.5px] text-slate-300 font-semibold block mb-1">
+                          Desplegable de estado para la comunidad:
+                        </label>
+                        <select
+                          value={driverDisponibilidad}
+                          onChange={(e) => {
+                            const next = e.target.value as 'desocupado' | 'ocupado';
+                            const keys = [
+                              currentUid,
+                              authUser?.uid,
+                              currentUser?.uid,
+                              currentUser?.id,
+                              authUser?.nombre,
+                              currentUser?.name,
+                              currentUser?.nombre,
+                              authUser?.phone,
+                              currentUser?.phone,
+                            ].filter(Boolean) as string[];
+                            keys.forEach((k) => setDriverDisponibilidad(k, next));
+                            setDriverDisponibilidadState(next);
+                          }}
+                          className="bg-[#121626] border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-white font-bold cursor-pointer"
+                        >
+                          <option value="desocupado">🟢 DESOCUPADO (Disponible)</option>
+                          <option value="ocupado">🟡 OCUPADO (En viaje activo con pasajero)</option>
+                        </select>
+                      </div>
                     </div>
 
                     <div className="shrink-0 pt-1 sm:pt-0">
@@ -926,13 +956,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       >
                         {driverDisponibilidad === 'ocupado' ? (
                           <>
-                            <CheckCircle2 className="w-4 h-4 text-slate-950" />
-                            <span>Pasar a Desocupado</span>
+                            <CheckCircle2 className="w-4 h-4 text-slate-950 stroke-[3]" />
+                            <span>Colocar DESOCUPADO</span>
                           </>
                         ) : (
                           <>
                             <Zap className="w-4 h-4 fill-slate-950 text-slate-950" />
-                            <span>Pasar a Ocupado</span>
+                            <span>Colocar OCUPADO</span>
                           </>
                         )}
                       </button>

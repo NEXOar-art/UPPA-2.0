@@ -79,6 +79,10 @@ import {
   Mail,
   MoreVertical,
   Zap,
+  CheckCircle,
+  CheckCircle2,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 
 export default function App() {
@@ -184,7 +188,10 @@ export default function App() {
   const [taxis, setTaxis] = useState<TaxiListing[]>(MOCK_TAXI_LISTINGS);
   const [payments, setPayments] = useState<PaymentProof[]>(MOCK_PAYMENTS);
   const [messages, setMessages] = useState<ChatMessage[]>(MOCK_CHAT_MESSAGES);
-  const [ads, setAds] = useState<AdListing[]>(MOCK_ADS);
+  // Publicidades estrictamente reales en el banner (Rotisería Malvinas y Nexo Art)
+  const [ads, setAds] = useState<AdListing[]>(() =>
+    MOCK_ADS.filter((a) => a.id === 'ad-rotiseria-malvinas' || a.id === 'ad-nexo-art')
+  );
 
   // User & Driver Geolocation state
   const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
@@ -309,8 +316,7 @@ export default function App() {
     return () => unsub();
   }, [currentUser, driverSession]);
 
-  const handleToggleDriverDisponibilidad = () => {
-    const nextState = driverDisponibilidad === 'ocupado' ? 'desocupado' : 'ocupado';
+  const handleSetDriverDisponibilidad = (nextState: 'desocupado' | 'ocupado') => {
     const keys = [
       currentUser?.uid,
       currentUser?.id,
@@ -324,8 +330,26 @@ export default function App() {
       setDriverDisponibilidad(k, nextState);
     });
     setDriverDisponibilidadState(nextState);
-    showToast(nextState === 'ocupado' ? '🟡 Estado de prestador: OCUPADO' : '🟢 Estado de prestador: DESOCUPADO');
+    showToast(
+      nextState === 'ocupado'
+        ? '🟡 Estado: OCUPADO (En viaje activo)'
+        : '🟢 ¡Estado: DESOCUPADO! Toda la comunidad ve que estás disponible.'
+    );
   };
+
+  const handleToggleDriverDisponibilidad = () => {
+    const nextState = driverDisponibilidad === 'ocupado' ? 'desocupado' : 'ocupado';
+    handleSetDriverDisponibilidad(nextState);
+  };
+
+  // Escuchar cuando el prestador acepta un viaje en cualquier parte de la app
+  useEffect(() => {
+    const handleAcceptedRide = () => {
+      setDriverDisponibilidadState('ocupado');
+    };
+    window.addEventListener('uppa-driver-accepted-ride', handleAcceptedRide);
+    return () => window.removeEventListener('uppa-driver-accepted-ride', handleAcceptedRide);
+  }, []);
 
   // Active View / Tabs
   const [activeTab, setActiveTab] = useState<'map' | 'taxi' | 'chat' | 'admin'>('map');
@@ -334,6 +358,10 @@ export default function App() {
   const [activeTrackingTaxi, setActiveTrackingTaxi] = useState<TaxiListing | null>(null);
   const [isHeaderMenuOpen, setIsHeaderMenuOpen] = useState(false);
   const headerMenuRef = useRef<HTMLDivElement>(null);
+
+  // Menú Desplegable del Perfil (con control directo de Ocupado/Desocupado para el prestador)
+  const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
+  const profileDropdownRef = useRef<HTMLDivElement>(null);
 
   // Modals
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
@@ -351,18 +379,21 @@ export default function App() {
   // Eventos Push en Pantalla (Deduplicación & Exposición de 15 Minutos)
   const [screenPushEvents, setScreenPushEvents] = useState<PushNotificationPayload[]>([]);
 
-  // Cerrar menú de 3 puntos al hacer clic afuera
+  // Cerrar menú de 3 puntos y desplegable de perfil al hacer clic afuera
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (headerMenuRef.current && !headerMenuRef.current.contains(e.target as Node)) {
         setIsHeaderMenuOpen(false);
       }
+      if (profileDropdownRef.current && !profileDropdownRef.current.contains(e.target as Node)) {
+        setIsProfileDropdownOpen(false);
+      }
     };
-    if (isHeaderMenuOpen) {
+    if (isHeaderMenuOpen || isProfileDropdownOpen) {
       document.addEventListener('mousedown', handleClickOutside);
     }
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [isHeaderMenuOpen]);
+  }, [isHeaderMenuOpen, isProfileDropdownOpen]);
 
   // Limpieza periódica de eventos push que superaron los 15 minutos de exposición
   useEffect(() => {
@@ -1075,12 +1106,14 @@ export default function App() {
           </div>
 
           {isLoggedIn ? (
-            <>
+            <div className="relative" ref={profileDropdownRef}>
               <button
-                onClick={() => setIsAuthModalOpen(true)}
+                onClick={() => setIsProfileDropdownOpen((prev) => !prev)}
                 className={`relative px-2.5 py-1.5 rounded-xl text-xs cursor-pointer flex items-center gap-1.5 transition-all ${
                   isDriverUser && isDriverHabilitado
-                    ? 'bg-emerald-950/70 border border-emerald-400 text-emerald-200 shadow-lg shadow-emerald-500/25 ring-2 ring-emerald-400/60 animate-pulse'
+                    ? driverDisponibilidad === 'ocupado'
+                      ? 'bg-amber-950/85 border border-amber-400 text-amber-200 shadow-xl shadow-amber-500/35 ring-2 ring-amber-400/80 animate-pulse'
+                      : 'bg-emerald-950/70 border border-emerald-400 text-emerald-200 shadow-lg shadow-emerald-500/25 ring-2 ring-emerald-400/60'
                     : isDriverUser && !isDriverHabilitado
                     ? 'glass-button border border-slate-700/60 text-slate-300 hover:text-white'
                     : 'glass-button text-slate-300 hover:text-white'
@@ -1088,19 +1121,25 @@ export default function App() {
                 title={
                   isDriverUser
                     ? isDriverHabilitado
-                      ? `Mi Perfil: ${currentUser.name} (Chofer Habilitado - Clic para ver botón Ocupado/Desocupado)`
+                      ? driverDisponibilidad === 'ocupado'
+                        ? `Mi Perfil: ${currentUser.name} (ACTIVO - EN VIAJE - Clic para desplegable y colocar Desocupado)`
+                        : `Mi Perfil: ${currentUser.name} (Chofer Habilitado - Disponible)`
                       : `Mi Perfil: ${currentUser.name} (Chofer Pendiente de Habilitación del Administrador)`
-                    : isEmailVerified
-                    ? `Mi Perfil: ${currentUser.name} (Email Autenticado)`
-                    : `Mi Perfil: ${currentUser.name} (Email Pendiente de Autenticación)`
+                    : `Mi Perfil: ${currentUser.name}`
                 }
               >
-                {/* Si es prestador de servicio y está habilitado, titila en verde con punto pulsante */}
+                {/* Indicador titilando: SOLO para el prestador de servicio habilitado y NUNCA para el pasajero */}
                 {isDriverUser && isDriverHabilitado ? (
-                  <span className="relative flex h-3 w-3 mr-0.5">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-80" />
-                    <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500 ring-2 ring-[#07090e]" />
-                  </span>
+                  driverDisponibilidad === 'ocupado' ? (
+                    <span className="relative flex h-3 w-3 mr-0.5">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-90" />
+                      <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500 ring-2 ring-[#07090e]" />
+                    </span>
+                  ) : (
+                    <span className="relative flex h-2.5 w-2.5 mr-0.5">
+                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
+                    </span>
+                  )
                 ) : (
                   <span className="text-sm">
                     {currentUser.role === 'admin' || isFirebaseAdmin || currentUser.rol === 'administrador'
@@ -1115,41 +1154,177 @@ export default function App() {
                   {currentUser.name}
                 </span>
 
+                {/* Badge en el botón del perfil (Solo para el prestador) */}
                 {isDriverUser && isDriverHabilitado && (
-                  <span className="text-[10px] font-black uppercase tracking-wider text-emerald-300 hidden sm:inline px-1.5 py-0.5 rounded bg-emerald-500/25 border border-emerald-400/50">
-                    Habilitado
-                  </span>
+                  driverDisponibilidad === 'ocupado' ? (
+                    <span className="text-[10px] font-black uppercase tracking-wider text-amber-300 hidden sm:inline px-1.5 py-0.5 rounded bg-amber-500/25 border border-amber-400/60 animate-pulse">
+                      ⚡ ACTIVO
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-black uppercase tracking-wider text-emerald-300 hidden sm:inline px-1.5 py-0.5 rounded bg-emerald-500/25 border border-emerald-400/50">
+                      DESOCUPADO
+                    </span>
+                  )
                 )}
 
                 {isDriverUser && !isDriverHabilitado && (
                   <span className="text-[10px] font-bold text-amber-300 hidden sm:inline px-1.5 py-0.5 rounded bg-amber-500/15 border border-amber-400/30">
-                    Pendiente Habilitación
+                    Pendiente
                   </span>
                 )}
 
-                {!isEmailVerified && (
-                  <span
-                    className="w-2 h-2 rounded-full bg-amber-400 border border-[#0a0d14] animate-pulse shrink-0"
-                    title="Email pendiente de verificar"
-                  />
-                )}
+                <ChevronDown className="w-3 h-3 text-slate-400 shrink-0" />
               </button>
 
-              <button
-                onClick={async () => {
-                  await firebaseLogout();
-                  setIsLoggedIn(false);
-                  try {
-                    localStorage.removeItem('uppa_session_user');
-                  } catch {}
-                  showToast('Sesión cerrada');
-                }}
-                className="p-1.5 rounded-xl glass-button text-slate-400 hover:text-rose-300 cursor-pointer"
-                title="Cerrar sesión"
-              >
-                <LogOut className="w-3.5 h-3.5" />
-              </button>
-            </>
+              {/* Menú Desplegable del Perfil */}
+              {isProfileDropdownOpen && (
+                <div className="absolute right-0 top-full mt-2 w-72 sm:w-80 rounded-2xl bg-[#0c101d]/98 backdrop-blur-2xl border border-white/10 shadow-2xl p-3 z-50 animate-in fade-in slide-in-from-top-2 duration-150 space-y-3">
+                  {/* Encabezado con datos del usuario */}
+                  <div className="flex items-center gap-3 pb-2.5 border-b border-white/10">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-sky-500/20 to-blue-600/20 border border-sky-400/30 flex items-center justify-center text-lg shadow-sm shrink-0">
+                      {currentUser.role === 'admin'
+                        ? '🛡️'
+                        : isDriverUser
+                        ? currentUser.tipoVehiculo === 'moto'
+                          ? '🏍️'
+                          : '🚕'
+                        : '👤'}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-bold text-white truncate">
+                        {currentUser.name || 'Mi Perfil'}
+                      </p>
+                      <p className="text-[11px] text-slate-400 truncate font-mono">
+                        {currentUser.email || 'Sin correo registrado'}
+                      </p>
+                      <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+                        <span
+                          className={`text-[9.5px] font-black uppercase tracking-wider px-2 py-0.5 rounded border ${
+                            isDriverUser
+                              ? isDriverHabilitado
+                                ? driverDisponibilidad === 'ocupado'
+                                  ? 'bg-amber-500/25 text-amber-300 border-amber-400/60 animate-pulse'
+                                  : 'bg-emerald-500/20 text-emerald-300 border-emerald-400/50'
+                                : 'bg-amber-500/15 text-amber-300 border-amber-400/30'
+                              : 'bg-sky-500/20 text-sky-300 border-sky-400/30'
+                          }`}
+                        >
+                          {isDriverUser
+                            ? isDriverHabilitado
+                              ? driverDisponibilidad === 'ocupado'
+                                ? '⚡ ACTIVO (En Viaje)'
+                                : '🟢 Habilitado (Disponible)'
+                              : '⏳ Chofer Pendiente'
+                            : '👤 Pasajero'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Sección Exclusiva para Prestadores de Servicio */}
+                  {isDriverUser && (
+                    <div className="p-3 rounded-xl bg-white/[0.03] border border-white/5 space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold text-slate-200">
+                          Disponibilidad de Servicio
+                        </span>
+                        {driverDisponibilidad === 'ocupado' ? (
+                          <span className="text-[10px] font-black text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded border border-amber-400/50 animate-pulse flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                            <span>OCUPADO</span>
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-black text-emerald-300 bg-emerald-500/20 px-2 py-0.5 rounded border border-emerald-400/40 flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                            <span>DESOCUPADO</span>
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Desplegable de Estado */}
+                      <div>
+                        <label className="text-[10.5px] text-slate-400 block mb-1">
+                          Desplegable de estado:
+                        </label>
+                        <select
+                          value={driverDisponibilidad}
+                          onChange={(e) => {
+                            handleSetDriverDisponibilidad(e.target.value as 'desocupado' | 'ocupado');
+                          }}
+                          className="w-full bg-[#131828] border border-slate-700 hover:border-slate-600 rounded-xl px-2.5 py-1.5 text-xs text-white font-bold focus:outline-none focus:border-cyan-400 transition-colors cursor-pointer"
+                        >
+                          <option value="desocupado">🟢 DESOCUPADO (Disponible para la comunidad)</option>
+                          <option value="ocupado">🟡 OCUPADO (En viaje activo con pasajero)</option>
+                        </select>
+                      </div>
+
+                      {/* Botón directo de acción para colocar Desocupado / Ocupado */}
+                      {driverDisponibilidad === 'ocupado' ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleSetDriverDisponibilidad('desocupado');
+                            setIsProfileDropdownOpen(false);
+                          }}
+                          className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/25 active:scale-95 transition-all cursor-pointer ring-2 ring-emerald-300"
+                        >
+                          <CheckCircle2 className="w-4 h-4 text-slate-950 stroke-[3]" />
+                          <span>Colocar DESOCUPADO (Disponible)</span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleSetDriverDisponibilidad('ocupado');
+                            setIsProfileDropdownOpen(false);
+                          }}
+                          className="w-full py-2 px-3 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-400/50 font-bold text-xs flex items-center justify-center gap-1.5 active:scale-95 transition-all cursor-pointer"
+                        >
+                          <Zap className="w-3.5 h-3.5 text-amber-400" />
+                          <span>Colocar OCUPADO (En viaje)</span>
+                        </button>
+                      )}
+
+                      <p className="text-[10px] text-slate-400 leading-tight">
+                        Al colocar <strong>Desocupado</strong>, toda la comunidad en <em>Taxis & Motos</em> sabrá de inmediato que estás disponible.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Acciones generales del menú */}
+                  <div className="pt-1 space-y-1 border-t border-white/5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsProfileDropdownOpen(false);
+                        setIsAuthModalOpen(true);
+                      }}
+                      className="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold text-slate-200 hover:text-white hover:bg-white/[0.06] flex items-center gap-2 transition-all cursor-pointer"
+                    >
+                      <UserIcon className="w-3.5 h-3.5 text-sky-400" />
+                      <span>Ver Mi Perfil Completo & Datos</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        setIsProfileDropdownOpen(false);
+                        await firebaseLogout();
+                        setIsLoggedIn(false);
+                        try {
+                          localStorage.removeItem('uppa_session_user');
+                        } catch {}
+                        showToast('Sesión cerrada');
+                      }}
+                      className="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold text-rose-300 hover:text-rose-200 hover:bg-rose-500/10 flex items-center gap-2 transition-all cursor-pointer"
+                    >
+                      <LogOut className="w-3.5 h-3.5 text-rose-400" />
+                      <span>Cerrar Sesión</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           ) : (
             <button
               onClick={() => setIsAuthModalOpen(true)}

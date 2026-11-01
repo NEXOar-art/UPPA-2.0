@@ -17,6 +17,7 @@ import {
   getCalificacionInfo,
   getDriversDisponibilidadMap,
   subscribeToDriversDisponibilidad,
+  setDriverDisponibilidad,
   RANKING_WINDOW_MS,
 } from '../../services/realtimeFirebaseService';
 import {
@@ -157,8 +158,30 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
         currentUserName,
         currentUserPhone || '3489690058'
       );
-      setRideSuccessNotice('¡Aceptaste el viaje! Los datos fueron actualizados en tiempo real.');
-      setTimeout(() => setRideSuccessNotice(null), 4000);
+
+      // Pasar automáticamente al prestador a estado OCUPADO y notificar a la comunidad
+      if (currentUserId) setDriverDisponibilidad(currentUserId, 'ocupado');
+      if (currentUserName) setDriverDisponibilidad(currentUserName, 'ocupado');
+      if (currentUserPhone) setDriverDisponibilidad(currentUserPhone, 'ocupado');
+
+      setDisponibilidadMap((prev) => ({
+        ...prev,
+        [currentUserId]: 'ocupado',
+        [currentUserName]: 'ocupado',
+        ...(currentUserPhone ? { [currentUserPhone]: 'ocupado' } : {}),
+      }));
+
+      // Disparar evento para sincronizar perfil en tiempo real
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('uppa-driver-accepted-ride', {
+            detail: { driverId: currentUserId, driverName: currentUserName, solId },
+          })
+        );
+      }
+
+      setRideSuccessNotice('¡Aceptaste el viaje! Tu perfil ahora titila en estado ACTIVO (Ocupado). Al finalizar el viaje, abrí tu perfil para pasar a Desocupado.');
+      setTimeout(() => setRideSuccessNotice(null), 5000);
     } catch (e: any) {
       alert('Error al aceptar viaje: ' + (e.message || ''));
     }

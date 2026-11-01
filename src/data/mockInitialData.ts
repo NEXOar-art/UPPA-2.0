@@ -73,31 +73,31 @@ export const MOCK_ROUTES: TransitRoute[] = [
     currentDelayMinutes: 4,
     lastUpdated: 'Hace 4 min',
     coordinates: [
-      [-34.0975, -59.0373], // Terminal Zárate
-      [-34.1145, -59.0210], // FONAVI
-      [-34.1190, -59.0120], // Rotonda RN9
-      [-34.1370, -58.9800], // Paraje El Tatú
-      [-34.1430, -58.9720], // Parque Industrial Campana
-      [-34.1550, -58.9620], // Tenaris Siderca
-      [-34.1633, -58.9591], // Plaza Eduardo Costa
-      [-34.1755, -58.9442], // Colectora Norte y Salk
-      [-34.1914, -58.9447], // McDonald's Campana
-      [-34.1934, -58.9491], // Colectora Sur y Magaldi
-      [-34.1948, -58.9472], // Colectora Sur y Secundaria 3
-      [-34.2002, -58.9403], // Colectora Sur y Grassi
+      [-34.095650, -59.038650], // Terminal Zárate (Centro de Transferencia)
+      [-34.113650, -59.016180], // Av. Lavalle y Perito Moreno (FONAVI)
+      [-34.115650, -59.013400], // Rotonda Acceso RN 9 / Colectora
+      [-34.138650, -58.978250], // Paraje El Tatú / Colectora
+      [-34.144050, -58.972450], // Parque Industrial Campana / RP 6
+      [-34.174350, -58.958620], // Tenaris Siderca (Colectora Norte & Necochea)
+      [-34.163200, -58.958950], // Plaza Eduardo Costa (Palacio Municipal Campana)
+      [-34.178750, -58.955350], // Colectora Norte y Dr. Salk
+      [-34.191398, -58.944732], // McDonald's Campana (Panamericana Km 72.5)
+      [-34.192306, -58.943583], // Colectora Sur y Magaldi
+      [-34.193448, -58.942756], // Colectora Sur y Secundaria 3
+      [-34.200217, -58.940283], // Colectora Sur y Grassi
     ],
     stops: [
-      { id: 'st-col-1', name: 'Terminal Zárate (Andén Colectora)', lat: -34.0975, lng: -59.0373, sequence: 1 },
-      { id: 'st-col-2', name: 'Barrio FONAVI / Av. Lavalle', lat: -34.1145, lng: -59.0210, sequence: 2 },
-      { id: 'st-col-3', name: 'Rotonda Acceso RN9 / Colectora', lat: -34.1190, lng: -59.0120, sequence: 3 },
-      { id: 'st-col-4', name: 'Paraje El Tatú / Colectora', lat: -34.1370, lng: -58.9800, sequence: 4 },
-      { id: 'st-col-5', name: 'Parque Industrial Campana', lat: -34.1430, lng: -58.9720, sequence: 5 },
-      { id: 'st-col-6', name: 'Tenaris Siderca (Portería 1)', lat: -34.1550, lng: -58.9620, sequence: 6 },
-      { id: 'st-col-7', name: 'Plaza Eduardo Costa (Campana)', lat: -34.1633, lng: -58.9591, sequence: 7 },
-      { id: 'st-col-8', name: "McDonald's Campana / Colectora Sur", lat: -34.1914, lng: -58.9447, sequence: 8 },
-      { id: 'st-col-9', name: 'Colectora Sur y Magaldi', lat: -34.1934, lng: -58.9491, sequence: 9 },
-      { id: 'st-col-10', name: 'Escuela Secundaria N° 3 (Colectora)', lat: -34.1948, lng: -58.9472, sequence: 10 },
-      { id: 'st-col-11', name: 'Colectora Sur y Grassi', lat: -34.2002, lng: -58.9403, sequence: 11 },
+      { id: 'st-col-1', name: 'Terminal Zárate (Andén Colectora)', lat: -34.095650, lng: -59.038650, sequence: 1 },
+      { id: 'st-col-2', name: 'Barrio FONAVI / Av. Lavalle', lat: -34.113650, lng: -59.016180, sequence: 2 },
+      { id: 'st-col-3', name: 'Rotonda Acceso RN 9 / Colectora', lat: -34.115650, lng: -59.013400, sequence: 3 },
+      { id: 'st-col-4', name: 'Paraje El Tatú / Colectora', lat: -34.138650, lng: -58.978250, sequence: 4 },
+      { id: 'st-col-5', name: 'Parque Industrial Campana', lat: -34.144050, lng: -58.972450, sequence: 5 },
+      { id: 'st-col-6', name: 'Tenaris Siderca (Portería 1 / Necochea)', lat: -34.174350, lng: -58.958620, sequence: 6 },
+      { id: 'st-col-7', name: 'Plaza Eduardo Costa (Campana)', lat: -34.163200, lng: -58.958950, sequence: 7 },
+      { id: 'st-col-8', name: "McDonald's Campana / Colectora Sur", lat: -34.191398, lng: -58.944732, sequence: 8 },
+      { id: 'st-col-9', name: 'Colectora Sur y Magaldi', lat: -34.192306, lng: -58.943583, sequence: 9 },
+      { id: 'st-col-10', name: 'Escuela Secundaria N° 3 (Colectora)', lat: -34.193448, lng: -58.942756, sequence: 10 },
+      { id: 'st-col-11', name: 'Colectora Sur y Grassi', lat: -34.200217, lng: -58.940283, sequence: 11 },
     ],
   },
   {
@@ -112,28 +112,28 @@ export const MOCK_ROUTES: TransitRoute[] = [
     currentDelayMinutes: 3,
     lastUpdated: 'Hace 2 min',
     coordinates: [
-      [-34.0975, -59.0373], // Terminal Zárate
-      [-34.1190, -59.0120], // Rotonda Zárate
-      [-34.1633, -58.9591], // Plaza Costa
-      [-34.1914, -58.9447], // McDonald's
-      [-34.2016, -58.9394], // Escuela Roberto Rocca
-      [-34.2022, -58.9392], // Galería Ariel del Plata
-      [-34.2030, -58.9390], // Escuela Ariel del Plata
-      [-34.2040, -58.9385], // Sociedad de Fomento Ariel del Plata
-      [-34.2050, -58.9380], // Casaux y Goujon
-      [-34.2070, -58.9378], // Las Campanas
+      [-34.095650, -59.038650], // Terminal Zárate
+      [-34.115650, -59.013400], // Rotonda Zárate
+      [-34.163200, -58.958950], // Plaza Costa
+      [-34.191398, -58.944732], // McDonald's
+      [-34.200810, -58.937393], // Escuela Técnica Roberto Rocca
+      [-34.201022, -58.937241], // Galería Ariel del Plata
+      [-34.202119, -58.936479], // Escuela Ariel del Plata
+      [-34.203006, -58.935582], // Sociedad de Fomento Ariel del Plata
+      [-34.203967, -58.936834], // Casaux y Goujon
+      [-34.205225, -58.939338], // Casaux y Chapuis (Las Campanas)
     ],
     stops: [
-      { id: 'st-ap-1', name: 'Terminal Zárate', lat: -34.0975, lng: -59.0373, sequence: 1 },
-      { id: 'st-ap-2', name: 'Rotonda Zárate / RN9', lat: -34.1190, lng: -59.0120, sequence: 2 },
-      { id: 'st-ap-3', name: 'Plaza Eduardo Costa (Campana)', lat: -34.1633, lng: -58.9591, sequence: 3 },
-      { id: 'st-ap-4', name: "McDonald's Campana (Colectora Sur)", lat: -34.1914, lng: -58.9447, sequence: 4 },
-      { id: 'st-ap-5', name: 'Escuela Técnica Roberto Rocca', lat: -34.2016, lng: -58.9394, sequence: 5 },
-      { id: 'st-ap-6', name: 'Galería Ariel del Plata', lat: -34.2022, lng: -58.9392, sequence: 6 },
-      { id: 'st-ap-7', name: 'Escuela Ariel del Plata', lat: -34.2030, lng: -58.9390, sequence: 7 },
-      { id: 'st-ap-8', name: 'Sociedad de Fomento Ariel del Plata', lat: -34.2040, lng: -58.9385, sequence: 8 },
-      { id: 'st-ap-9', name: 'Casaux y Goujon (Ariel del Plata)', lat: -34.2050, lng: -58.9380, sequence: 9 },
-      { id: 'st-ap-10', name: 'Casaux y Chapuis (Las Campanas / B° Malvinas)', lat: -34.2070, lng: -58.9378, sequence: 10 },
+      { id: 'st-ap-1', name: 'Terminal Zárate (Andén Principal)', lat: -34.095650, lng: -59.038650, sequence: 1 },
+      { id: 'st-ap-2', name: 'Rotonda Zárate / RN 9', lat: -34.115650, lng: -59.013400, sequence: 2 },
+      { id: 'st-ap-3', name: 'Plaza Eduardo Costa (Campana)', lat: -34.163200, lng: -58.958950, sequence: 3 },
+      { id: 'st-ap-4', name: "McDonald's Campana (Colectora Sur)", lat: -34.191398, lng: -58.944732, sequence: 4 },
+      { id: 'st-ap-5', name: 'Escuela Técnica Roberto Rocca', lat: -34.200810, lng: -58.937393, sequence: 5 },
+      { id: 'st-ap-6', name: 'Galería Ariel del Plata', lat: -34.201022, lng: -58.937241, sequence: 6 },
+      { id: 'st-ap-7', name: 'Escuela Ariel del Plata (Calle Aguer)', lat: -34.202119, lng: -58.936479, sequence: 7 },
+      { id: 'st-ap-8', name: 'Sociedad de Fomento Ariel del Plata', lat: -34.203006, lng: -58.935582, sequence: 8 },
+      { id: 'st-ap-9', name: 'Casaux y Goujon (Ariel del Plata)', lat: -34.203967, lng: -58.936834, sequence: 9 },
+      { id: 'st-ap-10', name: 'Casaux y Chapuis (Las Campanas / B° Malvinas)', lat: -34.205225, lng: -58.939338, sequence: 10 },
     ],
   },
   {
@@ -149,16 +149,16 @@ export const MOCK_ROUTES: TransitRoute[] = [
     lastUpdated: 'Hace 1 min',
     coordinates: [
       [-34.0920, -59.0190], // Costanera Zárate
-      [-34.0984, -59.0287], // Plaza Mitre
-      [-34.1023, -59.0354], // Terminal Zárate
-      [-34.1085, -59.0220], // Hospital Virgen del Carmen
+      [-34.101650, -59.032180], // Plaza Mitre
+      [-34.095650, -59.038650], // Terminal Zárate
+      [-34.108050, -59.023380], // Hospital Virgen del Carmen (Pellegrini & Lavalle)
       [-34.1160, -59.0290], // Villa Fox
     ],
     stops: [
       { id: 'st-40', name: 'Costanera Eduardo Buscaglia', lat: -34.0920, lng: -59.0190, sequence: 1 },
-      { id: 'st-41', name: 'Plaza Mitre (Zárate)', lat: -34.0984, lng: -59.0287, sequence: 2 },
-      { id: 'st-42', name: 'Terminal de Zárate', lat: -34.1023, lng: -59.0354, sequence: 3 },
-      { id: 'st-43', name: 'Hospital Virgen del Carmen', lat: -34.1085, lng: -59.0220, sequence: 4 },
+      { id: 'st-41', name: 'Plaza Mitre (Zárate)', lat: -34.101650, lng: -59.032180, sequence: 2 },
+      { id: 'st-42', name: 'Terminal de Zárate (Centro Transferencia)', lat: -34.095650, lng: -59.038650, sequence: 3 },
+      { id: 'st-43', name: 'Hospital Virgen del Carmen (Lavalle & Pellegrini)', lat: -34.108050, lng: -59.023380, sequence: 4 },
       { id: 'st-44', name: 'Villa Fox (Plaza)', lat: -34.1160, lng: -59.0290, sequence: 5 },
     ],
   },
@@ -445,34 +445,6 @@ export const MOCK_ADS: AdListing[] = [
     imageUrl: 'https://images.unsplash.com/photo-1626785774573-4b799315345d?auto=format&fit=crop&w=400&q=80',
     zone: 'Zárate ↔ Campana',
     discountBadge: '🎨 15% OFF Vecinos',
-    isActive: true,
-  },
-  {
-    id: 'ad-gomeria-ruta6',
-    businessName: 'Gomería y Auxilio 24hs Ruta 6',
-    category: 'Mecánica & Auxilio',
-    title: 'Parche y auxilio rápido para motos y autos',
-    description: 'A 300m de la entrada a Barrio Malvinas. Atendemos emergencias de choferes UPPA con 15% de descuento.',
-    phone: '+54 9 3487 40-1122',
-    linkUrl: 'https://wa.me/5493487401122?text=Hola%20Gomeria%20Ruta%206,%20necesito%20auxilio%20desde%20UPPA',
-    whatsappUrl: 'https://wa.me/5493487401122?text=Hola%20Gomeria%20Ruta%206,%20necesito%20auxilio%20desde%20UPPA',
-    imageUrl: 'https://images.unsplash.com/photo-1486006920555-c77dce18193b?auto=format&fit=crop&w=400&q=80',
-    zone: 'Ruta 6 Km 189',
-    discountBadge: '⚡ Guardia 24hs',
-    isActive: true,
-  },
-  {
-    id: 'ad-cafe-estacion',
-    businessName: 'Café & Panadería La Estación',
-    category: 'Gastronomía',
-    title: 'Café al paso y medialunas calientes frente a la plaza',
-    description: 'Frente a Plaza Eduardo Costa. Wi-Fi gratis y carga de celular para usuarios en espera del micro.',
-    phone: '+54 9 3487 55-9090',
-    linkUrl: 'https://rotiseria-malvinas.vercel.app',
-    whatsappUrl: 'https://wa.me/5493487559090?text=Hola%20Cafe%20La%20Estacion,%20consulto%20desde%20UPPA',
-    imageUrl: 'https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?auto=format&fit=crop&w=400&q=80',
-    zone: 'Campana Centro',
-    discountBadge: '☕ Promo Espera',
     isActive: true,
   },
 ];
