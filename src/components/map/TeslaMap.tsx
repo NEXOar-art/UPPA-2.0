@@ -2020,110 +2020,125 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
           )}
         </div>
 
-        {/* Botón 5: Reportar Eventos e Inconvenientes del Transporte (solo icono ⚠️ con desplegable) */}
-        <div className="relative">
-          <button
-            onClick={() => {
-              resetHideTimer();
-              const next = !isEventsPanelOpen;
-              setIsEventsPanelOpen(next);
-              if (next) {
-                setIsStopsPanelOpen(false);
-                setIsEventFilterPanelOpen(false);
-              }
-            }}
-            className={`w-10 h-10 rounded-2xl flex items-center justify-center text-lg shadow-xl backdrop-blur-xl border transition-all active:scale-95 cursor-pointer ${
-              isEventsPanelOpen
-                ? 'bg-rose-500 text-white border-rose-300 ring-2 ring-rose-400/40 shadow-rose-500/30 scale-105'
-                : 'glass-panel text-rose-300 hover:text-white border-white/10 hover:bg-white/10'
-            }`}
-            title="Reportar eventos e inconvenientes del transporte"
-          >
-            <span className="leading-none select-none animate-pulse">⚠️</span>
-          </button>
+        {/* Botón 5: Reportar Eventos e Inconvenientes del Transporte (solo icono ⚠️) */}
+        <button
+          onClick={() => {
+            resetHideTimer();
+            const next = !isEventsPanelOpen;
+            setIsEventsPanelOpen(next);
+            if (next) {
+              setIsStopsPanelOpen(false);
+              setIsEventFilterPanelOpen(false);
+            }
+          }}
+          className={`w-10 h-10 rounded-2xl flex items-center justify-center text-lg shadow-xl backdrop-blur-xl border transition-all active:scale-95 cursor-pointer ${
+            isEventsPanelOpen
+              ? 'bg-rose-500 text-white border-rose-300 ring-2 ring-rose-400/40 shadow-rose-500/30 scale-105'
+              : 'glass-panel text-rose-300 hover:text-white border-white/10 hover:bg-white/10'
+          }`}
+          title="Eventos e Inconvenientes del transporte"
+        >
+          <span className="leading-none select-none animate-pulse">⚠️</span>
+        </button>
+      </div>
 
-          {/* Desplegable de Eventos e Inconvenientes del Transporte */}
-          {isEventsPanelOpen && (
-            <div
-              className="absolute top-0 right-12 w-80 sm:w-96 max-h-[75vh] rounded-3xl bg-[#090d18]/95 backdrop-blur-2xl border border-white/10 shadow-2xl p-3.5 z-40 flex flex-col animate-in fade-in slide-in-from-right-2 duration-150"
-            >
-              <div className="flex items-center justify-between pb-2.5 border-b border-white/10 shrink-0">
-                <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-xl bg-rose-500/20 text-rose-300 flex items-center justify-center text-sm border border-rose-400/30">
-                    ⚠️
+      {/* Contenedor Superior Centrado: Eventos e Inconvenientes (sin superponerse con las demás funcionalidades) */}
+      {isEventsPanelOpen && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center pt-4 sm:pt-6 px-3 pointer-events-none">
+          {/* Backdrop con desenfoque suave para cerrar al hacer clic afuera */}
+          <div
+            onClick={() => setIsEventsPanelOpen(false)}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm pointer-events-auto transition-opacity"
+          />
+
+          {/* Panel Flotante Superior Centrado */}
+          <div
+            onMouseEnter={handleCardMouseEnter}
+            onMouseLeave={handleCardMouseLeave}
+            className="relative pointer-events-auto w-full max-w-lg sm:max-w-xl max-h-[82vh] rounded-3xl bg-[#090d18]/98 backdrop-blur-2xl border border-rose-500/30 shadow-[0_20px_50px_rgba(244,63,94,0.35)] p-4 sm:p-5 z-50 flex flex-col animate-in fade-in slide-in-from-top-4 zoom-in-95 duration-200"
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-white/10 shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-2xl bg-rose-500/20 text-rose-300 flex items-center justify-center text-lg border border-rose-400/40 shadow-sm">
+                  ⚠️
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-white flex items-center gap-2">
+                    Eventos e Inconvenientes
+                    <span className="text-[10px] font-mono font-bold text-rose-300 bg-rose-500/15 px-2 py-0.5 rounded-full border border-rose-500/30">
+                      En Vivo
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-400 leading-tight mt-0.5">
+                    Tocá un inconveniente para registrarlo en el mapa en tiempo real
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsEventsPanelOpen(false)}
+                className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/15 text-slate-400 hover:text-white flex items-center justify-center cursor-pointer transition-colors"
+                title="Cerrar"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Nota o Detalle opcional */}
+            <div className="pt-3 pb-2.5 shrink-0">
+              <input
+                type="text"
+                placeholder="Nota o detalle opcional (ej: Frente a Tenaris, sentido a Zárate...)"
+                value={eventCustomNote}
+                onChange={(e) => setEventCustomNote(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-2xl bg-white/5 border border-white/10 text-xs sm:text-sm text-white placeholder-slate-400 focus:outline-none focus:border-rose-400 focus:ring-1 focus:ring-rose-400/50 transition-all shadow-inner"
+              />
+            </div>
+
+            {/* Indicador de ubicación de registro */}
+            <div className="mb-3 px-3 py-2 rounded-2xl bg-white/[0.03] border border-white/5 text-xs text-slate-400 flex items-center justify-between shrink-0">
+              <span className="flex items-center gap-2 truncate">
+                <MapPin className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                <span className="truncate">
+                  {userLocation?.address ? `Ubicación: ${userLocation.address}` : 'Ubicación actual en el corredor Malvinas ↔ Zárate'}
+                </span>
+              </span>
+              <span className="text-[10px] font-mono font-bold text-rose-300 bg-rose-500/15 px-2 py-0.5 rounded-md border border-rose-500/30 shrink-0">
+                GPS Activo
+              </span>
+            </div>
+
+            {/* Lista scrollable de eventos para registrar con 1 toque */}
+            <div className="overflow-y-auto space-y-2 pr-1 flex-1 max-h-[50vh]">
+              {TRANSIT_EVENT_TYPES.map((evOpt) => (
+                <button
+                  key={evOpt.id}
+                  onClick={() => handleRegisterEventFromDropdown(evOpt)}
+                  className={`w-full p-3 rounded-2xl border text-left transition-all cursor-pointer group active:scale-98 flex items-center gap-3.5 ${evOpt.colorClass}`}
+                  title={`Registrar ${evOpt.label} en el mapa`}
+                >
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl shrink-0 bg-black/40 border border-white/10 group-hover:scale-110 transition-transform shadow-sm">
+                    {evOpt.icon}
                   </div>
-                  <div>
-                    <h3 className="text-xs font-black text-white">Eventos e Inconvenientes</h3>
-                    <p className="text-[10px] text-slate-400 leading-tight">
-                      Tocá un inconveniente para registrarlo en el mapa
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-1">
+                      <h4 className="font-bold text-white text-xs sm:text-sm group-hover:text-rose-200 transition-colors">
+                        {evOpt.label}
+                      </h4>
+                      <span className="text-[10px] font-mono font-bold text-slate-300 group-hover:text-white transition-colors bg-white/5 px-2 py-0.5 rounded-lg border border-white/10">
+                        Registrar ➔
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-300 mt-0.5 leading-snug line-clamp-1">
+                      {evOpt.subtitle}
                     </p>
                   </div>
-                </div>
-                <button
-                  onClick={() => setIsEventsPanelOpen(false)}
-                  className="w-6 h-6 rounded-full bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white flex items-center justify-center cursor-pointer transition-colors"
-                  title="Cerrar"
-                >
-                  <X className="w-3.5 h-3.5" />
                 </button>
-              </div>
-
-              {/* Nota o Detalle opcional */}
-              <div className="pt-2 pb-2 shrink-0">
-                <input
-                  type="text"
-                  placeholder="Nota o detalle opcional (ej: Frente a Tenaris...)"
-                  value={eventCustomNote}
-                  onChange={(e) => setEventCustomNote(e.target.value)}
-                  className="w-full px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-xs text-white placeholder-slate-400 focus:outline-none focus:border-rose-400 transition-colors"
-                />
-              </div>
-
-              {/* Indicador de ubicación de registro */}
-              <div className="mb-2 px-2.5 py-1.5 rounded-xl bg-white/[0.03] border border-white/5 text-[10px] text-slate-400 flex items-center justify-between shrink-0">
-                <span className="flex items-center gap-1.5 truncate">
-                  <MapPin className="w-3 h-3 text-rose-400 shrink-0" />
-                  <span className="truncate">
-                    {userLocation?.address ? `Ubicación: ${userLocation.address}` : 'Ubicación actual en el corredor'}
-                  </span>
-                </span>
-                <span className="text-[9px] font-mono font-bold text-rose-300 bg-rose-500/15 px-1.5 py-0.5 rounded-md border border-rose-500/30 shrink-0">
-                  En vivo
-                </span>
-              </div>
-
-              {/* Lista scrollable de eventos para registrar con 1 toque */}
-              <div className="overflow-y-auto space-y-1.5 pr-1 flex-1 max-h-[50vh]">
-                {TRANSIT_EVENT_TYPES.map((evOpt) => (
-                  <button
-                    key={evOpt.id}
-                    onClick={() => handleRegisterEventFromDropdown(evOpt)}
-                    className={`w-full p-2.5 rounded-2xl border text-left transition-all cursor-pointer group active:scale-98 flex items-center gap-3 ${evOpt.colorClass}`}
-                    title={`Registrar ${evOpt.label} en el mapa`}
-                  >
-                    <div className="w-9 h-9 rounded-xl flex items-center justify-center text-lg shrink-0 bg-black/35 border border-white/10 group-hover:scale-110 transition-transform">
-                      {evOpt.icon}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-1">
-                        <h4 className="font-bold text-white text-[11.5px] group-hover:text-rose-200 transition-colors">
-                          {evOpt.label}
-                        </h4>
-                        <span className="text-[9px] font-mono font-bold text-slate-400 group-hover:text-white transition-colors">
-                          Registrar ➔
-                        </span>
-                      </div>
-                      <p className="text-[10px] text-slate-300 mt-0.5 leading-snug line-clamp-1">
-                        {evOpt.subtitle}
-                      </p>
-                    </div>
-                  </button>
-                ))}
-              </div>
+              ))}
             </div>
-          )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* =========================================================================
           ACTIVE DRIVER TRAYECTORY HUD (When a taxi is selected in Taxis & Motos)
