@@ -22,6 +22,7 @@ import {
   PushNotificationPayload,
   mapFirestoreRolToAppRole,
   HabilitacionChofer,
+  SolicitudTransporteFirestore,
 } from './types';
 import { computeLineSentiment } from './utils/sentiment';
 import { UserLocation, reverseGeocode } from './utils/geolocation';
@@ -41,6 +42,9 @@ import { LocationPermissionModal } from './components/auth/LocationPermissionMod
 import { DriverConnectionBar } from './components/driver/DriverConnectionBar';
 import { SplashScreen } from './components/splash/SplashScreen';
 import { PedirTransporteModal } from './components/common/PedirTransporteModal';
+import { MobilityBottomSheet } from './components/common/MobilityBottomSheet';
+import { RankingPrestadoresDropdown } from './components/taxi/RankingPrestadoresDropdown';
+import { Linea228Stop } from './data/linea228Stops';
 import { useAuth } from './context/AuthContext';
 import {
   ActiveDriverSession,
@@ -83,6 +87,7 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronUp,
+  Maximize2,
 } from 'lucide-react';
 
 export default function App() {
@@ -343,9 +348,16 @@ export default function App() {
   };
 
   // Escuchar cuando el prestador acepta un viaje en cualquier parte de la app
+  // Active passenger tracking for driver GPS navigation
+  const [activeTrackingPassenger, setActiveTrackingPassenger] = useState<SolicitudTransporteFirestore | null>(null);
+
   useEffect(() => {
-    const handleAcceptedRide = () => {
+    const handleAcceptedRide = (e: any) => {
       setDriverDisponibilidadState('ocupado');
+      if (e?.detail?.solicitud) {
+        setActiveTrackingPassenger(e.detail.solicitud);
+        setActiveTab('map');
+      }
     };
     window.addEventListener('uppa-driver-accepted-ride', handleAcceptedRide);
     return () => window.removeEventListener('uppa-driver-accepted-ride', handleAcceptedRide);
@@ -356,6 +368,7 @@ export default function App() {
   const [selectedEvent, setSelectedEvent] = useState<MapEvent | null>(null);
   const [selectedRouteId, setSelectedRouteId] = useState<string>('route-zarate-malvinas');
   const [activeTrackingTaxi, setActiveTrackingTaxi] = useState<TaxiListing | null>(null);
+  const [focusedStopOnMap, setFocusedStopOnMap] = useState<Linea228Stop | null>(null);
   const [isHeaderMenuOpen, setIsHeaderMenuOpen] = useState(false);
   const headerMenuRef = useRef<HTMLDivElement>(null);
 
@@ -1003,64 +1016,12 @@ export default function App() {
           </button>
         </div>
 
-        {/* Deductive Icon-First Navigation Tabs (Sin texto, solo iconos directos) */}
-        <nav className="flex items-center gap-1 glass-pill p-1 rounded-2xl border-white/5">
-          <button
-            onClick={() => setActiveTab('map')}
-            className={`p-2 text-xs font-semibold rounded-xl transition-all flex items-center justify-center ${
-              activeTab === 'map'
-                ? 'bg-sky-400/20 text-sky-200 border border-sky-400/35 shadow-sm'
-                : 'text-slate-400 hover:text-white'
-            }`}
-            title="Mapa"
-          >
-            <Bus className="w-4 h-4" />
-          </button>
-
-          <button
-            onClick={() => setActiveTab('taxi')}
-            className={`p-2 text-xs font-semibold rounded-xl transition-all flex items-center justify-center ${
-              activeTab === 'taxi'
-                ? 'bg-emerald-400/20 text-emerald-200 border border-emerald-400/35 shadow-sm'
-                : 'text-slate-400 hover:text-white'
-            }`}
-            title="Taxis & Motos"
-          >
-            <div className="flex items-center gap-0.5">
-              <Bike className="w-4 h-4" />
-              <Car className="w-4 h-4" />
-            </div>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('chat')}
-            className={`p-2 text-xs font-semibold rounded-xl transition-all flex items-center justify-center relative ${
-              activeTab === 'chat'
-                ? 'bg-purple-400/20 text-purple-200 border border-purple-400/35 shadow-sm'
-                : 'text-slate-400 hover:text-white'
-            }`}
-            title="Chat"
-          >
-            <MessageSquare className="w-4 h-4" />
-            {communityChatList.length > 0 && (
-              <span className="absolute -top-1 -right-1 px-1 py-0.2 rounded-full bg-purple-500 text-white font-extrabold text-[9px] min-w-3.5 text-center animate-pulse">
-                {communityChatList.length}
-              </span>
-            )}
-          </button>
-
-          <button
-            onClick={() => setActiveTab('admin')}
-            className={`p-2 text-xs font-semibold rounded-xl transition-all flex items-center justify-center ${
-              activeTab === 'admin'
-                ? 'bg-purple-500/25 text-purple-200 border border-purple-400/40 shadow-sm'
-                : 'text-slate-400 hover:text-purple-300'
-            }`}
-            title="Admin"
-          >
-            <Shield className="w-4 h-4" />
-          </button>
-        </nav>
+        {/* Route status indicator */}
+        <div className="hidden sm:flex items-center gap-2 px-3 py-1 rounded-xl bg-white/[0.04] border border-white/10 text-xs">
+          <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+          <span className="font-bold text-slate-200">Línea 228</span>
+          <span className="text-[10px] text-cyan-400 font-semibold font-mono">Malvinas ↔ Zárate</span>
+        </div>
 
         {/* Right Actions */}
         <div className="flex items-center gap-1.5">
@@ -1388,6 +1349,24 @@ export default function App() {
                 onAddEvent={handleCreateEvent}
                 currentUserName={currentUser.name}
                 currentUserId={currentUser.id}
+                focusedStop={focusedStopOnMap}
+                activeTrackingPassenger={activeTrackingPassenger}
+                onClearTrackingPassenger={() => setActiveTrackingPassenger(null)}
+              />
+            </div>
+
+            {/* Cabify-Inspired Mobility Bottom Sheet (Panel inferior con scrolling web hacia arriba) */}
+            <div className="absolute bottom-2 left-0 right-0 z-30 pointer-events-none">
+              <MobilityBottomSheet
+                userName={currentUser.name || 'Pasajero'}
+                onOpenPedirTransporte={() => setIsPedirTransporteOpen(true)}
+                onOpenTaxis={() => setActiveTab('taxi')}
+                onOpenChat={() => setActiveTab('chat')}
+                onSelectStop={(stop) => {
+                  setFocusedStopOnMap(stop);
+                  showToast(`Parada #${stop.sequence}: ${stop.name}`);
+                }}
+                unreadChatCount={communityChatList.length}
               />
             </div>
 
@@ -1418,6 +1397,11 @@ export default function App() {
               setActiveTrackingTaxi(taxi);
               setActiveTab('map');
               showToast(`Trazando trayectoria con ${taxi.driverName}`);
+            }}
+            onLocatePassengerOnMap={(solicitud) => {
+              setActiveTrackingPassenger(solicitud);
+              setActiveTab('map');
+              showToast(`📍 Ubicación de ${solicitud.nombrePasajero} habilitada en GPS`);
             }}
           />
         )}
@@ -1490,6 +1474,154 @@ export default function App() {
       {/* Footer Advertising Banner */}
       <AdBanner ads={ads} onOpenContactModal={() => setIsContactAdOpen(true)} />
 
+      {/* Barra de Navegación Inferior Inspirada en Cabify con Iconos y Texto Debajo */}
+      <nav className="shrink-0 bg-[#080d18]/98 backdrop-blur-2xl border-t border-white/10 px-1.5 py-1.5 z-40 safe-area-pb shadow-2xl">
+        <div className="max-w-xl mx-auto grid grid-cols-6 gap-1">
+          {/* Tab 1: Mapa (Icono de colectivo + texto "Mapa" debajo) */}
+          <button
+            onClick={() => setActiveTab('map')}
+            className={`py-1 px-1 rounded-2xl flex flex-col items-center justify-center transition-all cursor-pointer ${
+              activeTab === 'map'
+                ? 'text-sky-300 font-black'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <div
+              className={`p-1.5 rounded-xl transition-all ${
+                activeTab === 'map'
+                  ? 'bg-sky-500/25 border border-sky-400/40 text-sky-300 shadow-md shadow-sky-500/20'
+                  : 'bg-transparent text-slate-400'
+              }`}
+            >
+              <Bus className="w-4 h-4" />
+            </div>
+            <span className="text-[10px] tracking-tight mt-0.5 font-bold">Mapa</span>
+          </button>
+
+          {/* Botón 2: Mi ubicacion */}
+          <button
+            onClick={() => {
+              setActiveTab('map');
+              if (!userLocation) {
+                setIsLocationModalOpen(true);
+              } else {
+                window.dispatchEvent(new CustomEvent('uppa-map-locate-me'));
+                showToast('Centrando en tu ubicación GPS');
+              }
+            }}
+            className="py-1 px-1 rounded-2xl flex flex-col items-center justify-center transition-all cursor-pointer text-slate-400 hover:text-cyan-300 group"
+            title="Centrar en mi ubicación GPS"
+          >
+            <div className="p-1.5 rounded-xl bg-transparent group-hover:bg-cyan-500/20 border border-transparent group-hover:border-cyan-400/30 text-cyan-400 transition-all shadow-sm">
+              <Navigation className="w-4 h-4 fill-cyan-400/20 text-cyan-400 group-hover:scale-110 transition-transform" />
+            </div>
+            <span className="text-[9.5px] tracking-tight mt-0.5 font-bold whitespace-nowrap text-slate-300 group-hover:text-cyan-200">
+              Mi ubicacion
+            </span>
+          </button>
+
+          {/* Botón 3: Enfocar */}
+          <button
+            onClick={() => {
+              setActiveTab('map');
+              window.dispatchEvent(new CustomEvent('uppa-map-fit-route'));
+              showToast('Enfocando traza completa Malvinas ↔ Zárate');
+            }}
+            className="py-1 px-1 rounded-2xl flex flex-col items-center justify-center transition-all cursor-pointer text-slate-400 hover:text-indigo-300 group"
+            title="Enfocar recorrido completo"
+          >
+            <div className="p-1.5 rounded-xl bg-transparent group-hover:bg-indigo-500/20 border border-transparent group-hover:border-indigo-400/30 text-indigo-400 transition-all shadow-sm">
+              <Maximize2 className="w-4 h-4 group-hover:scale-110 transition-transform" />
+            </div>
+            <span className="text-[10px] tracking-tight mt-0.5 font-bold whitespace-nowrap text-slate-300 group-hover:text-indigo-200">
+              Enfocar
+            </span>
+          </button>
+
+          {/* Tab 4: Taxi & Motos con 3 puntitos al lado para desplegar "Ranking de Prestadores" */}
+          <div className="relative flex items-center justify-center">
+            <button
+              onClick={() => setActiveTab('taxi')}
+              className={`py-1 px-1 rounded-2xl flex flex-col items-center justify-center transition-all cursor-pointer flex-1 ${
+                activeTab === 'taxi'
+                  ? 'text-emerald-300 font-black'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <div
+                className={`p-1.5 rounded-xl transition-all flex items-center -space-x-1 ${
+                  activeTab === 'taxi'
+                    ? 'bg-emerald-500/25 border border-emerald-400/40 text-emerald-300 shadow-md shadow-emerald-500/20'
+                    : 'bg-transparent text-slate-400'
+                }`}
+              >
+                <Bike className="w-3.5 h-3.5" />
+                <Car className="w-3.5 h-3.5" />
+              </div>
+              <span className="text-[9.5px] tracking-tight mt-0.5 font-bold whitespace-nowrap">
+                Taxi & Motos
+              </span>
+            </button>
+
+            {/* 3 Puntitos al lado que abren el Ranking de Prestadores */}
+            <div className="absolute right-0 top-1">
+              <RankingPrestadoresDropdown
+                placement="top"
+                onOpenTaxiTab={() => setActiveTab('taxi')}
+                triggerButtonClassName="w-5 h-5 rounded-md bg-emerald-500/20 hover:bg-emerald-500/35 border border-emerald-400/40 text-emerald-300 flex items-center justify-center transition-all cursor-pointer shadow-sm"
+              />
+            </div>
+          </div>
+
+          {/* Tab 5: Chat Comunitario */}
+          <button
+            onClick={() => setActiveTab('chat')}
+            className={`py-1 px-1 rounded-2xl flex flex-col items-center justify-center transition-all cursor-pointer relative ${
+              activeTab === 'chat'
+                ? 'text-purple-300 font-black'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <div
+              className={`p-1.5 rounded-xl transition-all relative ${
+                activeTab === 'chat'
+                  ? 'bg-purple-500/25 border border-purple-400/40 text-purple-300 shadow-md shadow-purple-500/20'
+                  : 'bg-transparent text-slate-400'
+              }`}
+            >
+              <MessageSquare className="w-4 h-4" />
+              {communityChatList.length > 0 && (
+                <span className="absolute -top-1 -right-1 px-1 py-0.2 rounded-full bg-purple-500 text-white font-black text-[8.5px] min-w-3.5 text-center animate-pulse">
+                  {communityChatList.length}
+                </span>
+              )}
+            </div>
+            <span className="text-[10px] tracking-tight mt-0.5 font-bold">Chat</span>
+          </button>
+
+          {/* Tab 6: Admin */}
+          <button
+            onClick={() => setActiveTab('admin')}
+            className={`py-1 px-1 rounded-2xl flex flex-col items-center justify-center transition-all cursor-pointer ${
+              activeTab === 'admin'
+                ? 'text-violet-300 font-black'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <div
+              className={`p-1.5 rounded-xl transition-all ${
+                activeTab === 'admin'
+                  ? 'bg-violet-500/25 border border-violet-400/40 text-violet-300 shadow-md shadow-violet-500/20'
+                  : 'bg-transparent text-slate-400'
+              }`}
+            >
+              <Shield className="w-4 h-4" />
+            </div>
+            <span className="text-[10px] tracking-tight mt-0.5 font-bold">Admin</span>
+          </button>
+        </div>
+      </nav>
+
       {/* Location Modal */}
       <LocationPermissionModal
         isOpen={isLocationModalOpen}
@@ -1517,6 +1649,7 @@ export default function App() {
         currentUserId={currentUser.id}
         currentUserName={currentUser.name}
         initialOrigin={userLocation?.address || 'Campana Centro (Plaza Eduardo Costa)'}
+        userLocation={userLocation}
         onSuccess={() => {
           showToast('¡Aviso de transporte emitido a choferes de Moto y Auto Taxi!');
         }}

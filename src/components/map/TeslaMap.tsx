@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
-import { TransitRoute, MapEvent, LiveBus, TaxiListing, BusStop, EventType } from '../../types';
+import { TransitRoute, MapEvent, LiveBus, TaxiListing, BusStop, EventType, SolicitudTransporteFirestore } from '../../types';
 import { UserLocation, getDistanceKm } from '../../utils/geolocation';
 import { MAP_CONFIG } from '../../config/api';
 import {
@@ -95,10 +95,13 @@ interface TeslaMapProps {
   isDriverOnline?: boolean;
   activeTrackingTaxi?: TaxiListing | null;
   onClearTrackingTaxi?: () => void;
+  activeTrackingPassenger?: SolicitudTransporteFirestore | null;
+  onClearTrackingPassenger?: () => void;
   onOpenPedirTransporte?: () => void;
   onAddEvent?: (event: Omit<MapEvent, 'id' | 'confirmations' | 'confirmedByUserIds' | 'reportedAt'>) => void;
   currentUserName?: string;
   currentUserId?: string;
+  focusedStop?: BusStop | null;
 }
 
 export const TRANSIT_EVENT_TYPES: {
@@ -246,10 +249,13 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
   isDriverOnline = false,
   activeTrackingTaxi,
   onClearTrackingTaxi,
+  activeTrackingPassenger,
+  onClearTrackingPassenger,
   onOpenPedirTransporte,
   onAddEvent,
   currentUserName,
   currentUserId,
+  focusedStop,
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
@@ -265,8 +271,20 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
   const userMarkerRef = useRef<L.LayerGroup | null>(null);
   const trajectoryLayerRef = useRef<L.LayerGroup | null>(null);
   const stopTrajectoryLayerRef = useRef<L.LayerGroup | null>(null);
+  const passengerTrackingLayerRef = useRef<L.LayerGroup | null>(null);
   const gasStationsLayerRef = useRef<L.LayerGroup | null>(null);
   const schoolsLayerRef = useRef<L.LayerGroup | null>(null);
+
+  // Passenger Trajectory state for drivers navigating to passenger pickup
+  const [passengerTrajectoryInfo, setPassengerTrajectoryInfo] = useState<{
+    solicitud: SolicitudTransporteFirestore;
+    distKm: number;
+    etaDriveMin: number;
+    driverLat: number;
+    driverLng: number;
+    passengerLat: number;
+    passengerLng: number;
+  } | null>(null);
 
   // Map state
   const [activeTileStyle, setActiveTileStyle] = useState<'streets' | 'tesla-dark' | 'osm'>('osm');
@@ -308,6 +326,20 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
     userLat: number;
     userLng: number;
   } | null>(null);
+
+  // Focus on a stop when requested from bottom sheet
+  useEffect(() => {
+    if (!focusedStop || !mapInstanceRef.current) return;
+    mapInstanceRef.current.flyTo([focusedStop.lat, focusedStop.lng], 16, {
+      animate: true,
+      duration: 1.2,
+    });
+    const matchedRoute = routes.find((r) => r.id === 'route-zarate-malvinas') || routes[0];
+    if (matchedRoute) {
+      setSelectedStop({ stop: focusedStop, route: matchedRoute });
+      setAreCardsVisible(true);
+    }
+  }, [focusedStop, routes]);
 
   // Auto-hide cards logic: 3.5 seconds of exposure, waking up on touch/hover, staying while interacting
   const [areCardsVisible, setAreCardsVisible] = useState(true);
@@ -539,6 +571,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
     userMarkerRef.current = L.layerGroup().addTo(map);
     trajectoryLayerRef.current = L.layerGroup().addTo(map);
     stopTrajectoryLayerRef.current = L.layerGroup().addTo(map);
+    passengerTrackingLayerRef.current = L.layerGroup().addTo(map);
     gasStationsLayerRef.current = L.layerGroup().addTo(map);
     schoolsLayerRef.current = L.layerGroup().addTo(map);
 
@@ -1344,6 +1377,180 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
     };
   }, [activeTrackingTaxi, userLocation]);
 
+  // =========================================================================
+  // PASSENGER TRACKING TRAJECTORY & GPS (Chofer hacia Pasajero)
+  // =========================================================================
+  useEffect(() => {
+    if (!mapInstanceRef.current || !passengerTrackingLayerRef.current) return;
+    const map = mapInstanceRef.current;
+    const layer = passengerTrackingLayerRef.current;
+    layer.clearLayers();
+
+    if (!activeTrackingPassenger) {
+      setPassengerTrajectoryInfo(null);
+      return;
+    }
+
+    // Driver location (or fallback to Campana Centro)
+    const driverLat = userLocation?.lat || -34.1683;
+    const driverLng = userLocation?.lng || -58.9592;
+
+    // Passenger location (or fallback to Malvinas)
+    const passengerLat = activeTrackingPassenger.origenCoords?.lat || -34.2096;
+    const passengerLng = activeTrackingPassenger.origenCoords?.lng || -58.9426;
+
+    let isMounted = true;
+
+    // Voice announcement
+    try {
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(
+          `Ubicación del pasajero ${activeTrackingPassenger.nombrePasajero} habilitada en GPS. Trazando ruta hacia ${activeTrackingPassenger.origen}.`
+        );
+        utterance.lang = 'es-AR';
+        utterance.rate = 1.05;
+        window.speechSynthesis.speak(utterance);
+      }
+    } catch {}
+
+    const fetchPassengerTrajectory = async () => {
+      let finalCoords: [number, number][] = [];
+      let calculatedDistKm = getDistanceKm(driverLat, driverLng, passengerLat, passengerLng);
+      let calculatedEtaMin = Math.max(1, Math.round((calculatedDistKm / 35) * 60));
+
+      try {
+        const response = await fetch(
+          `https://us1.locationiq.com/v1/directions/driving/${driverLng},${driverLat};${passengerLng},${passengerLat}?key=${CARTOGRAPHY_API_KEY}&overview=full&geometries=geojson`,
+          { signal: AbortSignal.timeout(3000) }
+        );
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data && data.routes && data.routes[0]) {
+            const rawCoords: [number, number][] = data.routes[0].geometry.coordinates.map(
+              ([lng, lat]: [number, number]) => [lat, lng]
+            );
+            if (rawCoords.length >= 2) {
+              finalCoords = rawCoords;
+              calculatedDistKm = Math.round((data.routes[0].distance / 1000) * 10) / 10;
+              calculatedEtaMin = Math.max(1, Math.round(data.routes[0].duration / 60));
+            }
+          }
+        }
+      } catch {}
+
+      if (finalCoords.length === 0) {
+        const midLat = (driverLat + passengerLat) / 2;
+        const midLng = (driverLng + passengerLng) / 2;
+        finalCoords = [[driverLat, driverLng], [midLat, midLng], [passengerLat, passengerLng]];
+      }
+
+      if (!isMounted) return;
+
+      setPassengerTrajectoryInfo({
+        solicitud: activeTrackingPassenger,
+        distKm: calculatedDistKm,
+        etaDriveMin: calculatedEtaMin,
+        driverLat,
+        driverLng,
+        passengerLat,
+        passengerLng,
+      });
+
+      // 1. PUNTO A (Chofer GPS en camino)
+      const driverMarkerIcon = L.divIcon({
+        className: 'custom-driver-origin-marker',
+        html: `
+          <div class="relative flex items-center justify-center">
+            <div class="absolute -inset-3 rounded-full bg-emerald-400/40 animate-pulse"></div>
+            <div class="relative w-9 h-9 rounded-full bg-emerald-500 border-2 border-white flex items-center justify-center text-sm shadow-[0_0_20px_#10b981] z-10 font-bold">
+              ${activeTrackingPassenger.tipoVehiculoRequerido === 'moto' ? '🏍️' : '🚕'}
+            </div>
+            <div class="absolute -bottom-6 bg-[#07090e]/95 text-emerald-300 font-mono text-[9.5px] font-bold px-2 py-0.5 rounded-full border border-emerald-400/80 shadow-2xl whitespace-nowrap z-20 flex items-center gap-1">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+              <span>TU VEHÍCULO</span>
+            </div>
+          </div>
+        `,
+        iconSize: [36, 36],
+        iconAnchor: [18, 18],
+      });
+      L.marker([driverLat, driverLng], { icon: driverMarkerIcon }).addTo(layer);
+
+      // 2. PUNTO B (Pasajero con Beacon Titilando)
+      const passengerBeaconIcon = L.divIcon({
+        className: 'custom-passenger-beacon-marker',
+        html: `
+          <div class="relative flex items-center justify-center">
+            <div class="absolute -inset-4 rounded-full bg-cyan-400/40 animate-ping"></div>
+            <div class="absolute -inset-2 rounded-full bg-cyan-500/60 marker-titilando"></div>
+            <div class="relative w-9 h-9 rounded-full bg-gradient-to-br from-cyan-400 to-sky-600 border-2 border-white flex items-center justify-center text-sm shadow-[0_0_25px_#06b6d4] z-10 font-bold text-white">
+              🧑
+            </div>
+            <div class="absolute -bottom-6 bg-[#07090e]/95 text-cyan-200 font-mono text-[10px] font-bold px-2.5 py-0.5 rounded-full border border-cyan-400/80 shadow-2xl whitespace-nowrap z-20 flex items-center gap-1">
+              <span class="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping"></span>
+              <span>PASAJERO: ${activeTrackingPassenger.nombrePasajero}</span>
+            </div>
+          </div>
+        `,
+        iconSize: [36, 36],
+        iconAnchor: [18, 18],
+      });
+
+      const pMarker = L.marker([passengerLat, passengerLng], { icon: passengerBeaconIcon }).addTo(layer);
+      pMarker.bindPopup(`
+        <div style="font-family: inherit; padding: 4px; color: #0f172a; max-width: 250px;">
+          <div style="font-size: 13px; font-weight: 800; color: #0f172a; display: flex; align-items: center; gap: 4px;">
+            <span>🧑</span> <span>${activeTrackingPassenger.nombrePasajero}</span>
+          </div>
+          <div style="font-size: 11px; color: #0369a1; font-weight: 700; margin-top: 2px;">
+            📍 Origen: ${activeTrackingPassenger.origen}
+          </div>
+          <div style="font-size: 10.5px; color: #475569; margin-top: 2px;">
+            🏁 Destino: ${activeTrackingPassenger.destino}
+          </div>
+          <div style="margin-top: 8px;">
+            <a href="https://www.google.com/maps/dir/?api=1&destination=${passengerLat},${passengerLng}&travelmode=driving" target="_blank" rel="noopener noreferrer" style="display: block; text-align: center; background: #06b6d4; color: #021a24; font-size: 11px; font-weight: 800; padding: 6px 10px; border-radius: 8px; text-decoration: none;">
+              Iniciar Guía GPS en Google Maps ➔
+            </a>
+          </div>
+        </div>
+      `);
+
+      // 3. Trajectory Polyline
+      L.polyline(finalCoords, {
+        color: '#06b6d4',
+        weight: 10,
+        opacity: 0.35,
+        lineCap: 'round',
+        lineJoin: 'round',
+      }).addTo(layer);
+
+      L.polyline(finalCoords, {
+        color: '#22d3ee',
+        weight: 5,
+        opacity: 0.95,
+        className: 'leaflet-route-flow',
+        lineCap: 'round',
+        lineJoin: 'round',
+      }).addTo(layer);
+
+      // 4. Auto-fit bounds
+      try {
+        const bounds = L.latLngBounds([[driverLat, driverLng], [passengerLat, passengerLng]]);
+        map.fitBounds(bounds, { padding: [80, 80], maxZoom: 16 });
+      } catch {}
+    };
+
+    fetchPassengerTrajectory();
+
+    return () => {
+      isMounted = false;
+      layer.clearLayers();
+    };
+  }, [activeTrackingPassenger, userLocation]);
+
   const handleFitEntireRoute = () => {
     if (!mapInstanceRef.current) return;
     const map = mapInstanceRef.current;
@@ -1380,6 +1587,22 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
     mapInstanceRef.current.flyTo([userLocation.lat, userLocation.lng], 15, { duration: 1.2 });
   };
 
+  // External trigger listeners for bottom bar buttons ("Mi ubicacion" y "Enfocar")
+  useEffect(() => {
+    const handleLocateEvent = () => {
+      handleLocateMe();
+    };
+    const handleFitRouteEvent = () => {
+      handleFitEntireRoute();
+    };
+    window.addEventListener('uppa-map-locate-me', handleLocateEvent);
+    window.addEventListener('uppa-map-fit-route', handleFitRouteEvent);
+    return () => {
+      window.removeEventListener('uppa-map-locate-me', handleLocateEvent);
+      window.removeEventListener('uppa-map-fit-route', handleFitRouteEvent);
+    };
+  }, [userLocation, stopTrajectoryInfo, activeTrackingTaxi, activeRoute]);
+
   return (
     <div
       onMouseMove={resetHideTimer}
@@ -1415,53 +1638,6 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
           >
             <span className="w-2 h-2 rounded-full bg-sky-400 animate-pulse" />
             <span>Modo Mapa Libre · Tocar para ver controles</span>
-          </button>
-        </div>
-      )}
-
-      {/* Top-Left: Recorrido Total Malvinas ↔ Zárate (Sin desplegable) */}
-      <div
-        onMouseEnter={handleCardMouseEnter}
-        onMouseLeave={handleCardMouseLeave}
-        className={`absolute top-4 left-4 z-20 transition-all duration-500 ease-in-out ${
-          areCardsVisible
-            ? 'opacity-100 translate-y-0 pointer-events-auto'
-            : 'opacity-0 -translate-y-3 pointer-events-none'
-        }`}
-      >
-        <div className="glass-panel px-3 py-2 rounded-2xl flex items-center gap-2.5 text-xs shadow-xl border border-white/10 backdrop-blur-2xl bg-[#070b14]/90">
-          <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 shadow-[0_0_8px_#22d3ee] animate-pulse" />
-          <span className="font-extrabold text-white text-xs">
-            B° Malvinas ↔ Zárate Terminal
-          </span>
-          <span className="text-[10px] text-cyan-300 font-mono font-bold bg-cyan-500/15 px-1.5 py-0.5 rounded-full border border-cyan-400/30">
-            {totalRoute.stops.length} Paradas
-          </span>
-        </div>
-      </div>
-
-      {/* Top-Right: Botón pequeño de Pedir Transporte Alternativo */}
-      {onOpenPedirTransporte && (
-        <div
-          onMouseEnter={handleCardMouseEnter}
-          onMouseLeave={handleCardMouseLeave}
-          className={`absolute top-4 right-14 sm:right-16 z-20 transition-all duration-500 ease-in-out ${
-            areCardsVisible
-              ? 'opacity-100 translate-y-0 pointer-events-auto'
-              : 'opacity-0 -translate-y-3 pointer-events-none'
-          }`}
-        >
-          <button
-            onClick={onOpenPedirTransporte}
-            className="group relative h-8 px-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black text-xs flex items-center gap-1.5 shadow-lg shadow-amber-500/20 active:scale-95 transition-all cursor-pointer ring-1 ring-amber-300/80"
-            title="Pedir Transporte Alternativo (Aviso inmediato a Choferes de Moto y Auto Taxi)"
-          >
-            <span className="relative flex h-1.5 w-1.5">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-slate-950 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-slate-950"></span>
-            </span>
-            <Zap className="w-3.5 h-3.5 fill-slate-950" />
-            <span className="text-[11px] font-black tracking-tight">Pedir 🚕</span>
           </button>
         </div>
       )}
@@ -2181,70 +2357,151 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
         </div>
       )}
 
-      {/* Tesla Navigation HUD Card for Bus Corridor (Bottom-Left) */}
-      {!activeTrackingTaxi && !stopTrajectoryInfo && !selectedStop && (
+      {/* =========================================================================
+          ACTIVE PASSENGER TRACKING HUD (Guía GPS Activa hacia el Pasajero)
+         ========================================================================= */}
+      {passengerTrajectoryInfo && (
         <div
           onMouseEnter={handleCardMouseEnter}
           onMouseLeave={handleCardMouseLeave}
-          className={`absolute bottom-6 left-4 z-20 max-w-[calc(100vw-150px)] sm:max-w-xs transition-all duration-500 ease-in-out ${
+          className={`absolute top-16 sm:top-18 left-4 right-4 sm:right-auto sm:w-[400px] z-30 transition-all duration-500 ease-in-out ${
             areCardsVisible
               ? 'opacity-100 translate-y-0 pointer-events-auto'
-              : 'opacity-0 translate-y-3 pointer-events-none'
+              : 'opacity-0 -translate-y-3 pointer-events-none'
           }`}
         >
-          <div className="glass-panel p-3.5 rounded-2xl shadow-2xl flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-sky-400/15 border border-sky-400/30 flex items-center justify-center text-sky-300 shrink-0">
-              <Compass className="w-4 h-4" />
-            </div>
+          <div className="glass-panel p-4 rounded-3xl shadow-2xl border border-emerald-400/50 relative overflow-hidden bg-[#070b14]/95 backdrop-blur-2xl">
+            <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 animate-pulse" />
 
-            <div className="space-y-0.5 min-w-0">
+            <div className="flex items-start justify-between gap-2 pb-2.5 border-b border-white/5">
               <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-white truncate">
-                  {activeRoute.shortName}
+                <span className="relative flex h-3 w-3">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
                 </span>
-                <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-md bg-amber-400/15 text-amber-300 border border-amber-400/30 font-semibold">
-                  +18m
+                <span className="text-xs font-black text-emerald-300 uppercase tracking-wider font-mono flex items-center gap-1.5">
+                  <Navigation className="w-3.5 h-3.5 text-emerald-400 fill-emerald-400" />
+                  <span>Ubicación GPS del Pasajero Habilitada</span>
                 </span>
               </div>
+              {onClearTrackingPassenger && (
+                <button
+                  onClick={onClearTrackingPassenger}
+                  className="w-7 h-7 rounded-full bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
+                  title="Cerrar seguimiento de pasajero"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
 
-              <div className="text-[11px] text-slate-400 font-mono flex items-center gap-2">
-                <span>{nearestBus ? `${nearestBus.speedKmH} km/h` : 'En ruta'}</span>
-                <span>·</span>
-                <span className="text-sky-300">ETA {nearestBus?.etaMinutes || 4}m</span>
+            <div className="pt-3 space-y-3">
+              {/* Distance and ETA calculations */}
+              <div className="p-3.5 rounded-2xl bg-gradient-to-br from-emerald-500/20 via-teal-500/10 to-cyan-500/15 border border-emerald-400/40 flex items-center justify-between">
+                <div>
+                  <div className="text-[10px] text-emerald-300 font-mono uppercase tracking-wider font-bold">
+                    Distancia al Pasajero
+                  </div>
+                  <div className="text-2xl font-black text-white font-display flex items-baseline gap-1.5 mt-0.5">
+                    <span>
+                      {passengerTrajectoryInfo.distKm < 1
+                        ? `${Math.round(passengerTrajectoryInfo.distKm * 1000)} m`
+                        : `${passengerTrajectoryInfo.distKm} km`}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="text-right space-y-1">
+                  <div className="text-xs font-mono text-emerald-300 font-extrabold flex items-center justify-end gap-1.5 bg-emerald-500/25 px-2.5 py-1 rounded-lg border border-emerald-400/40">
+                    <span>🚗</span>
+                    <span>~{passengerTrajectoryInfo.etaDriveMin} min en viaje</span>
+                  </div>
+                  <div className="text-[10px] font-mono text-cyan-300 flex items-center justify-end gap-1">
+                    <span>GPS</span>
+                    <span>Ruta óptima trazada</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Passenger Info & Addresses */}
+              <div className="space-y-1.5 text-xs bg-white/[0.03] p-3 rounded-2xl border border-white/5">
+                <div className="flex items-center justify-between pb-1.5 mb-1 border-b border-white/5">
+                  <div className="flex items-center gap-2">
+                    <span className="w-6 h-6 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 flex items-center justify-center font-bold text-xs">
+                      🧑
+                    </span>
+                    <span className="font-bold text-white text-xs">
+                      {passengerTrajectoryInfo.solicitud.nombrePasajero}
+                    </span>
+                  </div>
+                  <span className="text-[9.5px] uppercase font-bold text-emerald-300 bg-emerald-500/20 px-2 py-0.5 rounded border border-emerald-400/30">
+                    {passengerTrajectoryInfo.solicitud.tipoVehiculoRequerido === 'moto' ? 'Moto Taxi' : 'Auto Taxi'}
+                  </span>
+                </div>
+
+                <div className="flex items-start gap-2 text-slate-200">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shrink-0 mt-1 shadow-[0_0_8px_#34d399]" />
+                  <div className="min-w-0 flex-1">
+                    <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider block">Punto de Encuentro:</span>
+                    <span className="text-white font-medium text-xs block leading-tight">
+                      {passengerTrajectoryInfo.solicitud.origen}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-2 text-slate-200 pt-1">
+                  <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 shrink-0 mt-1 shadow-[0_0_8px_#06b6d4]" />
+                  <div className="min-w-0 flex-1">
+                    <span className="text-[10px] font-bold text-cyan-400 uppercase tracking-wider block">Destino Final:</span>
+                    <span className="text-cyan-200 font-medium text-xs block leading-tight">
+                      {passengerTrajectoryInfo.solicitud.destino}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center gap-2 pt-1 flex-wrap">
+                <a
+                  href={`https://www.google.com/maps/dir/?api=1&destination=${passengerTrajectoryInfo.passengerLat},${passengerTrajectoryInfo.passengerLng}&travelmode=driving`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-1 h-10 rounded-2xl bg-gradient-to-r from-emerald-400 to-teal-400 hover:from-emerald-300 hover:to-teal-300 text-slate-950 font-black text-xs flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-500/25 active:scale-95 transition-all cursor-pointer ring-1 ring-emerald-300"
+                  title="Abrir en Google Maps con navegación por voz paso a paso"
+                >
+                  <Navigation className="w-3.5 h-3.5 fill-slate-950 text-slate-950" />
+                  <span>Google Maps GPS</span>
+                </a>
+
+                {passengerTrajectoryInfo.solicitud.telefonoPasajero && (
+                  <a
+                    href={`https://wa.me/${passengerTrajectoryInfo.solicitud.telefonoPasajero}?text=${encodeURIComponent(
+                      `¡Hola ${passengerTrajectoryInfo.solicitud.nombrePasajero}! Soy tu chofer de UPPA. Voy en camino hacia ${passengerTrajectoryInfo.solicitud.origen}.`
+                    )}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="h-10 px-3 rounded-2xl bg-[#25D366]/20 hover:bg-[#25D366]/30 border border-[#25D366]/40 text-[#25D366] font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-sm"
+                    title="Enviar WhatsApp al Pasajero"
+                  >
+                    <MessageCircle className="w-3.5 h-3.5" />
+                    <span>WhatsApp</span>
+                  </a>
+                )}
+
+                {onClearTrackingPassenger && (
+                  <button
+                    onClick={onClearTrackingPassenger}
+                    className="px-3 h-10 rounded-2xl glass-button text-xs font-semibold text-slate-300 hover:text-white cursor-pointer"
+                    title="Finalizar navegación"
+                  >
+                    Llegué / Finalizar
+                  </button>
+                )}
               </div>
             </div>
           </div>
         </div>
       )}
-
-      {/* Floating Bottom Quick Action Pills (Center-Right) con desplazamiento inteligente anti-superposición */}
-      <div
-        onMouseEnter={handleCardMouseEnter}
-        onMouseLeave={handleCardMouseLeave}
-        className={`absolute right-4 z-20 flex items-center gap-2 transition-all duration-500 ease-in-out ${
-          selectedStop ? 'bottom-32 sm:bottom-28' : 'bottom-6'
-        } ${
-          areCardsVisible
-            ? 'opacity-100 translate-y-0 pointer-events-auto'
-            : 'opacity-0 translate-y-3 pointer-events-none'
-        }`}
-      >
-        <button
-          onClick={handleLocateMe}
-          className="w-11 h-11 rounded-2xl glass-button text-slate-200 hover:text-sky-300 flex items-center justify-center shadow-lg"
-          title="Mi Ubicación GPS"
-        >
-          <Navigation className="w-4 h-4 text-sky-300" />
-        </button>
-
-        <button
-          onClick={handleFitEntireRoute}
-          className="w-11 h-11 rounded-2xl glass-button text-slate-200 hover:text-white flex items-center justify-center shadow-lg"
-          title="Enfocar Recorrido"
-        >
-          <Maximize2 className="w-4 h-4" />
-        </button>
-      </div>
 
       {/* Stop Inspector Bottom Drawer (Minimal Glass Drawer) con Información Completa y Botón IR (Guía GPS) */}
       {!stopTrajectoryInfo && selectedStop && (

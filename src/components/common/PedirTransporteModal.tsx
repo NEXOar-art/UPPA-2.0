@@ -22,6 +22,7 @@ interface PedirTransporteModalProps {
   currentUserId?: string;
   currentUserName?: string;
   initialOrigin?: string;
+  userLocation?: { lat: number; lng: number; address?: string } | null;
   onSuccess?: (solicitud: SolicitudTransporteFirestore) => void;
 }
 
@@ -31,13 +32,14 @@ export const PedirTransporteModal: React.FC<PedirTransporteModalProps> = ({
   currentUserId = 'usr-anonimo',
   currentUserName = 'Pasajero Comunidad UPPA',
   initialOrigin = 'Campana Centro (Plaza Eduardo Costa)',
+  userLocation,
   onSuccess,
 }) => {
-  const [origen, setOrigen] = useState('');
+  const [origen, setOrigen] = useState(initialOrigin);
   const [destino, setDestino] = useState('');
   const [tipoVehiculo, setTipoVehiculo] = useState<'moto' | 'auto'>('moto');
   const [telefono, setTelefono] = useState('');
-  const [nombre, setNombre] = useState('');
+  const [nombre, setNombre] = useState(currentUserName !== 'Pasajero' ? currentUserName : '');
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -45,14 +47,14 @@ export const PedirTransporteModal: React.FC<PedirTransporteModalProps> = ({
 
   useEffect(() => {
     if (isOpen) {
-      setOrigen('');
+      setOrigen(initialOrigin || '');
       setDestino('');
-      setNombre('');
+      setNombre(currentUserName && currentUserName !== 'Pasajero' ? currentUserName : '');
       setTelefono('');
       setErrorMsg('');
       setSuccessMsg(null);
     }
-  }, [isOpen]);
+  }, [isOpen, initialOrigin, currentUserName]);
 
   if (!isOpen) return null;
 
@@ -77,6 +79,7 @@ export const PedirTransporteModal: React.FC<PedirTransporteModalProps> = ({
         telefonoPasajero: telefono.trim(),
         origen: origen.trim(),
         destino: destino.trim(),
+        origenCoords: userLocation ? { lat: userLocation.lat, lng: userLocation.lng } : undefined,
         tipoVehiculoRequerido: tipoVehiculo,
         precioEstimado: tipoVehiculo === 'moto' ? 2200 : 3800,
         distanciaKm: 4.8,

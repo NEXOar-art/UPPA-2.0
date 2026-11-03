@@ -55,6 +55,7 @@ interface TaxiMarketplaceProps {
   taxis: TaxiListing[];
   onOpenPublishModal: (tab?: 'transfer' | 'enter-code') => void;
   onSelectTaxiOnMap?: (taxi: TaxiListing) => void;
+  onLocatePassengerOnMap?: (solicitud: SolicitudTransporteFirestore) => void;
   currentUserId?: string;
   currentUserName?: string;
   currentUserPhone?: string;
@@ -66,6 +67,7 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
   taxis,
   onOpenPublishModal,
   onSelectTaxiOnMap,
+  onLocatePassengerOnMap,
   currentUserId = 'usr-anon',
   currentUserName = 'Pasajero',
   currentUserPhone = '',
@@ -180,8 +182,18 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
         );
       }
 
-      setRideSuccessNotice('¡Aceptaste el viaje! Tu perfil ahora titila en estado ACTIVO (Ocupado). Al finalizar el viaje, abrí tu perfil para pasar a Desocupado.');
+      setRideSuccessNotice('¡Aceptaste el viaje! Ubicación del pasajero habilitada en GPS y tu perfil pasó a ACTIVO (Ocupado).');
       setTimeout(() => setRideSuccessNotice(null), 5000);
+
+      if (onLocatePassengerOnMap && target) {
+        onLocatePassengerOnMap({
+          ...target,
+          estado: 'aceptado',
+          choferId: currentUserId,
+          choferNombre: currentUserName,
+          choferTelefono: currentUserPhone,
+        });
+      }
     } catch (e: any) {
       alert('Error al aceptar viaje: ' + (e.message || ''));
     }
@@ -540,13 +552,30 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                             </button>
                           </div>
                         ) : (
-                          <div className="pt-1 border-t border-emerald-500/20 flex items-center justify-between text-[10px]">
-                            <p className="text-emerald-300 font-semibold truncate">
-                              Chofer: {sol.choferNombre || 'Asignado'}
-                            </p>
-                            <span className="text-[9px] text-emerald-400/80 font-mono shrink-0 ml-1" title="Visibilidad de 16 minutos tras aceptación">
-                              {acceptedMins} min restantes
-                            </span>
+                          <div className="pt-1.5 border-t border-emerald-500/20 space-y-1.5">
+                            <div className="flex items-center justify-between text-[10px]">
+                              <p className="text-emerald-300 font-semibold truncate">
+                                Chofer: {sol.choferNombre || 'Asignado'}
+                              </p>
+                              <span className="text-[9px] text-emerald-400/80 font-mono shrink-0 ml-1" title="Visibilidad de 16 minutos tras aceptación">
+                                {acceptedMins} min restantes
+                              </span>
+                            </div>
+
+                            {/* Botón para que el prestador de servicio ubique al usuario con GPS */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (onLocatePassengerOnMap) {
+                                  onLocatePassengerOnMap(sol);
+                                }
+                              }}
+                              className="w-full py-1.5 px-2.5 rounded-lg bg-gradient-to-r from-emerald-400 via-teal-400 to-cyan-400 hover:from-emerald-300 hover:to-cyan-300 text-slate-950 font-black text-[11px] flex items-center justify-center gap-1.5 shadow-md shadow-emerald-500/25 active:scale-95 transition-all cursor-pointer ring-1 ring-emerald-300"
+                              title="Habilitar ubicación del pasajero en el GPS y trazar ruta hacia su posición"
+                            >
+                              <Navigation className="w-3.5 h-3.5 fill-slate-950 text-slate-950" />
+                              <span>📍 Ubicar con GPS en Mapa</span>
+                            </button>
                           </div>
                         )}
                       </div>
