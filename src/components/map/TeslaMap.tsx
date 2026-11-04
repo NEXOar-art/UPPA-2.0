@@ -557,8 +557,6 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
       attributionControl: false,
     });
 
-    L.control.zoom({ position: 'topright' }).addTo(map);
-
     // Initialise with 'streets' (Calles & Rutas LocationIQ)
     const baseTile = createResilientTileLayer('streets').addTo(map);
     tileLayerRef.current = baseTile;
