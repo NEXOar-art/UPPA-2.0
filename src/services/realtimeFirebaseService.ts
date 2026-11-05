@@ -1403,24 +1403,6 @@ const MOCK_INITIAL_HABILITACIONES: HabilitacionChofer[] = [
     comprobanteFileName: 'comprobante_luciaveronicag_pago.pdf',
     habilitadoPor: 'Administrador (Clave 0608)',
   },
-  {
-    id: 'hab-2',
-    driverId: 'drv-carlos',
-    driverName: 'Carlos Chofer Moto Express',
-    vehicleType: 'moto',
-    vehicleModel: 'Honda Wave 110 Roja',
-    whatsapp: '5493487556677',
-    zone: 'Barrio Malvinas ↔ McDonald\'s',
-    horas: 12,
-    estado: 'pendiente',
-    activadoConClaveAdmin: false,
-    alias: 'luciaveronicag',
-    cvu: '0000003100020253501840',
-    titular: 'Lucia Veronica Gimenez',
-    createdAt: Date.now() - 25 * 60 * 1000,
-    comprobanteFileName: 'transferencia_mercado_pago_carlos.pdf',
-    adminNotes: 'Comprobante recibido por WhatsApp 3489690058. Pendiente habilitación con clave 0608.',
-  },
 ];
 
 // In-Memory & Cross-Tab Broadcast Channel para habilitaciones de choferes
@@ -1464,15 +1446,17 @@ if (habilitacionesBroadcastChannel) {
 }
 
 export function obtenerHabilitacionesActuales(): HabilitacionChofer[] {
-  return getCached<HabilitacionChofer[]>('habilitaciones', MOCK_INITIAL_HABILITACIONES);
+  const cached = getCached<HabilitacionChofer[]>('habilitaciones', MOCK_INITIAL_HABILITACIONES);
+  return cached.filter((h) => h.id !== 'hab-2' && h.driverId !== 'drv-carlos');
 }
 
 export function subscribeToHabilitacionesChofer(
   callback: (habilitaciones: HabilitacionChofer[]) => void,
   onError?: (error: any) => void
 ) {
-  // 1. Invocar inmediatamente con la caché local para 0ms de espera en la interfaz
-  const initialList = getCached<HabilitacionChofer[]>('habilitaciones', MOCK_INITIAL_HABILITACIONES);
+  // 1. Invocar inmediatamente con la caché local filtrada (sin solicitudes simuladas)
+  const initialList = getCached<HabilitacionChofer[]>('habilitaciones', MOCK_INITIAL_HABILITACIONES)
+    .filter((h) => h.id !== 'hab-2' && h.driverId !== 'drv-carlos');
   callback(initialList);
 
   // 2. Registrar en la lista de observadores activos

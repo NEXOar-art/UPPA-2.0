@@ -62,8 +62,6 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
   currentUserName,
   currentUserPhone = '',
 }) => {
-  const [modalTab, setModalTab] = useState<'transfer' | 'enter-code'>(initialTab);
-
   // Transfer Step Form
   const [selectedHours, setSelectedHours] = useState<number>(12);
   const [driverName, setDriverName] = useState('');
@@ -74,21 +72,16 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
   const [proofFileName, setProofFileName] = useState<string>('');
   const [copiedAlias, setCopiedAlias] = useState(false);
   const [copiedCbu, setCopiedCbu] = useState(false);
-  const [copiedGeneratedCode, setCopiedGeneratedCode] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
   // Generated code presentation state
   const [generatedCodeResult, setGeneratedCodeResult] = useState<string | null>(null);
   const [adminPinInput, setAdminPinInput] = useState<string>('');
   const [pinValidationErr, setPinValidationErr] = useState<string>('');
-
-  // Direct Code Entry Form
-  const [inputCode, setInputCode] = useState('');
   const [codeSuccessMsg, setCodeSuccessMsg] = useState<string | null>(null);
 
   useEffect(() => {
     if (isOpen) {
-      setModalTab(initialTab);
       setGeneratedCodeResult(null);
       setErrorMsg('');
       setCodeSuccessMsg(null);
@@ -98,9 +91,8 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
       setVehicleModel('');
       setZone('');
       setAdminPinInput('');
-      setInputCode('');
     }
-  }, [isOpen, initialTab]);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -119,11 +111,6 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
     setTimeout(() => setCopiedCbu(false), 2000);
   };
 
-  const handleCopyGeneratedCode = (code: string) => {
-    navigator.clipboard.writeText(code);
-    setCopiedGeneratedCode(true);
-    setTimeout(() => setCopiedGeneratedCode(false), 2000);
-  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -253,52 +240,6 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
     }
   };
 
-  // Direct activation using code (checks Firestore codigos_habilitacion first, then local validation)
-  const handleActivateWithCode = async (codeToUse: string) => {
-    setErrorMsg('');
-    const cleanCode = codeToUse.trim().toUpperCase();
-    if (!cleanCode) {
-      setErrorMsg('Por favor ingresá un código válido.');
-      return;
-    }
-
-    try {
-      // 1. Try Firestore codigos_habilitacion collection (Lógica de Chofer)
-      const firestoreMsg = await habilitarChofer(cleanCode, currentUserId || `usr-${Date.now()}`);
-      setCodeSuccessMsg(firestoreMsg);
-
-      const activeSession = getActiveDriverSession();
-      if (activeSession && onActivateDriverSession) {
-        onActivateDriverSession(activeSession);
-      }
-
-      setTimeout(() => {
-        onClose();
-      }, 1200);
-      return;
-    } catch (err: any) {
-      // If code was not found in Firestore codigos_habilitacion, try local fallback registry
-      const res = validateAndActivateCode(cleanCode, {
-        driverName,
-        vehicleType,
-        vehicleModel,
-        whatsapp,
-        zone,
-      });
-
-      if (res.success && res.session) {
-        if (onActivateDriverSession) {
-          onActivateDriverSession(res.session);
-        }
-        setCodeSuccessMsg(res.message);
-        setTimeout(() => {
-          onClose();
-        }, 1200);
-      } else {
-        setErrorMsg(err.message || res.message);
-      }
-    }
-  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200">
@@ -330,38 +271,13 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
           </button>
         </div>
 
-        {/* Tab switcher: Transferir & Obtener Código vs Tengo un Código */}
+        {/* Título: Transferir para prestar servicio */}
         {!generatedCodeResult && (
-          <div className="flex rounded-xl sm:rounded-2xl bg-white/[0.04] p-1 my-2.5 sm:my-3 border border-white/5 shrink-0">
-            <button
-              type="button"
-              onClick={() => {
-                setModalTab('transfer');
-                setErrorMsg('');
-              }}
-              className={`flex-1 py-1.5 text-[11px] sm:text-xs font-bold rounded-lg sm:rounded-xl transition-all cursor-pointer text-center ${
-                modalTab === 'transfer'
-                  ? 'bg-emerald-500/20 text-emerald-200 border border-emerald-400/40 shadow-sm'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              1. Transferir y Solicitar Código
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setModalTab('enter-code');
-                setErrorMsg('');
-              }}
-              className={`flex-1 py-1.5 text-[11px] sm:text-xs font-bold rounded-lg sm:rounded-xl transition-all flex items-center justify-center gap-1 sm:gap-1.5 cursor-pointer text-center ${
-                modalTab === 'enter-code'
-                  ? 'bg-emerald-500/20 text-emerald-200 border border-emerald-400/40 shadow-sm'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              <KeyRound className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-              <span>2. Ya tengo un Código</span>
-            </button>
+          <div className="py-2.5 px-3 rounded-xl sm:rounded-2xl bg-emerald-500/10 border border-emerald-400/30 text-center my-2.5 sm:my-3 shrink-0 shadow-sm">
+            <h3 className="text-xs sm:text-sm font-black text-emerald-300 tracking-wider uppercase font-display flex items-center justify-center gap-2">
+              <Sparkles className="w-4 h-4 text-emerald-400" />
+              <span>TRANSFERIR PARA PRESTAR SERVICIO</span>
+            </h3>
           </div>
         )}
 
@@ -383,75 +299,75 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
         {/* Scrollable Form Content */}
         <div className="flex-1 overflow-y-auto pr-1">
           {/* ========================================================
-              STEP A: GENERATED CODE SCREEN
+              CONFIRMATION SCREEN (SIN CÓDIGO SIMULADO - HABILITACIÓN POR ADMINISTRADOR)
               ======================================================== */}
           {generatedCodeResult ? (
             <div className="py-3 space-y-3.5 animate-in fade-in duration-200 text-center">
               <div className="w-14 h-14 rounded-3xl bg-emerald-400/20 border border-emerald-400/40 text-emerald-300 mx-auto flex items-center justify-center shadow-lg shadow-emerald-500/20">
-                <Sparkles className="w-7 h-7" />
+                <CheckCircle2 className="w-7 h-7 text-emerald-400" />
               </div>
 
               <div>
-                <h3 className="text-base font-bold text-white">¡Solicitud de Chofer Registrada!</h3>
+                <h3 className="text-base font-bold text-white">¡Solicitud de Chofer Enviada!</h3>
                 <p className="text-xs text-slate-300 mt-1 max-w-sm mx-auto">
-                  Para que tu servicio quede publicado, el administrador verifica el comprobante en WhatsApp y habilita tu unidad:
+                  Tus datos se registraron en el sistema. El Administrador verifica tu comprobante de transferencia y te habilita directamente para comenzar a prestar servicio:
                 </p>
               </div>
 
-              {/* Code Box */}
-              <div className="p-4 rounded-2xl bg-black/60 border border-purple-500/40 max-w-xs mx-auto space-y-2 relative shadow-inner">
-                <div className="text-[11px] text-purple-300 uppercase tracking-widest font-mono font-bold">
-                  Código Asignado a tu Vehículo
+              {/* Resumen Real del Prestador (Sin códigos simulados) */}
+              <div className="p-3.5 rounded-2xl bg-black/60 border border-emerald-500/30 max-w-sm mx-auto text-left space-y-1.5 text-xs shadow-inner">
+                <div className="flex justify-between text-slate-300">
+                  <span className="text-slate-400">Prestador:</span>
+                  <span className="font-bold text-white">{driverName}</span>
                 </div>
-                <div className="text-2xl font-black font-mono text-emerald-300 tracking-wider">
-                  {generatedCodeResult}
+                <div className="flex justify-between text-slate-300">
+                  <span className="text-slate-400">Vehículo:</span>
+                  <span className="font-semibold text-emerald-300">
+                    {vehicleType === 'moto' ? '🏍️ Moto Taxi' : '🚕 Auto Taxi'} ({vehicleModel})
+                  </span>
                 </div>
-                <div className="text-[11px] text-slate-400">
-                  {vehicleType === 'moto' ? '🏍️ Moto Taxi' : '🚕 Auto Taxi'} · {selectedHours} Horas Pagadas
+                <div className="flex justify-between text-slate-300">
+                  <span className="text-slate-400">Tiempo Solicitado:</span>
+                  <span className="font-bold text-amber-300">{selectedHours} Horas (${totalAmount.toLocaleString('es-AR')} ARS)</span>
                 </div>
-
-                <button
-                  type="button"
-                  onClick={() => handleCopyGeneratedCode(generatedCodeResult)}
-                  className="mt-1 px-3 py-1 rounded-lg bg-purple-500/20 hover:bg-purple-500/30 text-purple-200 text-[11px] font-bold inline-flex items-center gap-1 transition-colors cursor-pointer"
-                >
-                  {copiedGeneratedCode ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                  <span>{copiedGeneratedCode ? '¡Código Copiado!' : 'Copiar Código'}</span>
-                </button>
+                <div className="flex justify-between text-slate-300">
+                  <span className="text-slate-400">WhatsApp de contacto:</span>
+                  <span className="font-mono text-slate-200">+{whatsapp}</span>
+                </div>
               </div>
 
-              {/* WhatsApp Notification Link to 3489690058 */}
+              {/* Botón de WhatsApp para comunicarse con el Administrador */}
               <div className="max-w-sm mx-auto space-y-2">
                 <a
                   href={`https://wa.me/5493489690058?text=${encodeURIComponent(
                     `Hola Lucia Veronica Gimenez! Acabo de transferir $${totalAmount.toLocaleString('es-AR')} ARS a luciaveronicag para prestar servicio de ${
                       vehicleType === 'moto' ? 'Moto Taxi' : 'Auto Taxi'
-                    } por ${selectedHours} horas.\nMi código generado es: ${generatedCodeResult}\nChofer: ${driverName.trim()}\nWhatsApp chofer: ${whatsapp.trim()}`
+                    } por ${selectedHours} horas.\nChofer: ${driverName.trim()}\nVehículo: ${vehicleModel.trim()}\nWhatsApp chofer: ${whatsapp.trim()}\nZona: ${zone.trim() || 'Zárate ↔ Campana'}`
                   )}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 text-white border border-emerald-400/40 text-xs font-bold flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 transition-all cursor-pointer"
+                  className="w-full py-3 px-3 rounded-xl bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 text-white border border-emerald-400/40 text-xs font-black flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 transition-all cursor-pointer"
                 >
-                  <MessageCircle className="w-4 h-4 text-white" />
+                  <MessageCircle className="w-4 h-4 text-white shrink-0" />
                   <span>Enviar Comprobante al WhatsApp 3489690058</span>
                 </a>
               </div>
 
-              {/* Security Rule Explanation */}
-              <div className="p-3 rounded-xl bg-purple-950/40 border border-purple-500/30 text-[11px] text-purple-200 max-w-sm mx-auto text-left space-y-1.5">
-                <div className="flex items-center gap-1.5 font-bold text-white">
-                  <KeyRound className="w-3.5 h-3.5 text-purple-400" />
+              {/* Todo el texto de Habilitación por Administrador */}
+              <div className="p-3.5 rounded-2xl bg-purple-950/40 border border-purple-500/30 text-[11px] text-purple-200 max-w-sm mx-auto text-left space-y-2 shadow-sm">
+                <div className="flex items-center gap-2 font-bold text-white">
+                  <KeyRound className="w-4 h-4 text-purple-400 shrink-0" />
                   <span>Habilitación por Administrador</span>
                 </div>
-                <p className="text-slate-300 text-[10px] leading-relaxed">
-                  El código para que quede publicado lo activa el administrador tras corroborar la transferencia a <strong className="text-white">luciaveronicag</strong>, iniciando el temporizador en vivo de {selectedHours}h únicamente para tu unidad.
+                <p className="text-slate-300 text-[10.5px] leading-relaxed">
+                  El servicio y temporizador en vivo lo activa exclusivamente el Administrador tras corroborar la transferencia a <strong className="text-white">luciaveronicag</strong> enviada al WhatsApp <strong>3489690058</strong>. No tenés que ingresar ningún código: el Administrador es quien valida y te habilita directamente en el sistema para que comiences a tomar viajes.
                 </p>
               </div>
 
-              {/* Admin Quick Unlock Form */}
+              {/* Admin Quick Unlock Form (Clave 0608 directa si está el admin en la pantalla) */}
               <div className="p-3 sm:p-3.5 rounded-2xl bg-black/60 border border-white/10 max-w-sm mx-auto space-y-2 text-left">
                 <label className="block text-[11px] font-bold text-slate-300">
-                  Ingreso de Clave de Administrador
+                  Ingreso de Clave de Administrador (0608)
                 </label>
                 <div className="flex flex-col sm:flex-row gap-2">
                   <input
@@ -461,12 +377,12 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
                       setAdminPinInput(e.target.value);
                       setPinValidationErr('');
                     }}
-                    placeholder="Clave autorizada"
+                    placeholder="Clave 0608"
                     className="flex-1 h-10 px-3 rounded-xl bg-slate-900 border border-purple-400/40 text-white font-mono text-center text-sm font-bold focus:outline-none focus:border-purple-300"
                   />
                   <button
                     type="button"
-                    onClick={() => handleAdminPinActivation(generatedCodeResult)}
+                    onClick={() => handleAdminPinActivation(generatedCodeResult || 'UPPA-HABILITADO')}
                     className="h-10 px-4 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs rounded-xl shadow-md transition-all cursor-pointer whitespace-nowrap flex items-center justify-center"
                   >
                     Habilitar Servicio
@@ -476,66 +392,20 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
                   <p className="text-[11px] text-rose-400 font-semibold">{pinValidationErr}</p>
                 )}
               </div>
-            </div>
-          ) : modalTab === 'enter-code' ? (
-            /* ========================================================
-               TAB 2: ENTER EXISTING CODE DIRECTLY
-               ======================================================== */
-            <div className="py-2 space-y-4">
-              <div className="space-y-3">
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-300 mb-1 uppercase tracking-wider">
-                    Código de Habilitación
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={inputCode}
-                    onChange={(e) => setInputCode(e.target.value.toUpperCase())}
-                    placeholder="Ej: UPPA-MOTO-6H"
-                    className="w-full bg-white/[0.04] border border-white/10 rounded-2xl px-4 py-3 text-sm font-mono font-bold text-emerald-300 placeholder:text-slate-500 focus:outline-none focus:border-emerald-400 text-center tracking-wider uppercase"
-                  />
-                </div>
 
-                {/* Driver quick details if not preloaded */}
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div>
-                    <label className="block text-[11px] text-slate-400 mb-1">Nombre</label>
-                    <input
-                      type="text"
-                      value={driverName}
-                      onChange={(e) => setDriverName(e.target.value)}
-                      placeholder="Tu nombre"
-                      className="w-full bg-white/[0.04] border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] text-slate-400 mb-1">Vehículo</label>
-                    <select
-                      value={vehicleType}
-                      onChange={(e) => setVehicleType(e.target.value as any)}
-                      className="w-full bg-[#121622] border border-white/10 rounded-xl px-2 py-1.5 text-xs text-white"
-                    >
-                      <option value="auto">🚕 Auto Taxi</option>
-                      <option value="moto">🏍️ Moto Taxi</option>
-                    </select>
-                  </div>
-                </div>
-
+              <div className="pt-1">
                 <button
                   type="button"
-                  disabled={!inputCode.trim()}
-                  onClick={() => handleActivateWithCode(inputCode)}
-                  className="w-full h-11 bg-gradient-to-r from-emerald-400 to-teal-400 hover:from-emerald-300 hover:to-teal-300 text-slate-950 font-bold text-xs rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 active:scale-97 transition-all cursor-pointer disabled:opacity-40"
+                  onClick={onClose}
+                  className="px-5 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-slate-300 hover:text-white text-xs font-semibold transition-colors cursor-pointer"
                 >
-                  <KeyRound className="w-4 h-4" />
-                  <span>Activar Servicio y Arrancar Temporizador</span>
+                  Cerrar
                 </button>
               </div>
             </div>
           ) : (
             /* ========================================================
-               TAB 1: TRANSFER AND REQUEST CODE FORM
+               FORMULARIO INTACTO: TRANSFERIR PARA PRESTAR SERVICIO
                ======================================================== */
             <form onSubmit={handleTransferSubmit} className="space-y-3 sm:space-y-3.5">
 

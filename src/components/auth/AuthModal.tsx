@@ -27,6 +27,7 @@ import {
   ArrowRight,
   Zap,
   Clock,
+  MessageCircle,
 } from 'lucide-react';
 import {
   setDriverDisponibilidad,
@@ -970,11 +971,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   </div>
                 </div>
               ) : (
-                <div className="p-4 rounded-2xl border bg-amber-950/20 border-amber-500/40 text-slate-200 space-y-2.5">
+                <div className="p-4 rounded-2xl border bg-amber-950/30 border-amber-500/40 text-slate-200 space-y-3 shadow-lg">
                   <div className="flex items-center justify-between gap-2 flex-wrap">
-                    <span className="text-xs font-bold text-white flex items-center gap-1.5">
-                      <Clock className="w-3.5 h-3.5 text-amber-400" />
-                      <span>Disponibilidad de Servicio</span>
+                    <span className="text-xs font-black text-white flex items-center gap-1.5 uppercase tracking-wide">
+                      <KeyRound className="w-4 h-4 text-amber-400" />
+                      <span>Habilitación de Chofer</span>
                     </span>
                     <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-400/40">
                       <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
@@ -982,18 +983,27 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     </span>
                   </div>
 
-                  <p className="text-[11px] text-amber-200/90 leading-snug">
-                    ⏳ <strong>Esperando habilitación del Administrador:</strong> Para que aparezcas como <em>Habilitado</em> en la parte superior y en <em>Prestadores de Servicio Habilitados</em>, el Administrador debe validar tu comprobante e ingresar la clave autorizada en <em>Administración UPPA</em>. Una vez que esto suceda, tu perfil titilará en verde y podrás accionar el botón de Ocupado/Desocupado para tomar viajes.
+                  <div className="text-xs font-bold text-amber-300">
+                    Habilitación por Administrador
+                  </div>
+
+                  <p className="text-[11px] text-slate-300 leading-relaxed">
+                    Para que aparezcas como <strong>Habilitado</strong> en la parte superior y en <em>Prestadores de Servicio Habilitados</em>, el Administrador debe validar tu comprobante de transferencia y habilitar tu unidad en Administración UPPA. Una vez que esto suceda, tu perfil titilará en verde, comenzará tu temporizador en vivo y podrás accionar el botón de Ocupado/Desocupado para tomar viajes.
                   </p>
 
-                  <div className="pt-1 flex items-center gap-2">
-                    <button
-                      type="button"
-                      disabled
-                      className="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-800 text-slate-400 border border-slate-700 cursor-not-allowed opacity-80"
+                  {/* Botón directo de WhatsApp para comunicarse con el Administrador */}
+                  <div className="pt-1">
+                    <a
+                      href={`https://wa.me/5493489690058?text=${encodeURIComponent(
+                        `Hola Lucia Veronica Gimenez! Te contacto por la habilitación de mi servicio de chofer (${authUser?.nombre || currentUser?.name || currentUser?.nombre || 'Prestador UPPA'}). Ya envié mis datos.`
+                      )}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 text-white font-black text-xs flex items-center justify-center gap-2 shadow-md shadow-emerald-600/20 transition-all cursor-pointer"
                     >
-                      Botón de Ocupado/Desocupado (Inactivo hasta Habilitación)
-                    </button>
+                      <MessageCircle className="w-4 h-4 text-white shrink-0" />
+                      <span>Contactar al Administrador (WhatsApp 3489690058)</span>
+                    </a>
                   </div>
                 </div>
               )

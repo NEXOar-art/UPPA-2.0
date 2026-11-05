@@ -283,8 +283,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     );
   }
 
-  // Active Admin Screen
-  const pendingHabilitaciones = habilitaciones.filter((h) => h.estado === 'pendiente');
+  // Active Admin Screen - Solo solicitudes de choferes 100% reales (sin simular)
+  const pendingHabilitaciones = habilitaciones.filter(
+    (h) => h.estado === 'pendiente' && h.id !== 'hab-2' && h.driverId !== 'drv-carlos'
+  );
   const activeHabilitaciones = habilitaciones.filter((h) => h.estado === 'activo');
 
   return (
@@ -545,8 +547,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             </h3>
 
             {pendingHabilitaciones.length === 0 ? (
-              <div className="p-6 text-center rounded-2xl bg-slate-900/40 border border-white/5 text-slate-400 text-xs">
-                No hay solicitudes de choferes pendientes de habilitación en este momento.
+              <div className="p-8 text-center rounded-2xl bg-slate-900/40 border border-white/5 text-slate-400 text-xs space-y-1.5">
+                <p className="font-bold text-slate-300">No hay solicitudes de choferes pendientes de habilitación en este momento.</p>
+                <p className="text-[11px] text-slate-500">Las solicitudes aparecerán aquí en tiempo real cuando los prestadores transfieran y envíen su solicitud.</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

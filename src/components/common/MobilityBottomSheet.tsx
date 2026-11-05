@@ -116,14 +116,18 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
             <button
               type="button"
               onClick={() => setIsExpanded((prev) => !prev)}
-              className="flex items-center gap-1 text-[11px] font-bold text-sky-400 hover:text-sky-300 bg-sky-500/10 px-2.5 py-1.5 rounded-xl border border-sky-400/20 transition-all cursor-pointer"
-              title={isExpanded ? 'Contraer paradas' : 'Ver 62 Paradas'}
+              className={`flex items-center gap-1.5 text-[11px] font-black px-2.5 py-1.5 rounded-xl border transition-all cursor-pointer active:scale-95 shadow-sm ${
+                isExpanded
+                  ? 'text-cyan-200 bg-cyan-500/20 border-cyan-400/60 ring-1 ring-cyan-400/40'
+                  : 'text-sky-400 hover:text-sky-300 bg-sky-500/10 border-sky-400/20'
+              }`}
+              title={isExpanded ? 'Ocultar listado de paradas' : 'Ver 62 Paradas'}
             >
-              <span>{isExpanded ? 'Contraer' : '62 Paradas'}</span>
+              <span>{isExpanded ? 'Ocultar listado' : '62 Paradas'}</span>
               {isExpanded ? (
-                <ChevronDown className="w-3.5 h-3.5" />
+                <ChevronUp className="w-3.5 h-3.5 text-cyan-300 stroke-[3]" />
               ) : (
-                <ChevronUp className="w-3.5 h-3.5" />
+                <ChevronDown className="w-3.5 h-3.5" />
               )}
             </button>
 
@@ -286,11 +290,21 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
                 <span>Traza completa por RP 6 y Colectora</span>
               </span>
               <button
+                type="button"
                 onClick={() => setIsExpanded((prev) => !prev)}
-                className="text-cyan-400 hover:text-cyan-300 font-bold flex items-center gap-1 cursor-pointer"
+                className={`px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer active:scale-95 shadow-sm ${
+                  isExpanded
+                    ? 'bg-cyan-500/25 hover:bg-cyan-500/35 text-cyan-200 border border-cyan-400/60 shadow-cyan-500/20 ring-1 ring-cyan-400/50'
+                    : 'bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 hover:text-cyan-300 border border-cyan-400/30'
+                }`}
+                title={isExpanded ? 'Ocultar listado de paradas' : 'Explorar las 62 paradas'}
               >
                 <span>{isExpanded ? 'Ocultar listado' : 'Explorar las 62 paradas'}</span>
-                {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                {isExpanded ? (
+                  <ChevronUp className="w-3.5 h-3.5 text-cyan-300 stroke-[3]" />
+                ) : (
+                  <ChevronDown className="w-3.5 h-3.5" />
+                )}
               </button>
             </div>
           </div>
@@ -299,6 +313,44 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
         {/* Upward scrolling list of 62 stops (scrolling web hacia arriba) */}
         {isExpanded && (
           <div className="px-3.5 sm:px-5 pb-3 border-t border-white/10 pt-3 animate-in slide-in-from-bottom-2 duration-200">
+            {/* Barra superior de listado con botón 'Ocultar listado' y 'Minimizar' */}
+            <div className="flex items-center justify-between pb-2.5 mb-2.5 border-b border-white/10 gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse shrink-0" />
+                <span className="text-xs font-black text-white truncate">
+                  62 Paradas de Línea 228
+                </span>
+                <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-400/30">
+                  {filteredStops.length}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setIsExpanded(false)}
+                  className="px-3 py-1.5 rounded-xl bg-cyan-500/25 hover:bg-cyan-500/40 text-cyan-200 hover:text-white border border-cyan-400/60 font-black text-xs flex items-center gap-1.5 shadow-md shadow-cyan-500/20 active:scale-95 transition-all cursor-pointer ring-1 ring-cyan-400/40"
+                  title="Ocultar listado de paradas"
+                >
+                  <ChevronUp className="w-3.5 h-3.5 text-cyan-300 stroke-[3]" />
+                  <span>Ocultar listado</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsExpanded(false);
+                    setIsMinimized(true);
+                  }}
+                  className="px-2.5 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-slate-200 hover:text-white border border-white/20 font-bold text-xs flex items-center gap-1.5 active:scale-95 transition-all cursor-pointer"
+                  title="Minimizar panel para ver el mapa completo"
+                >
+                  <Minimize2 className="w-3.5 h-3.5 text-cyan-400" />
+                  <span className="hidden sm:inline">Minimizar</span>
+                </button>
+              </div>
+            </div>
+
             {/* Search and zone filters */}
             <div className="space-y-2 mb-2.5">
               <div className="relative">
@@ -397,6 +449,38 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
                   No se encontraron paradas con ese criterio.
                 </div>
               )}
+            </div>
+
+            {/* Barra inferior fija para Ocultar Listado y Minimizar sin tener que volver a subir */}
+            <div className="sticky bottom-0 -mx-1 px-2 pt-2.5 pb-1 bg-gradient-to-t from-[#0b0f1b] via-[#0b0f1b]/95 to-[#0b0f1b]/80 border-t border-white/10 backdrop-blur-md flex items-center justify-between gap-2 mt-2 rounded-b-2xl">
+              <span className="text-[11px] text-slate-300 font-medium truncate">
+                ¿Terminaste de consultar?
+              </span>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setIsExpanded(false)}
+                  className="px-3.5 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-black text-xs flex items-center gap-1.5 shadow-lg shadow-cyan-500/30 active:scale-95 transition-all cursor-pointer"
+                  title="Ocultar listado de paradas"
+                >
+                  <ChevronUp className="w-4 h-4 text-slate-950 stroke-[3]" />
+                  <span>Ocultar listado</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsExpanded(false);
+                    setIsMinimized(true);
+                  }}
+                  className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white border border-white/20 font-bold text-xs flex items-center gap-1.5 active:scale-95 transition-all cursor-pointer shadow-sm"
+                  title="Minimizar panel completo para ver el mapa"
+                >
+                  <Minimize2 className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>Minimizar Panel</span>
+                </button>
+              </div>
             </div>
           </div>
         )}

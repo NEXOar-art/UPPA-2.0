@@ -763,28 +763,9 @@ export default function App() {
       }
     });
 
-    // 2. Taxis iniciales vigentes que no colisionen con solicitudes pendientes
-    taxis.forEach((t) => {
-      const keyName = t.driverName.trim().toLowerCase();
-      const keyWa = t.whatsapp ? t.whatsapp.replace(/\D/g, '') : '';
-      const keyCode = t.activationCode ? t.activationCode.toUpperCase() : '';
-
-      if (t.endsAt > now) {
-        if (!seen.has(keyName) && (!keyWa || !seen.has(keyWa)) && (!keyCode || !seen.has(keyCode))) {
-          const isPendingInHab = habilitacionesList.some(
-            (h) =>
-              h.estado === 'pendiente' &&
-              (h.driverName.trim().toLowerCase() === keyName || (keyWa && h.whatsapp.includes(keyWa)))
-          );
-          if (!isPendingInHab) {
-            result.push(t);
-          }
-        }
-      }
-    });
-
+    // Solo se devuelven los prestadores de servicio 100% reales habilitados por el Administrador
     return result;
-  }, [habilitacionesList, taxis]);
+  }, [habilitacionesList, userLocation]);
 
   const handlePublishTaxi = (
     listingData: Omit<TaxiListing, 'id' | 'startsAt' | 'endsAt' | 'status' | 'rating' | 'completedRides'>,
@@ -1182,8 +1163,40 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Sección Exclusiva para Prestadores de Servicio */}
-                  {isDriverUser && (
+                  {/* Sección para Prestador Pendiente de Habilitación */}
+                  {isDriverUser && !isDriverHabilitado && (
+                    <div className="p-3 rounded-xl bg-amber-950/40 border border-amber-500/40 space-y-2 text-left">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-black text-amber-300 uppercase tracking-wide flex items-center gap-1.5">
+                          <KeyRound className="w-3.5 h-3.5 text-amber-400" />
+                          <span>Habilitación de Chofer</span>
+                        </span>
+                        <span className="text-[9px] font-bold text-amber-300 bg-amber-500/20 px-1.5 py-0.5 rounded border border-amber-400/40">
+                          Pendiente
+                        </span>
+                      </div>
+                      <div className="text-[11px] font-bold text-white">
+                        Habilitación por Administrador
+                      </div>
+                      <p className="text-[10px] text-slate-300 leading-relaxed">
+                        Para figurar como Habilitado en la plataforma, el Administrador debe validar tu comprobante de transferencia y activar tu unidad. En ese momento comenzará tu temporizador en vivo.
+                      </p>
+                      <a
+                        href={`https://wa.me/5493489690058?text=${encodeURIComponent(
+                          `Hola Lucia Veronica Gimenez! Te contacto por la habilitación de mi servicio de chofer (${currentUser.name || 'Prestador UPPA'}).`
+                        )}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="w-full py-2 px-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs flex items-center justify-center gap-1.5 transition-all shadow-md"
+                      >
+                        <MessageSquare className="w-3.5 h-3.5" />
+                        <span>Contactar Administrador (WhatsApp 3489690058)</span>
+                      </a>
+                    </div>
+                  )}
+
+                  {/* Sección Exclusiva para Prestadores de Servicio Habilitados */}
+                  {isDriverUser && isDriverHabilitado && (
                     <div className="p-3 rounded-xl bg-white/[0.03] border border-white/5 space-y-2.5">
                       <div className="flex items-center justify-between">
                         <span className="text-[11px] font-bold text-slate-200">
