@@ -301,44 +301,7 @@ export async function guardarFcmToken(uid: string, token: string): Promise<void>
 // ---------------------------------------------------------------------------
 // 2. REPORTES COLLECTION: reportes/{reporteId}
 // ---------------------------------------------------------------------------
-const MOCK_INITIAL_REPORTES: ReporteFirestore[] = [
-  {
-    id: 'rep-init-1',
-    usuarioId: 'usr-1',
-    nombreUsuario: 'Gaston R. Chofer',
-    tipo: 'demora',
-    descripcion: 'Demora de 12 min en cruce RP6 y Bidegain por obra de bacheo.',
-    ubicacion: { lat: -34.1430, lng: -58.9720 },
-    ruta: 'campana-zarate',
-    estado: 'activo',
-    creadoEn: Date.now() - 15 * 60 * 1000,
-    confirmaciones: 14,
-  },
-  {
-    id: 'rep-init-2',
-    usuarioId: 'usr-2',
-    nombreUsuario: 'Marta Pasajera',
-    tipo: 'accidente',
-    descripcion: 'Choque leve entre dos autos en Colectora Sur frente a McDonald\'s Km 72.5.',
-    ubicacion: { lat: -34.1914, lng: -58.9447 },
-    ruta: 'vigalondo-mcdonalds',
-    estado: 'activo',
-    creadoEn: Date.now() - 6 * 60 * 1000,
-    confirmaciones: 26,
-  },
-  {
-    id: 'rep-init-3',
-    usuarioId: 'usr-3',
-    nombreUsuario: 'Mariano Chofer Moto',
-    tipo: 'congestion',
-    descripcion: 'Congestión intensa en Justo Vigalondo y Bomberos Voluntarios por horario escolar.',
-    ubicacion: { lat: -34.2099, lng: -58.9422 },
-    ruta: 'vigalondo-mcdonalds',
-    estado: 'activo',
-    creadoEn: Date.now() - 22 * 60 * 1000,
-    confirmaciones: 9,
-  },
-];
+const MOCK_INITIAL_REPORTES: ReporteFirestore[] = [];
 
 export function subscribeToReportes(
   callback: (reportes: ReporteFirestore[]) => void,
@@ -350,17 +313,21 @@ export function subscribeToReportes(
   return onSnapshot(
     q,
     (snapshot) => {
-      const list: ReporteFirestore[] = snapshot.docs.map((d) => ({
-        id: d.id,
-        ...(d.data() as Omit<ReporteFirestore, 'id'>),
-      }));
+      const list: ReporteFirestore[] = snapshot.docs
+        .map((d) => ({
+          id: d.id,
+          ...(d.data() as Omit<ReporteFirestore, 'id'>),
+        }))
+        .filter((r) => !r.id?.startsWith('rep-init-') && !r.id?.startsWith('ev-'));
       setCached('reportes', list);
       callback(list);
     },
     (err) => {
       console.warn('Firestore reportes onSnapshot error/offline fallback:', err);
       if (onError) onError(err);
-      callback(getCached<ReporteFirestore[]>('reportes', MOCK_INITIAL_REPORTES));
+      const cached = getCached<ReporteFirestore[]>('reportes', []);
+      const realOnly = (cached || []).filter((r) => !r.id?.startsWith('rep-init-') && !r.id?.startsWith('ev-'));
+      callback(realOnly);
     }
   );
 }
@@ -427,8 +394,9 @@ export async function crearReporte(data: {
       confirmaciones: 1,
       creadoEn: Date.now(),
     };
-    const cached = getCached<ReporteFirestore[]>('reportes', MOCK_INITIAL_REPORTES);
-    setCached('reportes', [fallbackReport, ...cached]);
+    const cached = getCached<ReporteFirestore[]>('reportes', []);
+    const filteredCached = (cached || []).filter((r) => !r.id?.startsWith('rep-init-') && !r.id?.startsWith('ev-'));
+    setCached('reportes', [fallbackReport, ...filteredCached]);
 
     const typeLabel =
       data.tipo === 'accidente'
@@ -1734,54 +1702,52 @@ export async function obtenerMetricasEnTiempoReal(): Promise<AnalyticsSummary> {
     ]);
 
     const totalUsuarios = snapUsuarios ? snapUsuarios.size : 48;
-    const reportesDocs = snapReportes ? snapReportes.docs.map((d) => d.data()) : [];
+    const reportesDocs = snapReportes
+      ? snapReportes.docs
+          .map((d) => d.data())
+          .filter((r: any) => !r.id?.startsWith('rep-init-') && !r.id?.startsWith('ev-'))
+      : [];
     const solicitudesDocs = snapSolicitudes ? snapSolicitudes.docs.map((d) => d.data()) : [];
 
-    const reportesActivos = reportesDocs.filter((r: any) => r.estado === 'activo').length || 6;
-    const viajesSolicitados = solicitudesDocs.length || 18;
-    const viajesCompletados = solicitudesDocs.filter((s: any) => s.estado === 'completado').length || 14;
+    const reportesActivos = reportesDocs.filter((r: any) => r.estado === 'activo').length;
+    const viajesSolicitados = solicitudesDocs.length;
+    const viajesCompletados = solicitudesDocs.filter((s: any) => s.estado === 'completado').length;
 
     return {
-      usuariosConectados: Math.max(12, totalUsuarios),
+      usuariosConectados: Math.max(1, totalUsuarios),
       reportesActivos,
       viajesSolicitados,
       viajesCompletados,
       mensajesEnviados: 142,
       tiempoPromedioAceptacionMinutos: 3.4,
-      solicitudesEmergencia: 2,
+      solicitudesEmergencia: 0,
       reportesPorZona: [
-        { zona: 'Colectora Sur (McDonald\'s)', cantidad: 9 },
-        { zona: 'Justo Vigalondo (B° Malvinas)', cantidad: 7 },
-        { zona: 'Ariel del Plata / Las Campanas', cantidad: 5 },
-        { zona: 'Ruta 6 & Casco Céntrico', cantidad: 4 },
-        { zona: 'Zárate Centro / Terminal', cantidad: 6 },
+        { zona: 'Colectora Sur (McDonald\'s)', cantidad: reportesDocs.filter((r: any) => r.ruta === 'vigalondo-mcdonalds').length },
+        { zona: 'Justo Vigalondo (B° Malvinas)', cantidad: reportesDocs.filter((r: any) => r.ruta?.includes('vigalondo')).length },
+        { zona: 'Zárate Centro / Terminal', cantidad: reportesDocs.filter((r: any) => r.ruta?.includes('zarate')).length },
       ],
       demorasPorHorario: [
-        { franja: '06:00 - 09:00', cantidad: 16 },
-        { franja: '09:00 - 12:00', cantidad: 6 },
-        { franja: '12:00 - 15:00', cantidad: 9 },
-        { franja: '15:00 - 18:00', cantidad: 14 },
-        { franja: '18:00 - 21:00', cantidad: 21 },
-        { franja: '21:00 - 00:00', cantidad: 5 },
+        { franja: '06:00 - 09:00', cantidad: 0 },
+        { franja: '09:00 - 12:00', cantidad: 0 },
+        { franja: '12:00 - 15:00', cantidad: 0 },
+        { franja: '15:00 - 18:00', cantidad: 0 },
+        { franja: '18:00 - 21:00', cantidad: 0 },
+        { franja: '21:00 - 00:00', cantidad: 0 },
       ],
     };
   } catch (e) {
     return {
-      usuariosConectados: 32,
-      reportesActivos: 4,
-      viajesSolicitados: 12,
-      viajesCompletados: 9,
-      mensajesEnviados: 85,
-      tiempoPromedioAceptacionMinutos: 4.1,
-      solicitudesEmergencia: 1,
-      reportesPorZona: [
-        { zona: 'Colectora Sur (McDonald\'s)', cantidad: 5 },
-        { zona: 'Justo Vigalondo', cantidad: 4 },
-        { zona: 'Ruta 6', cantidad: 3 },
-      ],
+      usuariosConectados: 1,
+      reportesActivos: 0,
+      viajesSolicitados: 0,
+      viajesCompletados: 0,
+      mensajesEnviados: 0,
+      tiempoPromedioAceptacionMinutos: 0,
+      solicitudesEmergencia: 0,
+      reportesPorZona: [],
       demorasPorHorario: [
-        { franja: '07:00 - 09:00', cantidad: 12 },
-        { franja: '17:00 - 19:00', cantidad: 15 },
+        { franja: '07:00 - 09:00', cantidad: 0 },
+        { franja: '17:00 - 19:00', cantidad: 0 },
       ],
     };
   }

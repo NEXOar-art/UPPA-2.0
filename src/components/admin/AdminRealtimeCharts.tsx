@@ -265,15 +265,6 @@ export const AdminRealtimeCharts: React.FC<AdminRealtimeChartsProps> = ({
       else clima++;
     });
 
-    // Si aún hay pocos eventos en la sesión, proveer datos reales consolidados
-    if (congestiones === 0 && accidentes === 0 && cortes === 0) {
-      congestiones = 14;
-      accidentes = 4;
-      cortes = 3;
-      controles = 7;
-      clima = 2;
-    }
-
     return [
       { name: 'Congestión / Demora', value: congestiones },
       { name: 'Accidentes de Tránsito', value: accidentes },

@@ -188,7 +188,7 @@ export default function App() {
 
   // Global State
   const [routes, setRoutes] = useState<TransitRoute[]>(MOCK_ROUTES);
-  const [events, setEvents] = useState<MapEvent[]>(MOCK_EVENTS);
+  const [events, setEvents] = useState<MapEvent[]>([]);
   const [liveBuses, setLiveBuses] = useState<LiveBus[]>(MOCK_LIVE_BUSES);
   const [taxis, setTaxis] = useState<TaxiListing[]>(MOCK_TAXI_LISTINGS);
   const [payments, setPayments] = useState<PaymentProof[]>(MOCK_PAYMENTS);
@@ -420,8 +420,9 @@ export default function App() {
   // Subscribe to real-time Firestore reports and push notifications
   useEffect(() => {
     const unsubReportes = subscribeToReportes((reps) => {
-      if (reps && reps.length > 0) {
-        const mapped: MapEvent[] = reps.map((r) => {
+      const realReports = (reps || []).filter((r) => !r.id?.startsWith('rep-init-') && !r.id?.startsWith('ev-'));
+      if (realReports && realReports.length > 0) {
+        const mapped: MapEvent[] = realReports.map((r) => {
           let evType: MapEvent['type'] = 'late';
           if (r.tipo === 'accidente') evType = 'accident';
           else if (r.tipo === 'demora') evType = 'late';
@@ -458,6 +459,8 @@ export default function App() {
           }
         });
         setEvents(Array.from(uniqueReportsMap.values()));
+      } else {
+        setEvents([]);
       }
     });
 

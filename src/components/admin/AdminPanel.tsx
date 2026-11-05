@@ -1006,7 +1006,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {reportes.map((rep) => (
+            {reportes.length === 0 ? (
+              <div className="col-span-full py-8 text-center text-xs text-slate-400 bg-white/[0.02] border border-white/5 rounded-2xl">
+                <AlertTriangle className="w-8 h-8 text-amber-400/40 mx-auto mb-2" />
+                <p className="font-semibold text-white">No hay incidentes activos en este momento</p>
+                <p className="text-[11px] text-slate-400 mt-0.5">Todos los eventos mostrados en el sistema son aportados exclusivamente por los usuarios en vivo.</p>
+              </div>
+            ) : (
+              reportes.map((rep) => (
               <div
                 key={rep.id}
                 className="p-4 rounded-2xl bg-[#0f1422] border border-white/5 space-y-2.5 shadow-md"
@@ -1078,7 +1085,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   </button>
                 </div>
               </div>
-            ))}
+            )))}
           </div>
         </div>
       )}
