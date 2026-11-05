@@ -303,6 +303,130 @@ export async function guardarFcmToken(uid: string, token: string): Promise<void>
 // ---------------------------------------------------------------------------
 const MOCK_INITIAL_REPORTES: ReporteFirestore[] = [];
 
+/**
+ * Validador estricto de eventos de la comunidad:
+ * Rechaza y purga cualquier evento o reporte simulado, de prueba o con datos ficticios.
+ * Solo permite publicar eventos 100% reales aportados por la comunidad.
+ */
+export function isRealCommunityReport(r: any): boolean {
+  if (!r) return false;
+  const id = String(r.id || '').toLowerCase();
+  const desc = String(r.descripcion || r.description || r.body || '').toLowerCase();
+  const title = String(r.title || '').toLowerCase();
+  const user = String(r.nombreUsuario || r.reportedBy || '').toLowerCase();
+  const userId = String(r.usuarioId || r.reportedByUserId || '').toLowerCase();
+
+  // 1. Identificadores de simulación
+  if (
+    id.startsWith('rep-init') ||
+    id.startsWith('ev-1') ||
+    id.startsWith('ev-2') ||
+    id.startsWith('ev-3') ||
+    id.startsWith('ev-4') ||
+    id.startsWith('ev-5') ||
+    id.startsWith('mock') ||
+    id.startsWith('dummy') ||
+    id.startsWith('demo')
+  ) {
+    return false;
+  }
+
+  // 2. Usuarios simulados
+  if (
+    user.includes('marta pasajera') ||
+    user.includes('gaston r. chofer') ||
+    user.includes('mariano chofer') ||
+    user.includes('esteban v.') ||
+    user.includes('carla morales') ||
+    user.includes('martín s.') ||
+    user.includes('martin s.') ||
+    user.includes('vecinos unidos malvinas') ||
+    user.includes('valeria r.')
+  ) {
+    return false;
+  }
+
+  if (
+    userId === 'usr-1' ||
+    userId === 'usr-2' ||
+    userId === 'usr-3' ||
+    userId === 'usr-88' ||
+    userId === 'usr-91' ||
+    userId === 'usr-43' ||
+    userId === 'usr-12' ||
+    userId === 'usr-29'
+  ) {
+    return false;
+  }
+
+  // 3. Contenido de prueba simulado
+  if (
+    desc.includes('cruce rp6 y bidegain') ||
+    desc.includes('choque leve entre dos autos') ||
+    desc.includes('congestión intensa en justo vigalondo') ||
+    desc.includes('congestion intensa en justo vigalondo') ||
+    desc.includes('interno 42 detenido') ||
+    desc.includes('plaza eduardo costa no pasó') ||
+    desc.includes('plaza eduardo costa no paso') ||
+    desc.includes('interno 38 pasó recién') ||
+    desc.includes('interno 38 paso recien') ||
+    desc.includes('calle principal con pozo grande') ||
+    desc.includes('calle anegada') ||
+    desc.includes('parada hospital zárate: chofer no frenó') ||
+    desc.includes('parada hospital zarate: chofer no freno')
+  ) {
+    return false;
+  }
+
+  if (
+    title.includes('micro averiado con falla') ||
+    title.includes('demora de más de 25') ||
+    title.includes('demora de mas de 25') ||
+    title.includes('coche en circulación con cupo') ||
+    title.includes('coche en circulacion con cupo') ||
+    title.includes('calle anegada') ||
+    title.includes('coche siguió de largo') ||
+    title.includes('coche siguio de largo')
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+// Purga inmediata de eventos y reportes simulados almacenados en localStorage del navegador
+if (typeof window !== 'undefined' && window.localStorage) {
+  try {
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (
+        key &&
+        (key.startsWith('UPPA_REALTIME_reportes') ||
+          key.includes('REPORTES') ||
+          key.includes('reportes') ||
+          key.includes('events'))
+      ) {
+        const val = localStorage.getItem(key);
+        if (val) {
+          try {
+            const parsed = JSON.parse(val);
+            if (Array.isArray(parsed)) {
+              const clean = parsed.filter(isRealCommunityReport);
+              localStorage.setItem(key, JSON.stringify(clean));
+            } else if (!isRealCommunityReport(parsed)) {
+              keysToRemove.push(key);
+            }
+          } catch {
+            keysToRemove.push(key);
+          }
+        }
+      }
+    }
+    keysToRemove.forEach((k) => localStorage.removeItem(k));
+  } catch {}
+}
+
 export function subscribeToReportes(
   callback: (reportes: ReporteFirestore[]) => void,
   onError?: (error: any) => void
@@ -313,20 +437,30 @@ export function subscribeToReportes(
   return onSnapshot(
     q,
     (snapshot) => {
-      const list: ReporteFirestore[] = snapshot.docs
-        .map((d) => ({
+      const realReports: ReporteFirestore[] = [];
+      snapshot.docs.forEach((d) => {
+        const data = {
           id: d.id,
           ...(d.data() as Omit<ReporteFirestore, 'id'>),
-        }))
-        .filter((r) => !r.id?.startsWith('rep-init-') && !r.id?.startsWith('ev-'));
-      setCached('reportes', list);
-      callback(list);
+        };
+        if (isRealCommunityReport(data)) {
+          realReports.push(data);
+        } else {
+          // Si existe un documento simulado en Firestore, eliminarlo definitivamente
+          try {
+            deleteDoc(doc(db, COL_REPORTES, d.id)).catch(() => {});
+          } catch {}
+        }
+      });
+
+      setCached('reportes', realReports);
+      callback(realReports);
     },
     (err) => {
       console.warn('Firestore reportes onSnapshot error/offline fallback:', err);
       if (onError) onError(err);
       const cached = getCached<ReporteFirestore[]>('reportes', []);
-      const realOnly = (cached || []).filter((r) => !r.id?.startsWith('rep-init-') && !r.id?.startsWith('ev-'));
+      const realOnly = (cached || []).filter(isRealCommunityReport);
       callback(realOnly);
     }
   );

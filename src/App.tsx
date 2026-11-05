@@ -60,6 +60,7 @@ import {
   crearReporte,
   subscribeToDriversDisponibilidad,
   setDriverDisponibilidad,
+  isRealCommunityReport,
 } from './services/realtimeFirebaseService';
 
 import {
@@ -420,7 +421,7 @@ export default function App() {
   // Subscribe to real-time Firestore reports and push notifications
   useEffect(() => {
     const unsubReportes = subscribeToReportes((reps) => {
-      const realReports = (reps || []).filter((r) => !r.id?.startsWith('rep-init-') && !r.id?.startsWith('ev-'));
+      const realReports = (reps || []).filter(isRealCommunityReport);
       if (realReports && realReports.length > 0) {
         const mapped: MapEvent[] = realReports.map((r) => {
           let evType: MapEvent['type'] = 'late';
@@ -492,6 +493,7 @@ export default function App() {
 
     const unsubNotif = onPushNotification((notif) => {
       if (!notif) return;
+      if (!isRealCommunityReport(notif)) return;
       showToast(`${notif.title}: ${notif.body}`);
 
       setScreenPushEvents((prev) => {

@@ -38,6 +38,7 @@ import {
   RotateCcw,
   Filter,
 } from 'lucide-react';
+import { isRealCommunityReport } from '../../services/realtimeFirebaseService';
 import { GAS_STATIONS_DATA, SCHOOLS_DATA, PointOfInterest } from '../../data/poiCorredorData';
 import { LINEA_228_STOPS, LINEA_228_COORDINATES } from '../../data/linea228Stops';
 
@@ -1116,6 +1117,9 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
     };
 
     events.forEach((ev) => {
+      // Filtrar y descartar de forma infalible cualquier evento simulado o de prueba
+      if (!isRealCommunityReport(ev)) return;
+
       const catKey = getEventCategoryKey(ev.type);
       if (activeEventCategories[catKey] === false) return;
 
