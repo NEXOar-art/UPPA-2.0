@@ -375,6 +375,7 @@ export default function App() {
 
   // Menú Desplegable del Perfil (con control directo de Ocupado/Desocupado para el prestador)
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
+  const [isHabilitacionCardExpanded, setIsHabilitacionCardExpanded] = useState(false);
   const profileDropdownRef = useRef<HTMLDivElement>(null);
 
   // Modals
@@ -1048,17 +1049,6 @@ export default function App() {
                   <Zap className="w-4 h-4 fill-amber-400 text-amber-400" />
                   <span>Pedir Transporte Alternativo</span>
                 </button>
-
-                <button
-                  onClick={() => {
-                    setActiveTab('admin');
-                    setIsHeaderMenuOpen(false);
-                  }}
-                  className="w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold text-violet-300 hover:bg-violet-500/15 flex items-center gap-2.5 transition-all cursor-pointer border-t border-white/5 mt-1"
-                >
-                  <Shield className="w-4 h-4 text-violet-400" />
-                  <span>Administración UPPA</span>
-                </button>
               </div>
             )}
           </div>
@@ -1179,35 +1169,55 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Sección para Prestador Pendiente de Habilitación */}
+                  {/* Sección para Prestador Pendiente de Habilitación con Desplegable */}
                   {isDriverUser && !isDriverHabilitado && (
                     <div className="p-3 rounded-xl bg-amber-950/40 border border-amber-500/40 space-y-2 text-left">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[11px] font-black text-amber-300 uppercase tracking-wide flex items-center gap-1.5">
-                          <KeyRound className="w-3.5 h-3.5 text-amber-400" />
+                      <div className="flex items-center justify-between gap-1.5">
+                        <span className="text-[11px] font-black text-amber-300 uppercase tracking-wide flex items-center gap-1.5 min-w-0 truncate">
+                          <KeyRound className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                           <span>Habilitación de Chofer</span>
                         </span>
-                        <span className="text-[9px] font-bold text-amber-300 bg-amber-500/20 px-1.5 py-0.5 rounded border border-amber-400/40">
+                        <span className="text-[9px] font-bold text-amber-300 bg-amber-500/20 px-1.5 py-0.5 rounded border border-amber-400/40 shrink-0">
                           Pendiente
                         </span>
                       </div>
-                      <div className="text-[11px] font-bold text-white">
-                        Habilitación por Administrador
-                      </div>
-                      <p className="text-[10px] text-slate-300 leading-relaxed">
-                        Para figurar como Habilitado en la plataforma, el Administrador debe validar tu comprobante de transferencia y activar tu unidad. En ese momento comenzará tu temporizador en vivo.
-                      </p>
-                      <a
-                        href={`https://wa.me/5493489690058?text=${encodeURIComponent(
-                          `Hola Lucia Veronica Gimenez! Te contacto por la habilitación de mi servicio de chofer (${currentUser.name || 'Prestador UPPA'}).`
-                        )}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="w-full py-2 px-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs flex items-center justify-center gap-1.5 transition-all shadow-md"
+
+                      {/* Botón Desplegable para ver/ocultar toda la información */}
+                      <button
+                        type="button"
+                        onClick={() => setIsHabilitacionCardExpanded((prev) => !prev)}
+                        className="w-full py-1.5 px-2.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-400/35 text-amber-200 text-xs font-bold flex items-center justify-between transition-colors cursor-pointer"
                       >
-                        <MessageSquare className="w-3.5 h-3.5" />
-                        <span>Contactar Administrador (WhatsApp 3489690058)</span>
-                      </a>
+                        <span>{isHabilitacionCardExpanded ? 'Ocultar información' : 'Ver información de habilitación'}</span>
+                        {isHabilitacionCardExpanded ? (
+                          <ChevronUp className="w-3.5 h-3.5 text-amber-300" />
+                        ) : (
+                          <ChevronDown className="w-3.5 h-3.5 text-amber-300" />
+                        )}
+                      </button>
+
+                      {/* Desplegable con toda la información */}
+                      {isHabilitacionCardExpanded && (
+                        <div className="pt-1.5 space-y-2 border-t border-amber-500/20 animate-in fade-in duration-200">
+                          <div className="text-[11px] font-bold text-white">
+                            Habilitación por Administrador
+                          </div>
+                          <p className="text-[10px] text-slate-300 leading-relaxed">
+                            Para figurar como Habilitado en la plataforma, el Administrador debe validar tu comprobante de transferencia y activar tu unidad. En ese momento comenzará tu temporizador en vivo.
+                          </p>
+                          <a
+                            href={`https://wa.me/5493489690058?text=${encodeURIComponent(
+                              `Hola Lucia Veronica Gimenez! Te contacto por la habilitación de mi servicio de chofer (${currentUser.name || 'Prestador UPPA'}).`
+                            )}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="w-full py-2 px-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs flex items-center justify-center gap-1.5 transition-all shadow-md"
+                          >
+                            <MessageSquare className="w-3.5 h-3.5" />
+                            <span>Contactar Administrador (WhatsApp 3489690058)</span>
+                          </a>
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -1283,30 +1293,6 @@ export default function App() {
 
                   {/* Acciones generales del menú */}
                   <div className="pt-1 space-y-1 border-t border-white/5">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsProfileDropdownOpen(false);
-                        setIsAuthModalOpen(true);
-                      }}
-                      className="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold text-slate-200 hover:text-white hover:bg-white/[0.06] flex items-center gap-2 transition-all cursor-pointer"
-                    >
-                      <UserIcon className="w-3.5 h-3.5 text-sky-400" />
-                      <span>Ver Mi Perfil Completo & Datos</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsProfileDropdownOpen(false);
-                        setActiveTab('admin');
-                      }}
-                      className="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold text-violet-300 hover:text-white hover:bg-violet-500/15 flex items-center gap-2 transition-all cursor-pointer"
-                    >
-                      <Shield className="w-3.5 h-3.5 text-violet-400" />
-                      <span>Panel de Administración UPPA</span>
-                    </button>
-
                     <button
                       type="button"
                       onClick={async () => {

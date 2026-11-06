@@ -28,6 +28,8 @@ import {
   Zap,
   Clock,
   MessageCircle,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import {
   setDriverDisponibilidad,
@@ -99,6 +101,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [verificationSentNotice, setVerificationSentNotice] = useState<string | null>(null);
   const [isCheckingVerification, setIsCheckingVerification] = useState(false);
   const [isResendingEmail, setIsResendingEmail] = useState(false);
+  const [isHabilitacionCardExpanded, setIsHabilitacionCardExpanded] = useState(false);
 
   // Synchronize state when modal opens
   useEffect(() => {
@@ -983,28 +986,47 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     </span>
                   </div>
 
-                  <div className="text-xs font-bold text-amber-300">
-                    Habilitación por Administrador
-                  </div>
+                  {/* Botón Desplegable para ver/ocultar toda la información */}
+                  <button
+                    type="button"
+                    onClick={() => setIsHabilitacionCardExpanded((prev) => !prev)}
+                    className="w-full py-2 px-3 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-400/35 text-amber-200 text-xs font-bold flex items-center justify-between transition-colors cursor-pointer"
+                  >
+                    <span>{isHabilitacionCardExpanded ? 'Ocultar información' : 'Ver información de habilitación'}</span>
+                    {isHabilitacionCardExpanded ? (
+                      <ChevronUp className="w-4 h-4 text-amber-300" />
+                    ) : (
+                      <ChevronDown className="w-4 h-4 text-amber-300" />
+                    )}
+                  </button>
 
-                  <p className="text-[11px] text-slate-300 leading-relaxed">
-                    Para que aparezcas como <strong>Habilitado</strong> en la parte superior y en <em>Prestadores de Servicio Habilitados</em>, el Administrador debe validar tu comprobante de transferencia y habilitar tu unidad en Administración UPPA. Una vez que esto suceda, tu perfil titilará en verde, comenzará tu temporizador en vivo y podrás accionar el botón de Ocupado/Desocupado para tomar viajes.
-                  </p>
+                  {/* Contenido Desplegable */}
+                  {isHabilitacionCardExpanded && (
+                    <div className="space-y-3 pt-1 border-t border-amber-500/20 animate-in fade-in duration-200">
+                      <div className="text-xs font-bold text-amber-300">
+                        Habilitación por Administrador
+                      </div>
 
-                  {/* Botón directo de WhatsApp para comunicarse con el Administrador */}
-                  <div className="pt-1">
-                    <a
-                      href={`https://wa.me/5493489690058?text=${encodeURIComponent(
-                        `Hola Lucia Veronica Gimenez! Te contacto por la habilitación de mi servicio de chofer (${authUser?.nombre || currentUser?.name || currentUser?.nombre || 'Prestador UPPA'}). Ya envié mis datos.`
-                      )}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 text-white font-black text-xs flex items-center justify-center gap-2 shadow-md shadow-emerald-600/20 transition-all cursor-pointer"
-                    >
-                      <MessageCircle className="w-4 h-4 text-white shrink-0" />
-                      <span>Contactar al Administrador (WhatsApp 3489690058)</span>
-                    </a>
-                  </div>
+                      <p className="text-[11px] text-slate-300 leading-relaxed">
+                        Para que aparezcas como <strong>Habilitado</strong> en la parte superior y en <em>Prestadores de Servicio Habilitados</em>, el Administrador debe validar tu comprobante de transferencia y habilitar tu unidad en Administración UPPA. Una vez que esto suceda, tu perfil titilará en verde, comenzará tu temporizador en vivo y podrás accionar el botón de Ocupado/Desocupado para tomar viajes.
+                      </p>
+
+                      {/* Botón directo de WhatsApp para comunicarse con el Administrador */}
+                      <div className="pt-1">
+                        <a
+                          href={`https://wa.me/5493489690058?text=${encodeURIComponent(
+                            `Hola Lucia Veronica Gimenez! Te contacto por la habilitación de mi servicio de chofer (${authUser?.nombre || currentUser?.name || currentUser?.nombre || 'Prestador UPPA'}). Ya envié mis datos.`
+                          )}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 text-white font-black text-xs flex items-center justify-center gap-2 shadow-md shadow-emerald-600/20 transition-all cursor-pointer"
+                        >
+                          <MessageCircle className="w-4 h-4 text-white shrink-0" />
+                          <span>Contactar al Administrador (WhatsApp 3489690058)</span>
+                        </a>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )
             )}
