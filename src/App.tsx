@@ -1048,6 +1048,17 @@ export default function App() {
                   <Zap className="w-4 h-4 fill-amber-400 text-amber-400" />
                   <span>Pedir Transporte Alternativo</span>
                 </button>
+
+                <button
+                  onClick={() => {
+                    setActiveTab('admin');
+                    setIsHeaderMenuOpen(false);
+                  }}
+                  className="w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold text-violet-300 hover:bg-violet-500/15 flex items-center gap-2.5 transition-all cursor-pointer border-t border-white/5 mt-1"
+                >
+                  <Shield className="w-4 h-4 text-violet-400" />
+                  <span>Administración UPPA</span>
+                </button>
               </div>
             )}
           </div>
@@ -1282,6 +1293,18 @@ export default function App() {
                     >
                       <UserIcon className="w-3.5 h-3.5 text-sky-400" />
                       <span>Ver Mi Perfil Completo & Datos</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsProfileDropdownOpen(false);
+                        setActiveTab('admin');
+                      }}
+                      className="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold text-violet-300 hover:text-white hover:bg-violet-500/15 flex items-center gap-2 transition-all cursor-pointer"
+                    >
+                      <Shield className="w-3.5 h-3.5 text-violet-400" />
+                      <span>Panel de Administración UPPA</span>
                     </button>
 
                     <button

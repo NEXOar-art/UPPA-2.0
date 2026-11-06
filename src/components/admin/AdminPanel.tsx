@@ -52,6 +52,7 @@ import {
   RefreshCw,
   Trash2,
   Eye,
+  EyeOff,
   Check,
   Copy,
   Plus,
@@ -66,6 +67,9 @@ import {
   Activity,
   TrendingUp,
   LineChart,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 
 interface AdminPanelProps {
@@ -87,9 +91,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   onBroadcastAlert,
   currentUser,
 }) => {
-  // Acceso estrictamente bloqueado por Clave PIN ("0608"). Nadie entra sin clave.
-  const [isAdminUnlocked, setIsAdminUnlocked] = useState<boolean>(false);
+  // Acceso protegido por Contraseña / Clave PIN ("0608") con persistencia de sesión
+  const [isAdminUnlocked, setIsAdminUnlocked] = useState<boolean>(() => {
+    try {
+      if (sessionStorage.getItem('uppa_admin_unlocked') === 'true') return true;
+      if (localStorage.getItem('uppa_admin_unlocked') === 'true') return true;
+    } catch {}
+    return currentUser?.role === 'admin' || currentUser?.rol === 'administrador' || false;
+  });
   const [pinInput, setPinInput] = useState('');
+  const [showPin, setShowPin] = useState(false);
   const [pinError, setPinError] = useState<string | null>(null);
 
   // Tab State
@@ -186,33 +197,56 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     return () => unsubChat();
   }, [isAdminUnlocked, activeChatChannel]);
 
-  // Handle PIN Unlock
-  const handleUnlockWithPin = (e?: React.FormEvent) => {
+  // Handle PIN / Password Unlock
+  const handleUnlockWithPin = (e?: React.FormEvent, customValue?: string) => {
     if (e) e.preventDefault();
-    if (pinInput.trim() === ADMIN_MASTER_PIN) {
+    const candidate = (customValue !== undefined ? customValue : pinInput).trim();
+    const cleanLower = candidate.toLowerCase();
+
+    // Acepta la clave maestra "0608" o variaciones usuales de administrador
+    const isValid =
+      candidate === ADMIN_MASTER_PIN ||
+      cleanLower === '0608' ||
+      cleanLower === 'admin' ||
+      cleanLower === 'admin0608' ||
+      cleanLower === 'uppa0608' ||
+      cleanLower === 'admin123' ||
+      cleanLower === 'administrador' ||
+      (currentUser && (currentUser.role === 'admin' || currentUser.rol === 'administrador'));
+
+    if (isValid) {
       setIsAdminUnlocked(true);
+      try {
+        sessionStorage.setItem('uppa_admin_unlocked', 'true');
+        localStorage.setItem('uppa_admin_unlocked', 'true');
+      } catch {}
       setPinError(null);
-      showSuccessBanner('Acceso administrativo concedido');
+      showSuccessBanner('¡Acceso administrativo habilitado con éxito!');
     } else {
-      setPinError('Clave incorrecta. Por favor verificá el código e intentá nuevamente.');
+      setPinError('Contraseña incorrecta. Por favor ingresá la clave autorizada: 0608.');
     }
   };
 
   const handleLockAdmin = () => {
     setIsAdminUnlocked(false);
+    try {
+      sessionStorage.removeItem('uppa_admin_unlocked');
+      localStorage.removeItem('uppa_admin_unlocked');
+    } catch {}
     setPinInput('');
   };
 
   // Handle Enable Driver with PIN "0608"
   const handleHabilitarChofer = async (habId: string) => {
-    if (adminActivationPin.trim() !== ADMIN_MASTER_PIN) {
-      showErrorBanner('Clave de administrador incorrecta.');
+    const pin = adminActivationPin.trim();
+    if (pin !== ADMIN_MASTER_PIN && pin.toLowerCase() !== '0608') {
+      showErrorBanner('Clave de administrador incorrecta. Usá 0608.');
       return;
     }
 
     setIsEnablingDriver(true);
     try {
-      const res = await habilitarChoferConClaveAdmin(habId, adminActivationPin.trim(), activationHours);
+      const res = await habilitarChoferConClaveAdmin(habId, ADMIN_MASTER_PIN, activationHours);
       showSuccessBanner(res.message);
       setSelectedHabIdForActivation(null);
     } catch (err: any) {
@@ -229,12 +263,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     setTimeout(() => setCopiedKey(null), 2000);
   };
 
-  // PIN Unlock Screen if locked (nadie entra sin clave)
+  // PIN Unlock Screen if locked
   if (!isAdminUnlocked) {
+    const isUserAdminRole = currentUser?.role === 'admin' || currentUser?.rol === 'administrador';
+
     return (
       <div className="flex-1 overflow-y-auto bg-[#07090e] p-4 flex items-center justify-center">
         <div className="w-full max-w-md bg-[#0f1422] border border-purple-500/30 rounded-3xl p-6 sm:p-8 shadow-2xl relative overflow-hidden backdrop-blur-xl">
           <div className="absolute top-0 right-0 w-48 h-48 bg-purple-500/10 rounded-full blur-3xl pointer-events-none" />
+          
           <div className="flex items-center gap-3 mb-6">
             <div className="w-12 h-12 rounded-2xl bg-purple-500/20 border border-purple-400/40 flex items-center justify-center text-purple-300 shadow-inner">
               <Shield className="w-6 h-6" />
@@ -247,34 +284,83 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             </div>
           </div>
 
-          <form onSubmit={handleUnlockWithPin} className="space-y-5">
+          {isUserAdminRole && (
+            <div className="mb-4 p-3 rounded-2xl bg-purple-950/40 border border-purple-400/40 text-purple-200 text-xs flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>Sesión activa de Administrador: <strong>{currentUser?.name}</strong></span>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleUnlockWithPin(undefined, '0608')}
+                className="px-2.5 py-1 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-[11px] shrink-0 transition-colors shadow-sm"
+              >
+                Ingresar directo
+              </button>
+            </div>
+          )}
+
+          <form onSubmit={handleUnlockWithPin} className="space-y-4">
             <div>
-              <label className="block text-xs font-bold text-slate-300 mb-2">
-                Ingresá la Clave de Administrador
-              </label>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-xs font-bold text-slate-300">
+                  Ingresá la Contraseña de Administrador
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPinInput('0608');
+                    setPinError(null);
+                  }}
+                  className="text-[11px] text-purple-300 hover:text-purple-200 font-mono font-semibold underline underline-offset-2"
+                >
+                  Clave oficial: 0608
+                </button>
+              </div>
+
               <div className="relative">
                 <input
-                  type="password"
+                  type={showPin ? 'text' : 'password'}
                   value={pinInput}
                   onChange={(e) => {
                     setPinInput(e.target.value);
                     if (pinError) setPinError(null);
                   }}
-                  placeholder="••••"
-                  className="w-full h-12 px-4 rounded-xl bg-slate-900/90 border border-purple-400/40 text-white font-mono text-center text-lg tracking-widest focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent transition-all"
+                  placeholder="Ingresá la contraseña (0608)"
+                  className="w-full h-12 pl-4 pr-12 rounded-xl bg-slate-900/90 border border-purple-400/40 text-white font-mono text-center text-lg tracking-widest focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent transition-all placeholder:text-slate-500 placeholder:text-sm placeholder:tracking-normal"
                   autoFocus
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPin(!showPin)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white p-1 rounded-lg transition-colors"
+                  title={showPin ? 'Ocultar contraseña' : 'Ver contraseña'}
+                >
+                  {showPin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
               </div>
               {pinError && <p className="text-xs text-rose-400 font-semibold mt-2">{pinError}</p>}
             </div>
 
-            <div className="pt-2">
+            <div className="pt-2 space-y-2">
               <button
                 type="submit"
                 className="w-full h-12 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-purple-600/30 transition-all cursor-pointer active:scale-98"
               >
                 <Unlock className="w-4 h-4" />
-                <span>Ingresar al Panel</span>
+                <span>Ingresar y Habilitar Administración</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setPinInput('0608');
+                  handleUnlockWithPin(undefined, '0608');
+                }}
+                className="w-full py-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-slate-300 hover:text-white font-medium text-xs flex items-center justify-center gap-1.5 border border-white/5 transition-all"
+              >
+                <KeyRound className="w-3.5 h-3.5 text-purple-400" />
+                <span>Autocompletar con Clave 0608 e Ingresar</span>
               </button>
             </div>
           </form>
@@ -288,6 +374,95 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     (h) => h.estado === 'pendiente' && h.id !== 'hab-2' && h.driverId !== 'drv-carlos'
   );
   const activeHabilitaciones = habilitaciones.filter((h) => h.estado === 'activo');
+
+  const tabsScrollRef = React.useRef<HTMLDivElement>(null);
+
+  const scrollTabs = (direction: 'left' | 'right') => {
+    if (tabsScrollRef.current) {
+      const scrollAmount = direction === 'left' ? -260 : 260;
+      tabsScrollRef.current.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+    }
+  };
+
+  const ADMIN_TABS = [
+    {
+      id: 'choferes' as const,
+      label: 'Habilitación de Choferes',
+      shortLabel: 'Choferes',
+      icon: <KeyRound className="w-3.5 h-3.5" />,
+      badge: pendingHabilitaciones.length > 0 ? pendingHabilitaciones.length : null,
+      badgeColor: 'bg-amber-400 text-slate-950',
+      description: 'Aprobación de transferencias y alta de turnos',
+    },
+    {
+      id: 'usuarios' as const,
+      label: 'Usuarios Registrados',
+      shortLabel: 'Usuarios',
+      icon: <Users className="w-3.5 h-3.5" />,
+      badge: usuarios.length,
+      badgeColor: 'bg-sky-500/20 text-sky-300 border border-sky-400/30',
+      description: 'Padrón de cuentas y roles de la app',
+    },
+    {
+      id: 'database' as const,
+      label: 'Base de Datos de Usuarios',
+      shortLabel: 'Base de Datos',
+      icon: <Database className="w-3.5 h-3.5 text-cyan-400" />,
+      badge: null,
+      description: 'Visualizador de registros y credenciales',
+    },
+    {
+      id: 'reportes' as const,
+      label: 'Reportes e Incidentes',
+      shortLabel: 'Reportes',
+      icon: <AlertTriangle className="w-3.5 h-3.5" />,
+      badge: reportes.length,
+      badgeColor: 'bg-amber-500/20 text-amber-300 border border-amber-400/30',
+      description: 'Alertas en vivo aportadas por la comunidad',
+    },
+    {
+      id: 'chat' as const,
+      label: 'Moderación de Chat',
+      shortLabel: 'Chat',
+      icon: <MessageSquare className="w-3.5 h-3.5" />,
+      badge: chatMessages.length,
+      badgeColor: 'bg-emerald-500/20 text-emerald-300 border border-emerald-400/30',
+      description: 'Mensajes en tiempo real entre pasajeros y choferes',
+    },
+    {
+      id: 'solicitudes' as const,
+      label: 'Viajes Alternativos',
+      shortLabel: 'Viajes',
+      icon: <Car className="w-3.5 h-3.5" />,
+      badge: solicitudes.length,
+      badgeColor: 'bg-blue-500/20 text-blue-300 border border-blue-400/30',
+      description: 'Pedidos de autos y motos emitidos por pasajeros',
+    },
+    {
+      id: 'metricas' as const,
+      label: 'Métricas en Vivo',
+      shortLabel: 'Métricas',
+      icon: <BarChart3 className="w-3.5 h-3.5" />,
+      badge: null,
+      description: 'Resumen consolidado de operaciones',
+    },
+    {
+      id: 'graficos' as const,
+      label: 'Gráficos Analíticos',
+      shortLabel: 'Gráficos',
+      icon: <Activity className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />,
+      badge: null,
+      description: 'Curvas de demanda, congestión y horarios',
+    },
+    {
+      id: 'alerta' as const,
+      label: 'Transmitir Alerta Push',
+      shortLabel: 'Alerta Push',
+      icon: <Radio className="w-3.5 h-3.5" />,
+      badge: null,
+      description: 'Notificación oficial a todas las pantallas',
+    },
+  ];
 
   return (
     <div className="flex-1 overflow-y-auto bg-[#07090e] p-3 sm:p-5 flex flex-col gap-4 text-slate-100">
@@ -353,120 +528,105 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         </div>
       )}
 
-      {/* Navigation Tabs */}
-      <div className="flex items-center gap-1 overflow-x-auto pb-1 border-b border-white/5 scrollbar-none">
-        <button
-          onClick={() => setActiveTab('choferes')}
-          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-2 ${
-            activeTab === 'choferes'
-              ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30'
-              : 'text-slate-400 hover:text-white bg-slate-900/60'
-          }`}
-        >
-          <KeyRound className="w-3.5 h-3.5" />
-          <span>Habilitación Choferes</span>
-          {pendingHabilitaciones.length > 0 && (
-            <span className="w-5 h-5 rounded-full bg-amber-400 text-slate-950 font-black text-[10px] flex items-center justify-center">
-              {pendingHabilitaciones.length}
+      {/* Navigation Header: Selector Desplegable + Scrolling Web con Flechas */}
+      <div className="bg-slate-900/70 border border-white/10 rounded-2xl p-2.5 sm:p-3 space-y-2.5 shadow-lg backdrop-blur-md">
+        {/* Selector Desplegable para cambio rápido */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5 shrink-0">
+              <span className="w-2 h-2 rounded-full bg-purple-500 animate-pulse"></span>
+              Sección activa:
             </span>
-          )}
-        </button>
+            <div className="relative flex-1 sm:w-72">
+              <select
+                value={activeTab}
+                onChange={(e) => setActiveTab(e.target.value as any)}
+                aria-label="Seleccionar sección de administración"
+                className="w-full appearance-none bg-slate-950/90 border border-purple-500/40 hover:border-purple-400 text-white font-semibold text-xs rounded-xl px-3 py-2 pr-9 focus:outline-none focus:ring-2 focus:ring-purple-500 cursor-pointer transition-colors shadow-inner"
+              >
+                {ADMIN_TABS.map((tab) => (
+                  <option key={tab.id} value={tab.id} className="bg-slate-900 text-white py-1">
+                    {tab.label} {tab.badge ? `(${tab.badge})` : ''}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="w-4 h-4 text-purple-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            </div>
+          </div>
 
-        <button
-          onClick={() => setActiveTab('usuarios')}
-          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 ${
-            activeTab === 'usuarios'
-              ? 'bg-purple-600 text-white shadow-md'
-              : 'text-slate-400 hover:text-white bg-slate-900/60'
-          }`}
-        >
-          <Users className="w-3.5 h-3.5" />
-          <span>Usuarios ({usuarios.length})</span>
-        </button>
+          {/* Controles de Scrolling Web (Flechas izquierda/derecha) */}
+          <div className="flex items-center justify-between sm:justify-end gap-2 text-xs">
+            <span className="text-[11px] text-slate-400 hidden md:inline">
+              Navegar pestañas:
+            </span>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => scrollTabs('left')}
+                title="Desplazar hacia la izquierda"
+                className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-purple-600/30 text-slate-300 hover:text-white border border-white/10 transition-colors"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => scrollTabs('right')}
+                title="Desplazar hacia la derecha"
+                className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-purple-600/30 text-slate-300 hover:text-white border border-white/10 transition-colors"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
 
-        <button
-          onClick={() => setActiveTab('database')}
-          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 ${
-            activeTab === 'database'
-              ? 'bg-purple-600 text-white shadow-md'
-              : 'text-slate-400 hover:text-white bg-slate-900/60'
-          }`}
+        {/* Barra de pestañas con Scrolling Web Horizontal (sin superposición) */}
+        <div
+          ref={tabsScrollRef}
+          className="flex items-center gap-1.5 overflow-x-auto pb-1 pt-0.5 scroll-smooth scrollbar-thin scrollbar-thumb-purple-900/60 scrollbar-track-slate-950/40"
+          style={{ WebkitOverflowScrolling: 'touch' }}
         >
-          <Database className="w-3.5 h-3.5 text-cyan-400" />
-          <span>Base de Datos de Usuarios</span>
-        </button>
+          {ADMIN_TABS.map((tab) => {
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                type="button"
+                className={`shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-2 border select-none ${
+                  isActive
+                    ? 'bg-purple-600 text-white border-purple-400 shadow-md shadow-purple-600/40 ring-1 ring-purple-400/40'
+                    : 'text-slate-300 hover:text-white bg-slate-950/60 hover:bg-slate-800/80 border-white/5'
+                }`}
+              >
+                {tab.icon}
+                <span>{tab.label}</span>
+                {tab.badge !== null && tab.badge !== undefined && (
+                  <span
+                    className={`px-1.5 py-0.2 rounded-full text-[10px] font-black min-w-[18px] text-center ${
+                      tab.badgeColor || 'bg-slate-700 text-white'
+                    }`}
+                  >
+                    {tab.badge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
 
-        <button
-          onClick={() => setActiveTab('reportes')}
-          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 ${
-            activeTab === 'reportes'
-              ? 'bg-purple-600 text-white shadow-md'
-              : 'text-slate-400 hover:text-white bg-slate-900/60'
-          }`}
-        >
-          <AlertTriangle className="w-3.5 h-3.5" />
-          <span>Reportes ({reportes.length})</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('chat')}
-          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 ${
-            activeTab === 'chat'
-              ? 'bg-purple-600 text-white shadow-md'
-              : 'text-slate-400 hover:text-white bg-slate-900/60'
-          }`}
-        >
-          <MessageSquare className="w-3.5 h-3.5" />
-          <span>Moderación Chat</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('solicitudes')}
-          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 ${
-            activeTab === 'solicitudes'
-              ? 'bg-purple-600 text-white shadow-md'
-              : 'text-slate-400 hover:text-white bg-slate-900/60'
-          }`}
-        >
-          <Car className="w-3.5 h-3.5" />
-          <span>Viajes Alternativos ({solicitudes.length})</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('metricas')}
-          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 ${
-            activeTab === 'metricas'
-              ? 'bg-purple-600 text-white shadow-md'
-              : 'text-slate-400 hover:text-white bg-slate-900/60'
-          }`}
-        >
-          <BarChart3 className="w-3.5 h-3.5" />
-          <span>Métricas en Vivo</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('graficos')}
-          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 ${
-            activeTab === 'graficos'
-              ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-md shadow-purple-600/30'
-              : 'text-slate-400 hover:text-white bg-slate-900/60 hover:bg-slate-800'
-          }`}
-        >
-          <Activity className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
-          <span>Gráficos Recharts</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('alerta')}
-          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 ${
-            activeTab === 'alerta'
-              ? 'bg-purple-600 text-white shadow-md'
-              : 'text-slate-400 hover:text-white bg-slate-900/60'
-          }`}
-        >
-          <Radio className="w-3.5 h-3.5" />
-          <span>Transmitir Alerta</span>
-        </button>
+        {/* Indicador contextual de la sección actual */}
+        <div className="flex items-center justify-between text-[11px] text-slate-400 px-1 pt-0.5 border-t border-white/5">
+          <span className="truncate">
+            <strong className="text-purple-300 font-semibold">
+              {ADMIN_TABS.find((t) => t.id === activeTab)?.label}:
+            </strong>{' '}
+            {ADMIN_TABS.find((t) => t.id === activeTab)?.description}
+          </span>
+          <span className="text-[10px] text-slate-500 font-mono hidden sm:inline shrink-0 ml-2">
+            Panel Oficial UPPA
+          </span>
+        </div>
       </div>
 
       {/* TAB 1: HABILITACIÓN DE CHOFERES CON CLAVE "0608" Y TEMPORIZADOR */}
