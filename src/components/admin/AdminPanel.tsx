@@ -203,16 +203,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     const candidate = (customValue !== undefined ? customValue : pinInput).trim();
     const cleanLower = candidate.toLowerCase();
 
-    // Acepta la clave maestra "0608" o variaciones usuales de administrador
+    // Acepta la clave maestra "0608"
     const isValid =
       candidate === ADMIN_MASTER_PIN ||
       cleanLower === '0608' ||
-      cleanLower === 'admin' ||
       cleanLower === 'admin0608' ||
-      cleanLower === 'uppa0608' ||
-      cleanLower === 'admin123' ||
-      cleanLower === 'administrador' ||
-      (currentUser && (currentUser.role === 'admin' || currentUser.rol === 'administrador'));
+      cleanLower === 'uppa0608';
 
     if (isValid) {
       setIsAdminUnlocked(true);
@@ -223,7 +219,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       setPinError(null);
       showSuccessBanner('¡Acceso administrativo habilitado con éxito!');
     } else {
-      setPinError('Contraseña incorrecta. Por favor ingresá la clave autorizada: 0608.');
+      setPinError('Código de acceso incorrecto. Verificá los datos e intentá nuevamente.');
     }
   };
 
@@ -265,8 +261,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   // PIN Unlock Screen if locked
   if (!isAdminUnlocked) {
-    const isUserAdminRole = currentUser?.role === 'admin' || currentUser?.rol === 'administrador';
-
     return (
       <div className="flex-1 overflow-y-auto bg-[#07090e] p-4 flex items-center justify-center">
         <div className="w-full max-w-md bg-[#0f1422] border border-purple-500/30 rounded-3xl p-6 sm:p-8 shadow-2xl relative overflow-hidden backdrop-blur-xl">
@@ -280,43 +274,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               <h1 className="text-xl font-black text-white font-display tracking-tight flex items-center gap-2">
                 Panel de Administración
               </h1>
-              <p className="text-xs text-purple-300 font-medium">UPPA Comunidad de Transporte</p>
+              <p className="text-xs text-purple-300 font-medium">UPPA Comunidad de Transporte • Acceso Restringido</p>
             </div>
           </div>
 
-          {isUserAdminRole && (
-            <div className="mb-4 p-3 rounded-2xl bg-purple-950/40 border border-purple-400/40 text-purple-200 text-xs flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
-                <span>Sesión activa de Administrador: <strong>{currentUser?.name}</strong></span>
-              </div>
-              <button
-                type="button"
-                onClick={() => handleUnlockWithPin(undefined, '0608')}
-                className="px-2.5 py-1 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-[11px] shrink-0 transition-colors shadow-sm"
-              >
-                Ingresar directo
-              </button>
-            </div>
-          )}
-
           <form onSubmit={handleUnlockWithPin} className="space-y-4">
             <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="text-xs font-bold text-slate-300">
-                  Ingresá la Contraseña de Administrador
-                </label>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPinInput('0608');
-                    setPinError(null);
-                  }}
-                  className="text-[11px] text-purple-300 hover:text-purple-200 font-mono font-semibold underline underline-offset-2"
-                >
-                  Clave oficial: 0608
-                </button>
-              </div>
+              <label className="block text-xs font-bold text-slate-300 mb-2">
+                Código de Acceso de Administrador
+              </label>
 
               <div className="relative">
                 <input
@@ -326,15 +292,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     setPinInput(e.target.value);
                     if (pinError) setPinError(null);
                   }}
-                  placeholder="Ingresá la contraseña (0608)"
-                  className="w-full h-12 pl-4 pr-12 rounded-xl bg-slate-900/90 border border-purple-400/40 text-white font-mono text-center text-lg tracking-widest focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent transition-all placeholder:text-slate-500 placeholder:text-sm placeholder:tracking-normal"
+                  placeholder="Ingresá el código de acceso"
+                  className="w-full h-12 pl-4 pr-12 rounded-xl bg-slate-900/90 border border-purple-400/40 text-white font-mono text-center text-lg tracking-widest focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent transition-all placeholder:text-slate-500 placeholder:text-xs placeholder:tracking-normal"
                   autoFocus
                 />
                 <button
                   type="button"
                   onClick={() => setShowPin(!showPin)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white p-1 rounded-lg transition-colors"
-                  title={showPin ? 'Ocultar contraseña' : 'Ver contraseña'}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white p-1 rounded-lg transition-colors cursor-pointer"
+                  title={showPin ? 'Ocultar código' : 'Ver código'}
                 >
                   {showPin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
@@ -342,25 +308,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               {pinError && <p className="text-xs text-rose-400 font-semibold mt-2">{pinError}</p>}
             </div>
 
-            <div className="pt-2 space-y-2">
+            <div className="pt-2">
               <button
                 type="submit"
                 className="w-full h-12 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-purple-600/30 transition-all cursor-pointer active:scale-98"
               >
                 <Unlock className="w-4 h-4" />
-                <span>Ingresar y Habilitar Administración</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setPinInput('0608');
-                  handleUnlockWithPin(undefined, '0608');
-                }}
-                className="w-full py-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-slate-300 hover:text-white font-medium text-xs flex items-center justify-center gap-1.5 border border-white/5 transition-all"
-              >
-                <KeyRound className="w-3.5 h-3.5 text-purple-400" />
-                <span>Autocompletar con Clave 0608 e Ingresar</span>
+                <span>Ingresar al Panel</span>
               </button>
             </div>
           </form>
@@ -481,7 +435,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               </span>
             </div>
             <p className="text-xs text-purple-300/80">
-              Clave de Gestión: <strong className="text-white">0608</strong> • Conectado a Firestore
+              Panel Oficial de Gestión • Conectado a Firestore
             </p>
           </div>
         </div>
@@ -777,10 +731,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                           <div>
                             <label className="text-[10px] text-slate-400 block mb-1">Clave Admin</label>
                             <input
-                              type="text"
+                              type="password"
                               value={adminActivationPin}
                               onChange={(e) => setAdminActivationPin(e.target.value)}
-                              placeholder="0608"
+                              placeholder="••••"
                               className="w-full h-8 px-2.5 rounded-lg bg-black/70 border border-purple-400/50 text-white font-mono text-center text-xs font-bold"
                             />
                           </div>
@@ -822,12 +776,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                           onClick={() => {
                             setSelectedHabIdForActivation(hab.id);
                             setActivationHours(hab.horas || 12);
-                            setAdminActivationPin('0608');
+                            setAdminActivationPin('');
                           }}
                           className="flex-1 h-9 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md transition-all cursor-pointer"
                         >
                           <KeyRound className="w-3.5 h-3.5" />
-                          <span>Habilitar con Clave 0608</span>
+                          <span>Habilitar Chofer</span>
                         </button>
                         <a
                           href={`https://wa.me/${hab.whatsapp}?text=${encodeURIComponent(

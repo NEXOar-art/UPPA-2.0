@@ -102,19 +102,25 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
     });
     return () => unsub();
   }, []);
-  // Solicitudes visibles en pantalla:
-  // - Solicitudes aceptadas (viajes realizados): VISIBLES POR 16 MINUTOS exactos desde su aceptación.
-  // - Solicitudes pendientes: activas por 12 minutos. Si expiran, permanecen únicamente por 3 MINUTOS más
-  //   para que el pasajero pueda reemitir; pasados esos 3 minutos de expirada, desaparecen de la pantalla.
+  // Solicitudes visibles en pantalla (Únicamente solicitudes ACTIVAS):
+  // - Solicitudes pendientes: ÚNICAMENTE mientras estén activas (estado === 'pendiente' y NO expiradas dentro de los 12 minutos).
+  // - Solicitudes aceptadas: activas en viaje vigente (no expiradas).
+  // - Toda solicitud inactiva o expirada NO debe publicarse.
   const visibleSolicitudes = useMemo(() => {
     return solicitudes.filter((sol) => {
+      // Si la solicitud expiró tras los 12 minutos, no está activa -> NO se publica
+      if (isSolicitudExpired(sol, nowTimestamp)) {
+        return false;
+      }
+      // Solicitud pendiente activa en búsqueda de chofer
+      if (sol.estado === 'pendiente') {
+        return true;
+      }
+      // Solicitud aceptada activa con chofer asignado (dentro de los 16 min)
       if (sol.estado === 'aceptado') {
         return !isSolicitudAceptadaExpired(sol, nowTimestamp);
       }
-      if (isSolicitudExpired(sol, nowTimestamp)) {
-        return !isSolicitudExpiradaOver3Min(sol, nowTimestamp);
-      }
-      return true;
+      return false;
     });
   }, [solicitudes, nowTimestamp]);
 
@@ -467,7 +473,6 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                   /* Scrolling horizontal web para solicitudes */
                   <div className="flex gap-2.5 overflow-x-auto pb-2 pt-0.5 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
                     {visibleSolicitudes.map((sol) => {
-                      const isExpired = isSolicitudExpired(sol, nowTimestamp);
                       const remainingSec = getSolicitudRemainingSeconds(sol, nowTimestamp);
                       const mins = Math.floor(remainingSec / 60);
                       const secs = remainingSec % 60;
@@ -476,19 +481,12 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                       const remainingAcceptedSec = getSolicitudAceptadaRemainingSeconds(sol, nowTimestamp);
                       const acceptedMins = Math.floor(remainingAcceptedSec / 60);
 
-                      const remainingExpSec = getSolicitudExpiradaRemainingSeconds(sol, nowTimestamp);
-                      const expMins = Math.floor(remainingExpSec / 60);
-                      const expSecs = remainingExpSec % 60;
-                      const formattedExpTimer = `${expMins}:${expSecs.toString().padStart(2, '0')}`;
-
                       return (
                         <div
                           key={sol.id}
                           className={`p-3 rounded-xl border text-xs min-w-[270px] max-w-[310px] shrink-0 space-y-1.5 ${
                             sol.estado === 'aceptado'
                               ? 'bg-[#0c1322] border-emerald-500/40 text-blue-200'
-                              : isExpired
-                              ? 'bg-[#180f14] border-rose-500/30 text-rose-200'
                               : 'bg-[#0f1424] border-amber-500/30 text-slate-200'
                           }`}
                         >
@@ -502,7 +500,7 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                               <span className="truncate">{sol.nombrePasajero}</span>
                             </div>
 
-                            {sol.estado === 'pendiente' && !isExpired && (
+                            {sol.estado === 'pendiente' && (
                               <span
                                 className={`px-2 py-0.5 rounded text-[9px] font-bold font-mono flex items-center gap-1 shrink-0 ${
                                   remainingSec <= 180
@@ -513,15 +511,6 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                               >
                                 <Clock className="w-2.5 h-2.5" />
                                 <span>{formattedTimer}</span>
-                              </span>
-                            )}
-
-                            {sol.estado === 'pendiente' && isExpired && (
-                              <span
-                                className="px-2 py-0.5 rounded text-[9px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/40 shrink-0 font-mono"
-                                title="Desaparece luego de 3 minutos de expirada"
-                              >
-                                EXPIRADA ({formattedExpTimer})
                               </span>
                             )}
 
@@ -541,7 +530,7 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                             <p className="truncate">🏁 {sol.destino}</p>
                           </div>
 
-                          {sol.estado === 'pendiente' && !isExpired ? (
+                          {sol.estado === 'pendiente' ? (
                             <button
                               onClick={() => handleAcceptRide(sol.id)}
                               className="w-full py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-[11px] flex items-center justify-center gap-1 shadow transition-all cursor-pointer active:scale-95"
@@ -549,13 +538,6 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                               <Check className="w-3 h-3" />
                               <span>Aceptar Viaje ({formattedTimer})</span>
                             </button>
-                          ) : sol.estado === 'pendiente' && isExpired ? (
-                            <div className="space-y-1 pt-0.5">
-                              <div className="text-[10px] text-rose-300/90 flex items-center gap-1 leading-tight">
-                                <AlertCircle className="w-3 h-3 text-rose-400 shrink-0" />
-                                <span>12 min cumplidos (desaparece en {formattedExpTimer})</span>
-                              </div>
-                            </div>
                           ) : (
                             <div className="pt-1.5 border-t border-emerald-500/20 space-y-1.5">
                               <div className="flex items-center justify-between text-[10px]">
@@ -618,7 +600,6 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
 
                 <div className="space-y-2">
                   {myPassengerSolicitudes.map((sol) => {
-                    const isExpired = isSolicitudExpired(sol, nowTimestamp);
                     const remainingSec = getSolicitudRemainingSeconds(sol, nowTimestamp);
                     const mins = Math.floor(remainingSec / 60);
                     const secs = remainingSec % 60;
@@ -630,8 +611,6 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                         className={`p-3 rounded-xl border text-xs ${
                           sol.estado === 'aceptado'
                             ? 'bg-[#0c1322] border-emerald-500/40 text-blue-200'
-                            : isExpired
-                            ? 'bg-[#180f14] border-rose-500/30 text-rose-200'
                             : 'bg-[#0f1424] border-amber-500/30 text-slate-200'
                         }`}
                       >
@@ -639,7 +618,7 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                           <span className="font-bold text-white">
                             {sol.tipoVehiculoRequerido === 'moto' ? '🏍️ Moto Taxi' : '🚕 Auto Taxi'}
                           </span>
-                          {sol.estado === 'pendiente' && !isExpired && (
+                          {sol.estado === 'pendiente' && (
                             <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-400/40">
                               Buscando chofer ({formattedTimer})
                             </span>
