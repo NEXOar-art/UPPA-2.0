@@ -91,13 +91,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   onBroadcastAlert,
   currentUser,
 }) => {
-  // Acceso protegido por Contraseña / Clave PIN ("0608") con persistencia de sesión
+  // Acceso protegido por Contraseña / Clave PIN ("0608")
   const [isAdminUnlocked, setIsAdminUnlocked] = useState<boolean>(() => {
     try {
-      if (sessionStorage.getItem('uppa_admin_unlocked') === 'true') return true;
-      if (localStorage.getItem('uppa_admin_unlocked') === 'true') return true;
-    } catch {}
-    return currentUser?.role === 'admin' || currentUser?.rol === 'administrador' || false;
+      return sessionStorage.getItem('uppa_admin_unlocked') === 'true';
+    } catch {
+      return false;
+    }
   });
   const [pinInput, setPinInput] = useState('');
   const [showPin, setShowPin] = useState(false);
@@ -214,7 +214,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       setIsAdminUnlocked(true);
       try {
         sessionStorage.setItem('uppa_admin_unlocked', 'true');
-        localStorage.setItem('uppa_admin_unlocked', 'true');
       } catch {}
       setPinError(null);
       showSuccessBanner('¡Acceso administrativo habilitado con éxito!');
@@ -224,12 +223,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   };
 
   const handleLockAdmin = () => {
-    setIsAdminUnlocked(false);
     try {
       sessionStorage.removeItem('uppa_admin_unlocked');
       localStorage.removeItem('uppa_admin_unlocked');
+      sessionStorage.setItem('uppa_admin_unlocked', 'false');
     } catch {}
+    setIsAdminUnlocked(false);
     setPinInput('');
+    setPinError(null);
+    setActionSuccessMessage(null);
+    setActionErrorMessage(null);
   };
 
   // Handle Enable Driver with PIN "0608"
@@ -259,11 +262,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     setTimeout(() => setCopiedKey(null), 2000);
   };
 
-  // PIN Unlock Screen if locked
+  // PIN Unlock Screen if locked - Tarjeta directa para ingresar código de administrador
   if (!isAdminUnlocked) {
     return (
-      <div className="flex-1 overflow-y-auto bg-[#07090e] p-4 flex items-center justify-center">
-        <div className="w-full max-w-md bg-[#0f1422] border border-purple-500/30 rounded-3xl p-6 sm:p-8 shadow-2xl relative overflow-hidden backdrop-blur-xl">
+      <div className="flex-1 w-full h-full overflow-y-auto bg-[#07090e] p-4 flex items-center justify-center min-h-[75vh]">
+        <div className="w-full max-w-md bg-[#0f1422] border border-purple-500/30 rounded-3xl p-6 sm:p-8 shadow-2xl relative overflow-hidden backdrop-blur-xl animate-in fade-in zoom-in-95 duration-200">
           <div className="absolute top-0 right-0 w-48 h-48 bg-purple-500/10 rounded-full blur-3xl pointer-events-none" />
           
           <div className="flex items-center gap-3 mb-6">
@@ -457,8 +460,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             <span>Actualizar</span>
           </button>
           <button
+            type="button"
             onClick={handleLockAdmin}
-            className="h-8 px-3 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 border border-rose-400/30 text-rose-300 text-xs font-bold flex items-center gap-1.5 transition-all"
+            className="h-8 px-3 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 border border-rose-400/30 text-rose-300 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer active:scale-95 shadow-sm"
+            title="Bloquear panel de administración y volver a la tarjeta de ingreso"
           >
             <Lock className="w-3.5 h-3.5" />
             <span>Bloquear</span>
