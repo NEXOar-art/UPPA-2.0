@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import {
   Bus,
   Bike,
@@ -19,6 +19,7 @@ import {
   Layers,
   Minimize2,
   Maximize2,
+  X,
 } from 'lucide-react';
 import { LINEA_228_STOPS, Linea228Stop } from '../../data/linea228Stops';
 import { RankingPrestadoresDropdown } from '../taxi/RankingPrestadoresDropdown';
@@ -46,6 +47,69 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
   const [selectedZone, setSelectedZone] = useState<string>('all');
   const [isRankingDropdownOpen, setIsRankingDropdownOpen] = useState(false);
 
+  // Arrastre táctil / mouse para ocultar el panel hacia abajo
+  const [dragOffsetY, setDragOffsetY] = useState(0);
+  const dragStartYRef = useRef<number | null>(null);
+  const hasDraggedRef = useRef<boolean>(false);
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    dragStartYRef.current = e.clientY;
+    hasDraggedRef.current = false;
+    try {
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    } catch {}
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (dragStartYRef.current === null) return;
+    const deltaY = e.clientY - dragStartYRef.current;
+    if (Math.abs(deltaY) > 6) {
+      hasDraggedRef.current = true;
+    }
+    // Solo permitimos desplazamiento visual hacia abajo (de 0 a 140px)
+    if (deltaY > 0) {
+      setDragOffsetY(Math.min(deltaY, 140));
+    } else {
+      setDragOffsetY(0);
+    }
+  };
+
+  const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (dragStartYRef.current === null) return;
+    const deltaY = e.clientY - dragStartYRef.current;
+    const didDrag = hasDraggedRef.current;
+
+    dragStartYRef.current = null;
+    setDragOffsetY(0);
+    try {
+      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+    } catch {}
+
+    // Función 2: Si tocó y arrastró hacia abajo (más de 30px) -> oculta / minimiza el panel
+    if (didDrag && deltaY > 30) {
+      setIsExpanded(false);
+      setIsMinimized(true);
+      return;
+    }
+
+    // Si arrastró hacia arriba (más de 30px) -> expande el panel
+    if (didDrag && deltaY < -30) {
+      setIsExpanded(true);
+      return;
+    }
+
+    // Función 1: Si tocó / hizo clic sin arrastrar hacia abajo -> expande / contrae el panel
+    if (!didDrag || Math.abs(deltaY) < 15) {
+      setIsExpanded((prev) => !prev);
+    }
+  };
+
+  const handlePointerCancel = () => {
+    dragStartYRef.current = null;
+    hasDraggedRef.current = false;
+    setDragOffsetY(0);
+  };
+
   // Filter stops by query and zone
   const filteredStops = useMemo(() => {
     return LINEA_228_STOPS.filter((stop) => {
@@ -72,16 +136,19 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
       <div className="w-full max-w-sm mx-auto px-4 pointer-events-auto flex justify-center pb-1 animate-in fade-in slide-in-from-bottom-2 duration-200">
         <button
           type="button"
-          onClick={() => setIsMinimized(false)}
+          onClick={() => {
+            setIsMinimized(false);
+            setDragOffsetY(0);
+          }}
           className="px-4 py-2.5 rounded-2xl bg-[#0b0f1b]/95 hover:bg-[#12182a] border border-cyan-400/50 text-white shadow-2xl backdrop-blur-2xl flex items-center gap-2.5 text-xs font-black transition-all cursor-pointer active:scale-95 group ring-2 ring-cyan-400/25"
-          title="Ver panel '¿Qué querés hacer?' y opciones de transporte"
+          title="Abrir panel de opciones de transporte"
         >
           <div className="w-6 h-6 rounded-lg bg-cyan-500/20 text-cyan-300 flex items-center justify-center border border-cyan-400/30 group-hover:scale-110 transition-transform">
             <Maximize2 className="w-3.5 h-3.5" />
           </div>
-          <span>¿Qué querés hacer?</span>
+          <span>Opciones de Transporte</span>
           <span className="text-[10px] text-cyan-400 font-bold bg-cyan-500/10 px-2 py-0.5 rounded-full border border-cyan-400/20">
-            Mostrar Panel
+            Abrir
           </span>
           <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
         </button>
@@ -90,29 +157,51 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
   }
 
   return (
-    <div className="w-full max-w-2xl mx-auto px-2 sm:px-4 pointer-events-auto">
+    <div
+      className="w-full max-w-2xl mx-auto px-2 sm:px-4 pointer-events-auto transition-transform"
+      style={{
+        transform: dragOffsetY > 0 ? `translateY(${dragOffsetY}px)` : undefined,
+        transition: dragOffsetY === 0 ? 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)' : 'none',
+      }}
+    >
       <div className="bg-[#0b0f1b]/95 backdrop-blur-2xl border border-white/10 rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden transition-all duration-300">
-        {/* Pull handle / Expand indicator */}
-        <button
-          onClick={() => setIsExpanded((prev) => !prev)}
-          className="w-full pt-2.5 pb-1 flex flex-col items-center justify-center cursor-pointer hover:opacity-80 transition-opacity group"
-          title={isExpanded ? 'Contraer panel' : 'Expandir panel hacia arriba'}
+        {/* Barra superior con doble función: Tocar para expandir / Arrastrar hacia abajo para ocultar */}
+        <div
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerCancel}
+          style={{ touchAction: 'none' }}
+          className="w-full pt-2.5 pb-1 flex flex-col items-center justify-center cursor-grab active:cursor-grabbing hover:bg-white/[0.04] transition-colors select-none group"
+          title={
+            isExpanded
+              ? 'Tocar para contraer · Arrastrar hacia abajo para ocultar el panel'
+              : 'Tocar para expandir panel hacia arriba · Arrastrar hacia abajo para ocultar'
+          }
         >
-          <div className="w-12 h-1.5 bg-slate-600/70 group-hover:bg-slate-400 rounded-full transition-colors" />
-        </button>
+          {/* Barra central de agarre */}
+          <div className="w-14 h-1.5 bg-slate-600/80 group-hover:bg-cyan-400/80 rounded-full transition-all group-active:w-20 group-active:bg-cyan-400" />
+          
+          {/* Micro indicadores de función dual: Expandir / Arrastrar para Ocultar */}
+          <div className="flex items-center gap-1.5 mt-1 text-[9.5px] font-bold text-slate-400 group-hover:text-cyan-300 transition-colors">
+            <ChevronUp className="w-3 h-3 text-cyan-400" />
+            <span>{isExpanded ? 'Tocar para contraer' : 'Tocar para expandir'}</span>
+            <span className="text-slate-600">·</span>
+            <span>Arrastrar hacia abajo para ocultar</span>
+            <ChevronDown className="w-3 h-3 text-slate-400 animate-bounce" />
+          </div>
+        </div>
 
-        {/* Header Greeting inspirado en Cabify con Botón de Minimizar */}
+        {/* Header: sin el título "¿Qué querés hacer?" y con botón "x" para minimizar */}
         <div className="px-3.5 sm:px-5 pt-1 pb-2 flex items-center justify-between gap-2">
-          <div>
-            <p className="text-[11px] sm:text-xs font-semibold text-slate-400">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+            <p className="text-xs sm:text-sm font-black text-white tracking-tight truncate">
               ¡Hola, {userName || 'Pasajero'}!
             </p>
-            <h2 className="text-base sm:text-lg font-black text-white tracking-tight flex items-center gap-1.5">
-              <span>¿Qué querés hacer?</span>
-            </h2>
           </div>
 
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 shrink-0">
             <button
               type="button"
               onClick={() => setIsExpanded((prev) => !prev)}
@@ -131,15 +220,18 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
               )}
             </button>
 
-            {/* BOTÓN PARA MINIMIZAR Y VER EL MAPA COMPLETO */}
+            {/* BOTÓN "X" PARA MINIMIZAR Y VER EL MAPA COMPLETO */}
             <button
               type="button"
-              onClick={() => setIsMinimized(true)}
-              className="flex items-center gap-1 text-[11px] font-bold text-slate-200 hover:text-white bg-white/10 hover:bg-white/15 px-2.5 py-1.5 rounded-xl border border-white/20 transition-all cursor-pointer active:scale-95 shadow-sm"
-              title="Minimizar panel para ver el mapa completo"
+              onClick={() => {
+                setIsExpanded(false);
+                setIsMinimized(true);
+              }}
+              className="w-8 h-8 rounded-full bg-white/10 hover:bg-rose-500/20 text-slate-300 hover:text-rose-200 border border-white/15 hover:border-rose-400/50 flex items-center justify-center transition-all cursor-pointer active:scale-95 shadow-sm"
+              title="Minimizar panel (x)"
+              aria-label="Minimizar panel"
             >
-              <Minimize2 className="w-3.5 h-3.5 text-cyan-400" />
-              <span>Minimizar</span>
+              <X className="w-4 h-4 stroke-[2.5]" />
             </button>
           </div>
         </div>
@@ -257,11 +349,11 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
                 </div>
                 <div>
                   <h3 className="text-xs sm:text-sm font-black text-white flex items-center gap-1.5">
-                    <span>Linea 228(Malvinas-Zarate)</span>
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping inline-block" />
+                    <span>B° Malvinas ↔ Zárate Terminal</span>
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse inline-block" />
                   </h3>
                   <p className="text-[10px] text-slate-300 font-medium">
-                    B° Malvinas ↔ Zárate Terminal · <strong className="text-cyan-300">62 paradas</strong>
+                    Corredor en vivo · <strong className="text-cyan-300">62 paradas</strong>
                   </p>
                 </div>
               </div>
@@ -342,11 +434,11 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
                     setIsExpanded(false);
                     setIsMinimized(true);
                   }}
-                  className="px-2.5 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-slate-200 hover:text-white border border-white/20 font-bold text-xs flex items-center gap-1.5 active:scale-95 transition-all cursor-pointer"
-                  title="Minimizar panel para ver el mapa completo"
+                  className="w-8 h-8 rounded-full bg-white/10 hover:bg-rose-500/20 text-slate-300 hover:text-rose-200 border border-white/15 hover:border-rose-400/50 flex items-center justify-center active:scale-95 transition-all cursor-pointer shadow-sm"
+                  title="Minimizar panel (x)"
+                  aria-label="Minimizar panel"
                 >
-                  <Minimize2 className="w-3.5 h-3.5 text-cyan-400" />
-                  <span className="hidden sm:inline">Minimizar</span>
+                  <X className="w-4 h-4 stroke-[2.5]" />
                 </button>
               </div>
             </div>
@@ -474,11 +566,12 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
                     setIsExpanded(false);
                     setIsMinimized(true);
                   }}
-                  className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white border border-white/20 font-bold text-xs flex items-center gap-1.5 active:scale-95 transition-all cursor-pointer shadow-sm"
-                  title="Minimizar panel completo para ver el mapa"
+                  className="px-3 py-2 rounded-xl bg-white/10 hover:bg-rose-500/20 text-white hover:text-rose-200 border border-white/20 hover:border-rose-400/50 font-bold text-xs flex items-center gap-1.5 active:scale-95 transition-all cursor-pointer shadow-sm"
+                  title="Minimizar panel (x)"
+                  aria-label="Minimizar panel"
                 >
-                  <Minimize2 className="w-3.5 h-3.5 text-cyan-400" />
-                  <span>Minimizar Panel</span>
+                  <X className="w-3.5 h-3.5 stroke-[2.5]" />
+                  <span>Cerrar (x)</span>
                 </button>
               </div>
             </div>

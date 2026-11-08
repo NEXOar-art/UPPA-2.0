@@ -41,6 +41,7 @@ import {
   Check,
   X,
   AlertCircle,
+  AlertTriangle,
   RotateCcw,
   Timer,
   Trophy,
@@ -82,6 +83,7 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
   const [reqOrigin, setReqOrigin] = useState('');
   const [reqDestination, setReqDestination] = useState('');
   const [reqType, setReqType] = useState<'moto' | 'auto'>('moto');
+  const [aceptaPoliticasRide, setAceptaPoliticasRide] = useState(false);
   const [isSubmittingRide, setIsSubmittingRide] = useState(false);
   const [rideSuccessNotice, setRideSuccessNotice] = useState<string | null>(null);
   const [isPoliticasOpen, setIsPoliticasOpen] = useState(false);
@@ -128,6 +130,10 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
   const handleCreateRideRequest = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!reqOrigin.trim() || !reqDestination.trim() || isSubmittingRide) return;
+    if (!aceptaPoliticasRide) {
+      alert('Debés aceptar la Política & Descargo para poder emitir el pedido de transporte alternativo.');
+      return;
+    }
 
     setIsSubmittingRide(true);
     try {
@@ -139,7 +145,8 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
         tipoVehiculoRequerido: reqType,
       });
       setIsRequestRideOpen(false);
-      setRideSuccessNotice('¡Solicitud de transporte creada! Temporizador de 12 minutos activo para ser aceptada por un chofer.');
+      setAceptaPoliticasRide(false);
+      setRideSuccessNotice('¡Pedido de transporte emitido! Temporizador de 12 minutos activo para ser aceptado por los choferes.');
       setTimeout(() => setRideSuccessNotice(null), 5000);
     } catch (e: any) {
       alert('Error al solicitar transporte: ' + e.message);
@@ -233,13 +240,20 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
   }, []);
 
   const getTaxiDisponibilidad = (taxi: TaxiListing): 'desocupado' | 'ocupado' => {
-    return (
-      disponibilidadMap[taxi.id] ||
-      disponibilidadMap[taxi.driverName] ||
-      disponibilidadMap[taxi.whatsapp] ||
-      taxi.disponibilidad ||
-      'desocupado'
-    );
+    const keys = [
+      taxi.id,
+      taxi.userId,
+      taxi.driverName,
+      taxi.driverName?.toLowerCase()?.trim(),
+      taxi.whatsapp,
+    ].filter(Boolean) as string[];
+
+    for (const key of keys) {
+      if (disponibilidadMap[key]) {
+        return disponibilidadMap[key];
+      }
+    }
+    return taxi.disponibilidad || 'desocupado';
   };
 
   // Prestadores visibles en pantalla:
@@ -771,12 +785,15 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-80" />
                             <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500" />
                           </span>
-                          <span>OCUPADO</span>
+                          <span>OCUPADO (EN VIAJE)</span>
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black tracking-wider uppercase bg-emerald-500/15 text-emerald-300 border border-emerald-400/30">
-                          <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                          <span>DESOCUPADO</span>
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black tracking-wider uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-400/40 shadow-sm shadow-emerald-500/20">
+                          <span className="relative flex h-2 w-2">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60" />
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400" />
+                          </span>
+                          <span>ACTIVO · DESOCUPADO</span>
                         </span>
                       )}
                     </div>
@@ -877,28 +894,58 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
               </button>
             </div>
 
-            <form onSubmit={handleCreateRideRequest} className="space-y-3">
+            <form onSubmit={handleCreateRideRequest} className="space-y-3.5">
               <div>
-                <label className="text-xs font-semibold text-slate-300 block mb-1">Punto de Origen</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                    <MapPin className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>¿Dónde estás? (Origen)</span>
+                  </label>
+                  {reqOrigin && (
+                    <button
+                      type="button"
+                      onClick={() => setReqOrigin('')}
+                      className="text-[10px] text-slate-400 hover:text-amber-300 transition-colors cursor-pointer"
+                    >
+                      Borrar texto
+                    </button>
+                  )}
+                </div>
                 <input
                   type="text"
                   required
+                  autoComplete="off"
                   value={reqOrigin}
                   onChange={(e) => setReqOrigin(e.target.value)}
-                  placeholder="Ej: Justo Vigalondo 1419 o Parada Colectora"
-                  className="w-full h-10 px-3 rounded-xl bg-slate-900 border border-white/10 text-xs text-white focus:outline-none focus:border-blue-400"
+                  placeholder="Escribí el lugar donde te encontrás (ej: Justo Vigalondo 1419 o Parada Colectora)"
+                  className="w-full h-10 px-3 rounded-xl bg-slate-900 border border-white/10 text-xs text-white placeholder-slate-400 focus:outline-none focus:border-blue-400 transition-colors"
                 />
               </div>
 
               <div>
-                <label className="text-xs font-semibold text-slate-300 block mb-1">Punto de Destino</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                    <MapPin className="w-3.5 h-3.5 text-cyan-400" />
+                    <span>¿Hacia dónde vas? (Destino)</span>
+                  </label>
+                  {reqDestination && (
+                    <button
+                      type="button"
+                      onClick={() => setReqDestination('')}
+                      className="text-[10px] text-slate-400 hover:text-amber-300 transition-colors cursor-pointer"
+                    >
+                      Borrar texto
+                    </button>
+                  )}
+                </div>
                 <input
                   type="text"
                   required
+                  autoComplete="off"
                   value={reqDestination}
                   onChange={(e) => setReqDestination(e.target.value)}
-                  placeholder="Ej: McDonald's Panamericana Km 72.5 o Zárate Centro"
-                  className="w-full h-10 px-3 rounded-xl bg-slate-900 border border-white/10 text-xs text-white focus:outline-none focus:border-blue-400"
+                  placeholder="Escribí hacia dónde vas (ej: McDonald's Panamericana Km 72.5 o Zárate Centro)"
+                  className="w-full h-10 px-3 rounded-xl bg-slate-900 border border-white/10 text-xs text-white placeholder-slate-400 focus:outline-none focus:border-blue-400 transition-colors"
                 />
               </div>
 
@@ -908,9 +955,9 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                   <button
                     type="button"
                     onClick={() => setReqType('moto')}
-                    className={`h-10 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 border transition-all ${
+                    className={`h-10 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 border transition-all cursor-pointer ${
                       reqType === 'moto'
-                        ? 'bg-amber-500/20 border-amber-400/50 text-amber-200'
+                        ? 'bg-amber-500/20 border-amber-400/50 text-amber-200 ring-1 ring-amber-400/40 shadow-sm'
                         : 'bg-slate-900 border-white/5 text-slate-400'
                     }`}
                   >
@@ -920,9 +967,9 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                   <button
                     type="button"
                     onClick={() => setReqType('auto')}
-                    className={`h-10 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 border transition-all ${
+                    className={`h-10 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 border transition-all cursor-pointer ${
                       reqType === 'auto'
-                        ? 'bg-cyan-500/20 border-cyan-400/50 text-cyan-200'
+                        ? 'bg-cyan-500/20 border-cyan-400/50 text-cyan-200 ring-1 ring-cyan-400/40 shadow-sm'
                         : 'bg-slate-900 border-white/5 text-slate-400'
                     }`}
                   >
@@ -942,14 +989,66 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                 </div>
               </div>
 
-              <button
-                type="submit"
-                disabled={isSubmittingRide}
-                className="w-full h-11 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black text-xs flex items-center justify-center gap-2 shadow-lg shadow-blue-600/30 transition-all cursor-pointer"
+              {/* Aceptación Obligatoria de Política & Descargo */}
+              <div
+                className={`p-3 rounded-2xl border transition-all ${
+                  aceptaPoliticasRide
+                    ? 'bg-amber-500/10 border-amber-400/50 shadow-inner ring-1 ring-amber-400/30'
+                    : 'bg-white/[0.03] border-white/10 hover:border-amber-400/30'
+                }`}
               >
-                <Send className="w-4 h-4" />
-                <span>{isSubmittingRide ? 'Publicando...' : 'Emitir Solicitud a Choferes'}</span>
-              </button>
+                <label className="flex items-start gap-3 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={aceptaPoliticasRide}
+                    onChange={(e) => setAceptaPoliticasRide(e.target.checked)}
+                    className="mt-0.5 w-4 h-4 rounded border-slate-700 text-amber-500 focus:ring-amber-400 focus:ring-offset-0 bg-[#0f1422] cursor-pointer"
+                  />
+                  <div className="text-xs text-slate-300 leading-snug">
+                    <span>He leído y acepto la </span>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setIsPoliticasOpen(true);
+                      }}
+                      className="font-bold text-amber-300 hover:text-amber-200 underline underline-offset-2 transition-colors cursor-pointer inline-flex items-center gap-1"
+                    >
+                      <ShieldAlert className="w-3.5 h-3.5 text-amber-400 inline" />
+                      <span>Política & Descargo</span>
+                    </button>
+                    <span className="text-slate-400 block text-[11px] mt-0.5">
+                      Obligatorio: debés aceptar la Política & Descargo para poder emitir el pedido de transporte alternativo.
+                    </span>
+                  </div>
+                </label>
+              </div>
+
+              <div>
+                <button
+                  type="submit"
+                  disabled={isSubmittingRide || !aceptaPoliticasRide || !reqOrigin.trim() || !reqDestination.trim()}
+                  className={`w-full h-11 rounded-xl font-black text-xs flex items-center justify-center gap-2 shadow-lg transition-all active:scale-97 ${
+                    !aceptaPoliticasRide || !reqOrigin.trim() || !reqDestination.trim() || isSubmittingRide
+                      ? 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed opacity-60 shadow-none'
+                      : 'bg-gradient-to-r from-amber-500 via-orange-500 to-yellow-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 shadow-amber-500/25 ring-1 ring-amber-300 cursor-pointer'
+                  }`}
+                >
+                  <Send className="w-4 h-4 fill-current" />
+                  <span>
+                    {isSubmittingRide
+                      ? 'Emitiendo aviso a los choferes...'
+                      : 'Emitir Pedido de Transporte Alternativo'}
+                  </span>
+                </button>
+                {!aceptaPoliticasRide && (
+                  <p className="text-[10.5px] text-amber-300/90 text-center mt-2 flex items-center justify-center gap-1.5 font-medium">
+                    <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                    <span>Debés aceptar la "Política & Descargo" para poder emitir el pedido.</span>
+                  </p>
+                )}
+              </div>
             </form>
           </div>
         </div>

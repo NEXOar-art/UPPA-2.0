@@ -367,7 +367,7 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
               {/* Admin Quick Unlock Form (Clave 0608 directa si está el admin en la pantalla) */}
               <div className="p-3 sm:p-3.5 rounded-2xl bg-black/60 border border-white/10 max-w-sm mx-auto space-y-2 text-left">
                 <label className="block text-[11px] font-bold text-slate-300">
-                  Ingreso de Clave de Administrador (0608)
+                  Ingreso de Clave de Administrador
                 </label>
                 <div className="flex flex-col sm:flex-row gap-2">
                   <input
@@ -377,7 +377,7 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
                       setAdminPinInput(e.target.value);
                       setPinValidationErr('');
                     }}
-                    placeholder="Clave 0608"
+                    placeholder="••••"
                     className="flex-1 h-10 px-3 rounded-xl bg-slate-900 border border-purple-400/40 text-white font-mono text-center text-sm font-bold focus:outline-none focus:border-purple-300"
                   />
                   <button

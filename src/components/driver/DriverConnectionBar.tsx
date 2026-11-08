@@ -34,7 +34,7 @@ export const DriverConnectionBar: React.FC<DriverConnectionBarProps> = ({
   location,
   driverName,
   vehicleType,
-  endsAt = Date.now() + 12 * 3600 * 1000,
+  endsAt = 0,
   activationCode,
   disponibilidad = 'desocupado',
   onToggleDisponibilidad,

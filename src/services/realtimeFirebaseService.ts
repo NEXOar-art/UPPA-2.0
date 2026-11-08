@@ -1479,6 +1479,91 @@ export async function actualizarEstadoSolicitud(
   }
 }
 
+/**
+ * Finaliza automáticamente cualquier viaje activo del chofer cuando éste aprieta "desocupado".
+ * Marca las solicitudes aceptadas como 'completado', purga la cola activa para los pasajeros,
+ * actualiza el estado de disponibilidad del chofer a 'desocupado' y notifica a las pestañas y al pasajero.
+ */
+export async function finalizarViajeDeChofer(
+  choferId: string,
+  choferNombre?: string
+): Promise<{ finishedCount: number; finishedIds: string[] }> {
+  const cached = getCached<SolicitudTransporteFirestore[]>('solicitudes', MOCK_INITIAL_SOLICITUDES);
+  const normChoferNombre = choferNombre ? choferNombre.toLowerCase().trim() : '';
+
+  // Buscar solicitudes activas aceptadas asignadas a este chofer
+  const matching = cached.filter((s) => {
+    if (s.estado !== 'aceptado' && s.estado !== 'en_camino') return false;
+    if (choferId && s.choferId === choferId) return true;
+    if (normChoferNombre && s.choferNombre && s.choferNombre.toLowerCase().trim() === normChoferNombre) return true;
+    return false;
+  });
+
+  const now = Date.now();
+  const patch = {
+    estado: 'completado' as const,
+    fechaCompletado: now,
+  };
+
+  const finishedIds: string[] = [];
+
+  // Actualizar caché local
+  const updatedList = cached.map((s) => {
+    const isTarget = matching.some((m) => m.id === s.id);
+    if (isTarget) {
+      finishedIds.push(s.id);
+      return { ...s, ...patch };
+    }
+    return s;
+  });
+  setCached('solicitudes', updatedList);
+
+  // Broadcast y persistencia para cada solicitud completada
+  for (const item of matching) {
+    try {
+      solicitudesBroadcastChannel?.postMessage({
+        type: 'UPDATE_SOLICITUD',
+        solicitudId: item.id,
+        patch,
+      });
+    } catch {}
+
+    triggerInAppPushNotification(
+      '🏁 ¡Viaje Completado!',
+      `${item.choferNombre || 'El chofer'} ha finalizado el viaje con éxito.`,
+      'transporte',
+      { solicitudId: item.id, choferId }
+    );
+
+    try {
+      const docRef = doc(db, COL_SOLICITUDES, item.id);
+      await updateDoc(docRef, {
+        ...patch,
+        actualizadoEn: serverTimestamp(),
+      });
+    } catch (err) {
+      console.warn('Firestore finalizarViajeDeChofer resilient mode:', err);
+    }
+  }
+
+  // Notificar al evento local en ventana para limpiar navegación de chofer en vivo
+  if (typeof window !== 'undefined') {
+    try {
+      window.dispatchEvent(
+        new CustomEvent('uppa-viaje-finalizado', {
+          detail: { choferId, choferNombre, finishedIds },
+        })
+      );
+    } catch {}
+  }
+
+  // Actualizar disponibilidad a desocupado
+  if (choferId) setDriverDisponibilidad(choferId, 'desocupado');
+  if (choferNombre) setDriverDisponibilidad(choferNombre, 'desocupado');
+
+  return { finishedCount: matching.length, finishedIds };
+}
+
 // ---------------------------------------------------------------------------
 // 5. HABILITACIÓN DE CHOFERES (CON CLAVE ADMIN "0608" Y TEMPORIZADOR EN VIVO)
 // ---------------------------------------------------------------------------

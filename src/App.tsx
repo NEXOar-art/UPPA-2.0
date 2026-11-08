@@ -60,6 +60,7 @@ import {
   crearReporte,
   subscribeToDriversDisponibilidad,
   setDriverDisponibilidad,
+  finalizarViajeDeChofer,
   isRealCommunityReport,
 } from './services/realtimeFirebaseService';
 
@@ -296,6 +297,20 @@ export default function App() {
     return vehicle === 'moto' || vehicle === 'auto';
   }, [isDriverHabilitado, userHabilitacionRecord, driverSession, currentUser]);
 
+  // Tiempo real abonado como prestador de servicio de transporte alternativo:
+  // Se calcula estrictamente a partir del registro de habilitación o sesión paga y solo mientras esté vigente (endsAt > now).
+  // Sin tiempos ficticios ni valores arbitrarios por defecto.
+  const driverPaidEndsAt = useMemo(() => {
+    const now = Date.now();
+    if (userHabilitacionRecord?.endsAt && userHabilitacionRecord.endsAt > now) {
+      return userHabilitacionRecord.endsAt;
+    }
+    if (driverSession?.endsAt && driverSession.endsAt > now) {
+      return driverSession.endsAt;
+    }
+    return 0;
+  }, [userHabilitacionRecord, driverSession]);
+
   // Disponibilidad de prestador (Desocupado / Ocupado) gestionada únicamente por el titular
   const [driverDisponibilidad, setDriverDisponibilidadState] = useState<'desocupado' | 'ocupado'>('desocupado');
 
@@ -308,6 +323,8 @@ export default function App() {
         currentUser?.name,
         currentUser?.phone,
         driverSession?.driverName,
+        userHabilitacionRecord?.driverId,
+        userHabilitacionRecord?.driverName,
       ].filter(Boolean) as string[];
 
       for (const k of keys) {
@@ -320,9 +337,22 @@ export default function App() {
       setDriverDisponibilidadState('desocupado');
     });
     return () => unsub();
-  }, [currentUser, driverSession]);
+  }, [currentUser, driverSession, userHabilitacionRecord]);
 
-  const handleSetDriverDisponibilidad = (nextState: 'desocupado' | 'ocupado') => {
+  const handleSetDriverDisponibilidad = async (nextState: 'desocupado' | 'ocupado') => {
+    const driverId =
+      userHabilitacionRecord?.driverId ||
+      currentUser?.uid ||
+      currentUser?.id ||
+      driverSession?.driverId ||
+      '';
+    const driverName =
+      userHabilitacionRecord?.driverName ||
+      driverSession?.driverName ||
+      currentUser?.nombre ||
+      currentUser?.name ||
+      '';
+
     const keys = [
       currentUser?.uid,
       currentUser?.id,
@@ -330,16 +360,30 @@ export default function App() {
       currentUser?.name,
       currentUser?.phone,
       driverSession?.driverName,
+      userHabilitacionRecord?.driverId,
+      userHabilitacionRecord?.driverName,
+      userHabilitacionRecord?.whatsapp,
     ].filter(Boolean) as string[];
+
+    // Si el prestador aprieta "desocupado", finaliza automáticamente cualquier viaje en curso
+    if (nextState === 'desocupado') {
+      try {
+        await finalizarViajeDeChofer(driverId, driverName);
+      } catch (err) {
+        console.warn('Error al finalizar viaje automático:', err);
+      }
+      setActiveTrackingPassenger(null);
+    }
 
     keys.forEach((k) => {
       setDriverDisponibilidad(k, nextState);
     });
     setDriverDisponibilidadState(nextState);
+
     showToast(
       nextState === 'ocupado'
-        ? '🟡 Estado: OCUPADO (En viaje activo)'
-        : '🟢 ¡Estado: DESOCUPADO! Toda la comunidad ve que estás disponible.'
+        ? '🟡 Estado: OCUPADO (En viaje activo con pasajero)'
+        : '🟢 ¡Estado: DESOCUPADO! Viaje finalizado con éxito. Toda la comunidad ve que estás activo y disponible para nuevos viajes.'
     );
   };
 
@@ -362,6 +406,15 @@ export default function App() {
     };
     window.addEventListener('uppa-driver-accepted-ride', handleAcceptedRide);
     return () => window.removeEventListener('uppa-driver-accepted-ride', handleAcceptedRide);
+  }, []);
+
+  useEffect(() => {
+    const handleViajeFinalizado = () => {
+      setActiveTrackingPassenger(null);
+      setDriverDisponibilidadState('desocupado');
+    };
+    window.addEventListener('uppa-viaje-finalizado', handleViajeFinalizado);
+    return () => window.removeEventListener('uppa-viaje-finalizado', handleViajeFinalizado);
   }, []);
 
   // Active View / Tabs
@@ -1326,8 +1379,8 @@ export default function App() {
         </div>
       </header>
 
-      {/* Driver GPS Status Bar with Real-time Countdown Timer - SOLO si está prestando servicio de moto taxi o auto taxi */}
-      {isPrestandoServicioTaxi && (
+      {/* Driver GPS Status Bar with Real-time Countdown Timer - EXCLUSIVO en la sección "mapa" y SOLO para el prestador de servicio habilitado con tiempo real abonado */}
+      {activeTab === 'map' && isPrestandoServicioTaxi && isDriverHabilitado && driverPaidEndsAt > Date.now() && (
         <DriverConnectionBar
           isOnline={isDriverOnline}
           onToggleOnline={() => {
@@ -1336,10 +1389,10 @@ export default function App() {
             showToast(next ? 'Conductor en línea transmitiendo GPS' : 'Modo conductor pausado');
           }}
           location={userLocation}
-          driverName={driverSession?.driverName || currentUser.nombre || currentUser.name}
-          vehicleType={((driverSession?.vehicleType || currentUser.tipoVehiculo || (currentUser.rol === 'chofer_moto' ? 'moto' : 'auto')) === 'moto' ? 'moto' : 'auto')}
-          endsAt={driverSession?.endsAt || (Date.now() + 12 * 3600 * 1000)}
-          activationCode={driverSession?.activationCode}
+          driverName={userHabilitacionRecord?.driverName || driverSession?.driverName || currentUser.nombre || currentUser.name}
+          vehicleType={((userHabilitacionRecord?.vehicleType || driverSession?.vehicleType || currentUser.tipoVehiculo || (currentUser.rol === 'chofer_moto' ? 'moto' : 'auto')) === 'moto' ? 'moto' : 'auto')}
+          endsAt={driverPaidEndsAt}
+          activationCode={userHabilitacionRecord?.activationCode || driverSession?.activationCode}
           disponibilidad={driverDisponibilidad}
           onToggleDisponibilidad={handleToggleDriverDisponibilidad}
           onCenterMap={() => setActiveTab('map')}
