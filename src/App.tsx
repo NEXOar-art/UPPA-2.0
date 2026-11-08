@@ -1469,6 +1469,7 @@ export default function App() {
             currentUserPhone={currentUser.phone}
             currentUserRole={currentUser.role}
             isDriverHabilitado={isDriverHabilitado}
+            userLocation={userLocation}
             onOpenPublishModal={(tab) => {
               setPublishTaxiInitialTab(tab || 'transfer');
               setIsPublishTaxiOpen(true);

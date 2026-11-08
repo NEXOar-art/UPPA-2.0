@@ -294,6 +294,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
   const [showGasStations, setShowGasStations] = useState(false);
   const [showSchools, setShowSchools] = useState(false);
   const [showEvents, setShowEvents] = useState(true);
+  const [showTaxis, setShowTaxis] = useState(true);
   const [isEventFilterPanelOpen, setIsEventFilterPanelOpen] = useState(false);
   const [activeEventCategories, setActiveEventCategories] = useState<Record<string, boolean>>({
     accident: true,
@@ -1184,6 +1185,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
     if (!mapInstanceRef.current || !taxisLayerRef.current) return;
     const layer = taxisLayerRef.current;
     layer.clearLayers();
+    if (!showTaxis) return;
 
     taxis.forEach((taxi) => {
       // Don't render generic taxi marker if this driver is already featured in the tracking trajectory layer
@@ -1209,7 +1211,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
       });
       marker.addTo(layer);
     });
-  }, [taxis, onSelectTaxi, activeTrackingTaxi]);
+  }, [taxis, onSelectTaxi, activeTrackingTaxi, showTaxis]);
 
   // =========================================================================
   // DRIVER TRACKING TRAJECTORY & ETA (Punto A -> Punto B Titilando)
@@ -1825,6 +1827,23 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
           <span className="leading-none select-none">🏫</span>
         </button>
 
+        {/* Botón Prestadores de Servicio (Taxi & Motos con icono 🚕 para mostrar/ocultar y limpiar el mapa) */}
+        <button
+          onClick={() => {
+            resetHideTimer();
+            const next = !showTaxis;
+            setShowTaxis(next);
+          }}
+          className={`w-10 h-10 rounded-2xl flex items-center justify-center text-lg shadow-xl backdrop-blur-xl border transition-all active:scale-95 cursor-pointer ${
+            showTaxis
+              ? 'bg-blue-500/25 text-blue-200 border-blue-400 ring-2 ring-blue-400/40 shadow-[0_0_15px_rgba(59,130,246,0.35)] scale-105'
+              : 'glass-panel text-slate-500 border-white/5 opacity-40 hover:opacity-75 grayscale'
+          }`}
+          title={showTaxis ? 'Ocultar Prestadores de Servicio en el mapa (🚕)' : 'Mostrar Prestadores de Servicio en el mapa (🚕)'}
+        >
+          <span className="leading-none select-none">🚕</span>
+        </button>
+
         {/* Botón 4: Filtro de Eventos y Capas por Categoría (solo icono 🎛️ sin texto) */}
         <div className="relative">
           <button
@@ -1883,6 +1902,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
                       setShowGasStations(true);
                       setShowSchools(true);
                       setShowEvents(true);
+                      setShowTaxis(true);
                       setActiveEventCategories({
                         accident: true,
                         late: true,

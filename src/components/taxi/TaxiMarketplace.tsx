@@ -18,8 +18,11 @@ import {
   getDriversDisponibilidadMap,
   subscribeToDriversDisponibilidad,
   setDriverDisponibilidad,
+  validarCodigoSeguridadViaje,
+  anularViajePorCodigo,
   RANKING_WINDOW_MS,
 } from '../../services/realtimeFirebaseService';
+import { getDistanceKm, UserLocation } from '../../utils/geolocation';
 import {
   Car,
   Bike,
@@ -30,6 +33,7 @@ import {
   MapPin,
   Plus,
   CheckCircle,
+  CheckCircle2,
   Shield,
   ShieldAlert,
   Navigation,
@@ -62,6 +66,7 @@ interface TaxiMarketplaceProps {
   currentUserPhone?: string;
   currentUserRole?: string;
   isDriverHabilitado?: boolean;
+  userLocation?: UserLocation | null;
 }
 
 export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
@@ -74,6 +79,7 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
   currentUserPhone = '',
   currentUserRole = 'passenger',
   isDriverHabilitado = false,
+  userLocation,
 }) => {
   const [vehicleFilter, setVehicleFilter] = useState<'all' | 'auto' | 'moto'>('all');
   const [solicitudes, setSolicitudes] = useState<SolicitudTransporteFirestore[]>([]);

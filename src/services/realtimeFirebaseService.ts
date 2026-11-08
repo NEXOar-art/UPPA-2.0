@@ -1100,7 +1100,7 @@ export function getSolicitudExpiradaRemainingSeconds(sol: SolicitudTransporteFir
  * Al cumplirse los 16 minutos, debe desaparecer de la vista para dar lugar a nuevas peticiones.
  */
 export function isSolicitudAceptadaExpired(sol: SolicitudTransporteFirestore, now: number = Date.now()): boolean {
-  if (sol.estado !== 'aceptado') return false;
+  if (sol.estado !== 'aceptado' && sol.estado !== 'en_camino') return false;
   const acceptedMs = typeof sol.fechaAceptado === 'number'
     ? sol.fechaAceptado
     : typeof sol.actualizadoEn === 'number'
@@ -1119,7 +1119,7 @@ export function isSolicitudAceptadaExpired(sol: SolicitudTransporteFirestore, no
  * Calcula los segundos restantes de exposición de los 16 minutos para solicitudes aceptadas.
  */
 export function getSolicitudAceptadaRemainingSeconds(sol: SolicitudTransporteFirestore, now: number = Date.now()): number {
-  if (sol.estado !== 'aceptado') return 0;
+  if (sol.estado !== 'aceptado' && sol.estado !== 'en_camino') return 0;
   const acceptedMs = typeof sol.fechaAceptado === 'number'
     ? sol.fechaAceptado
     : typeof sol.actualizadoEn === 'number'
@@ -1314,6 +1314,16 @@ export async function crearSolicitudTransporte(data: {
   return nuevaSolicitud;
 }
 
+export function generarCodigoSeguridadViaje(): string {
+  // Genera un código alfanumérico limpio de 4 caracteres (ej: "7K4M", "A9W2", "B3Z8")
+  const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+  let result = '';
+  for (let i = 0; i < 4; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+}
+
 export async function aceptarSolicitudTransporte(
   solicitudId: string,
   choferId: string,
@@ -1327,12 +1337,18 @@ export async function aceptarSolicitudTransporte(
   }
 
   const now = Date.now();
+  // Se genera automáticamente un código alfanumérico que solo verá el pasajero solicitante
+  const codigoSeguridad = existing?.codigoSeguridad || generarCodigoSeguridadViaje();
+
   const patch = {
     estado: 'aceptado' as const,
     choferId,
     choferNombre,
     choferTelefono,
     fechaAceptado: now,
+    codigoSeguridad,
+    codigoValidado: false,
+    intentosFallidosCodigo: 0,
   };
 
   // Actualizar caché local
@@ -1354,9 +1370,9 @@ export async function aceptarSolicitudTransporte(
 
   triggerInAppPushNotification(
     '✅ ¡Viaje Aceptado!',
-    `${choferNombre} aceptó el viaje y está en camino a tu ubicación.`,
+    `${choferNombre} aceptó el viaje. Tu código de abordaje seguro es: ${codigoSeguridad}. Pasáselo al subir.`,
     'transporte',
-    { solicitudId, choferId }
+    { solicitudId, choferId, codigoSeguridad }
   );
 
   // Cuando un prestador acepta un servicio, pasa automáticamente a estado OCUPADO
@@ -1372,6 +1388,166 @@ export async function aceptarSolicitudTransporte(
     });
   } catch (error) {
     console.warn('Firestore aceptarSolicitud notice (resilient mode active):', error);
+  }
+}
+
+/**
+ * Valida el código alfanumérico provisto por el pasajero al subir al vehículo.
+ * Si es correcto: habilita el viaje y pasa a estado 'en_camino'.
+ * Si es incorrecto: contabiliza intento y si supera 3 intentos (o se anula), el viaje queda anulado.
+ */
+export async function validarCodigoSeguridadViaje(
+  solicitudId: string,
+  codigoIngresado: string
+): Promise<{ success: boolean; error?: string; anular?: boolean; codigoValidado?: boolean }> {
+  const cached = getCached<SolicitudTransporteFirestore[]>('solicitudes', MOCK_INITIAL_SOLICITUDES);
+  const sol = cached.find((s) => s.id === solicitudId);
+  if (!sol) {
+    return { success: false, error: 'Solicitud no encontrada.' };
+  }
+  if (sol.estado === 'anulado' || sol.estado === 'cancelado' || sol.estado === 'completado') {
+    return { success: false, error: `El viaje ya se encuentra ${sol.estado}.` };
+  }
+
+  const expectedCode = (sol.codigoSeguridad || '').trim().toUpperCase();
+  const enteredCode = (codigoIngresado || '').trim().toUpperCase();
+
+  if (expectedCode && enteredCode === expectedCode) {
+    // Código correcto -> Habilitar viaje en curso
+    const patch = {
+      estado: 'en_camino' as const,
+      codigoValidado: true,
+      codigoValidadoEn: Date.now(),
+      actualizadoEn: Date.now(),
+    };
+
+    setCached(
+      'solicitudes',
+      cached.map((s) => (s.id === solicitudId ? { ...s, ...patch } : s))
+    );
+
+    try {
+      solicitudesBroadcastChannel?.postMessage({
+        type: 'UPDATE_SOLICITUD',
+        solicitudId,
+        patch,
+      });
+    } catch {}
+
+    triggerInAppPushNotification(
+      '🔐 ¡Código Correcto!',
+      `El chofer validó tu código de seguridad. ¡Buen viaje!`,
+      'transporte',
+      { solicitudId, choferId: sol.choferId }
+    );
+
+    try {
+      const docRef = doc(db, COL_SOLICITUDES, solicitudId);
+      await updateDoc(docRef, {
+        ...patch,
+        actualizadoEn: serverTimestamp(),
+      });
+    } catch (err) {
+      console.warn('Firestore validarCodigoSeguridadViaje:', err);
+    }
+
+    return { success: true, codigoValidado: true };
+  }
+
+  // Código incorrecto -> incrementar intentos o anular
+  const intentos = (sol.intentosFallidosCodigo || 0) + 1;
+  if (intentos >= 3) {
+    await anularViajePorCodigo(solicitudId, 'Código de seguridad incorrecto ingresado 3 veces.');
+    return {
+      success: false,
+      anular: true,
+      error: 'Código incorrecto. Se superó el límite de intentos (3) y el viaje ha quedado anulado.',
+    };
+  }
+
+  const patch = {
+    intentosFallidosCodigo: intentos,
+  };
+  setCached(
+    'solicitudes',
+    cached.map((s) => (s.id === solicitudId ? { ...s, ...patch } : s))
+  );
+
+  try {
+    solicitudesBroadcastChannel?.postMessage({
+      type: 'UPDATE_SOLICITUD',
+      solicitudId,
+      patch,
+    });
+  } catch {}
+
+  return {
+    success: false,
+    error: `Código incorrecto (intento ${intentos}/3). Verificá el código provisto por el pasajero.`,
+  };
+}
+
+/**
+ * Anula un viaje debido a código incorrecto o decisión de las partes.
+ * El chofer vuelve automáticamente a estado DESOCUPADO.
+ */
+export async function anularViajePorCodigo(
+  solicitudId: string,
+  motivo: string = 'Código de seguridad incorrecto'
+): Promise<void> {
+  const cached = getCached<SolicitudTransporteFirestore[]>('solicitudes', MOCK_INITIAL_SOLICITUDES);
+  const sol = cached.find((s) => s.id === solicitudId);
+  const now = Date.now();
+
+  const patch = {
+    estado: 'anulado' as const,
+    motivoAnulacion: motivo,
+    fechaAnulado: now,
+    actualizadoEn: now,
+  };
+
+  setCached(
+    'solicitudes',
+    cached.map((s) => (s.id === solicitudId ? { ...s, ...patch } : s))
+  );
+
+  try {
+    solicitudesBroadcastChannel?.postMessage({
+      type: 'UPDATE_SOLICITUD',
+      solicitudId,
+      patch,
+    });
+  } catch {}
+
+  // Liberar al chofer para que vuelva a figurar DESOCUPADO en la red
+  if (sol?.choferId) setDriverDisponibilidad(sol.choferId, 'desocupado');
+  if (sol?.choferNombre) setDriverDisponibilidad(sol.choferNombre, 'desocupado');
+
+  triggerInAppPushNotification(
+    '❌ Viaje Anulado',
+    `El viaje ha quedado anulado: ${motivo}.`,
+    'transporte',
+    { solicitudId }
+  );
+
+  if (typeof window !== 'undefined') {
+    try {
+      window.dispatchEvent(
+        new CustomEvent('uppa-viaje-anulado', {
+          detail: { solicitudId, choferId: sol?.choferId, motivo },
+        })
+      );
+    } catch {}
+  }
+
+  try {
+    const docRef = doc(db, COL_SOLICITUDES, solicitudId);
+    await updateDoc(docRef, {
+      ...patch,
+      actualizadoEn: serverTimestamp(),
+    });
+  } catch (err) {
+    console.warn('Firestore anularViajePorCodigo notice:', err);
   }
 }
 

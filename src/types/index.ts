@@ -201,11 +201,16 @@ export interface SolicitudTransporteFirestore {
   destino: string;
   origenCoords?: { lat: number; lng: number };
   destinoCoords?: { lat: number; lng: number };
-  estado: 'pendiente' | 'aceptado' | 'en_camino' | 'completado' | 'cancelado' | 'expirada';
+  estado: 'pendiente' | 'aceptado' | 'en_camino' | 'completado' | 'cancelado' | 'expirada' | 'anulado';
   tipoVehiculoRequerido: 'moto' | 'auto';
   choferId: string | null;
   choferNombre?: string | null;
   choferTelefono?: string | null;
+  codigoSeguridad?: string; // Código alfanumérico generado al aceptar, visible solo para el pasajero
+  codigoValidado?: boolean; // True cuando el chofer ingresa el código correcto al subir al vehículo
+  codigoValidadoEn?: number;
+  intentosFallidosCodigo?: number;
+  motivoAnulacion?: string;
   fechaSolicitud: any;
   fechaAceptado?: number; // Timestamp de aceptación para ventana de exposición de 30 minutos
   expiresAt?: number; // Temporizador límite de 12 minutos
