@@ -473,8 +473,11 @@ export async function crearReporte(data: {
   descripcion: string;
   ubicacion: { lat: number; lng: number };
   ruta?: string;
+  sentido?: 'hacia_malvinas' | 'hacia_zarate';
+  velocidadKmH?: number;
 }): Promise<ReporteFirestore> {
   const path = COL_REPORTES;
+  const now = Date.now();
   try {
     const colRef = collection(db, COL_REPORTES);
     const newDoc = doc(colRef);
@@ -486,6 +489,10 @@ export async function crearReporte(data: {
       descripcion: data.descripcion,
       ubicacion: data.ubicacion,
       ruta: data.ruta || 'campana-zarate',
+      sentido: data.sentido || (data.ruta === 'campana-zarate' ? 'hacia_zarate' : 'hacia_malvinas'),
+      velocidadKmH: data.velocidadKmH,
+      creadoEnMs: now,
+      expiresAtMs: data.tipo === 'ubicacion_colectivo' ? now + 60000 : undefined,
       estado: 'activo',
       confirmaciones: 1,
       creadoEn: serverTimestamp(),
@@ -495,7 +502,9 @@ export async function crearReporte(data: {
 
     // Trigger instant FCM / in-app push notification
     const typeLabel =
-      data.tipo === 'accidente'
+      data.tipo === 'ubicacion_colectivo'
+        ? `📍 Ubicación de colectivo ahora (${data.sentido === 'hacia_zarate' ? 'Hacia Zárate' : 'Hacia Malvinas'})`
+        : data.tipo === 'accidente'
         ? '🚨 Accidente reportado'
         : data.tipo === 'corte'
         ? '⛔ Corte de ruta'
@@ -512,10 +521,10 @@ export async function crearReporte(data: {
       { reporteId: newDoc.id, ubicacion: data.ubicacion }
     );
 
-    return { id: newDoc.id, ...nuevoReporte, creadoEn: Date.now() };
+    return { id: newDoc.id, ...nuevoReporte, creadoEn: now };
   } catch (error) {
     console.warn('Firestore crearReporte notice (fallback local):', error);
-    const localId = `rep-local-${Date.now()}`;
+    const localId = `rep-local-${now}`;
     const fallbackReport: ReporteFirestore = {
       id: localId,
       usuarioId: data.usuarioId,
@@ -524,16 +533,22 @@ export async function crearReporte(data: {
       descripcion: data.descripcion,
       ubicacion: data.ubicacion,
       ruta: data.ruta || 'campana-zarate',
+      sentido: data.sentido || (data.ruta === 'campana-zarate' ? 'hacia_zarate' : 'hacia_malvinas'),
+      velocidadKmH: data.velocidadKmH,
+      creadoEnMs: now,
+      expiresAtMs: data.tipo === 'ubicacion_colectivo' ? now + 60000 : undefined,
       estado: 'activo',
       confirmaciones: 1,
-      creadoEn: Date.now(),
+      creadoEn: now,
     };
     const cached = getCached<ReporteFirestore[]>('reportes', []);
     const filteredCached = (cached || []).filter((r) => !r.id?.startsWith('rep-init-') && !r.id?.startsWith('ev-'));
     setCached('reportes', [fallbackReport, ...filteredCached]);
 
     const typeLabel =
-      data.tipo === 'accidente'
+      data.tipo === 'ubicacion_colectivo'
+        ? `📍 Ubicación de colectivo ahora (${data.sentido === 'hacia_zarate' ? 'Hacia Zárate' : 'Hacia Malvinas'})`
+        : data.tipo === 'accidente'
         ? '🚨 Accidente reportado'
         : data.tipo === 'corte'
         ? '⛔ Corte de ruta'

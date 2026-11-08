@@ -124,8 +124,8 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
       if (sol.estado === 'pendiente') {
         return true;
       }
-      // Solicitud aceptada activa con chofer asignado (dentro de los 16 min)
-      if (sol.estado === 'aceptado') {
+      // Solicitud aceptada o en camino activa con chofer asignado (dentro de los 16 min)
+      if (sol.estado === 'aceptado' || sol.estado === 'en_camino') {
         return !isSolicitudAceptadaExpired(sol, nowTimestamp);
       }
       return false;
@@ -262,18 +262,126 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
     return taxi.disponibilidad || 'desocupado';
   };
 
-  // Prestadores visibles en pantalla:
-  // Solo se pueden ver en "Prestadores de Servicio Habilitados" los prestadores
-  // que están dentro del tiempo que abonaron (endsAt > nowTimestamp).
-  // Pasado ese tiempo desaparecen de inmediato para no ocupar espacio.
-  const visibleTaxis = useMemo(() => {
-    return taxis.filter((t) => {
-      if (vehicleFilter !== 'all' && t.vehicleType !== vehicleFilter) {
-        return false;
+  // Referencia GPS del usuario para cálculo de cercanía
+  const refCoords = useMemo(() => {
+    return {
+      lat: userLocation?.lat ?? -34.1683,
+      lng: userLocation?.lng ?? -58.9592,
+    };
+  }, [userLocation]);
+
+  // Estados para validación de código de seguridad por parte del chofer
+  const [codeInputs, setCodeInputs] = useState<Record<string, string>>({});
+  const [codeErrors, setCodeErrors] = useState<Record<string, string>>({});
+  const [codeSuccesses, setCodeSuccesses] = useState<Record<string, string>>({});
+  const [isValidatingCode, setIsValidatingCode] = useState<Record<string, boolean>>({});
+
+  const handleVerifyCode = async (solId: string) => {
+    const code = (codeInputs[solId] || '').trim().toUpperCase();
+    if (!code) {
+      setCodeErrors((prev) => ({
+        ...prev,
+        [solId]: 'Ingresá el código alfanumérico provisto por el pasajero.',
+      }));
+      return;
+    }
+    setIsValidatingCode((prev) => ({ ...prev, [solId]: true }));
+    setCodeErrors((prev) => ({ ...prev, [solId]: '' }));
+    try {
+      const res = await validarCodigoSeguridadViaje(solId, code);
+      if (!res.success) {
+        setCodeErrors((prev) => ({
+          ...prev,
+          [solId]: res.error || 'Código de seguridad incorrecto.',
+        }));
+      } else {
+        setCodeSuccesses((prev) => ({
+          ...prev,
+          [solId]: '¡Código validado con éxito! Viaje habilitado en curso.',
+        }));
       }
-      return t.endsAt > nowTimestamp;
+    } catch (err: any) {
+      setCodeErrors((prev) => ({
+        ...prev,
+        [solId]: err.message || 'Error al validar código.',
+      }));
+    } finally {
+      setIsValidatingCode((prev) => ({ ...prev, [solId]: false }));
+    }
+  };
+
+  const handleAnularRide = async (
+    solId: string,
+    motivo: string = 'Código incorrecto o pasajero no abordó'
+  ) => {
+    if (
+      !window.confirm(
+        '¿Confirmás anular este viaje? El chofer volverá a estar ACTIVO y DESOCUPADO inmediatamente.'
+      )
+    ) {
+      return;
+    }
+    try {
+      await anularViajePorCodigo(solId, motivo);
+      if (currentUserId) setDriverDisponibilidad(currentUserId, 'desocupado');
+      if (currentUserName) setDriverDisponibilidad(currentUserName, 'desocupado');
+      if (currentUserPhone) setDriverDisponibilidad(currentUserPhone, 'desocupado');
+      setDisponibilidadMap((prev) => ({
+        ...prev,
+        [currentUserId]: 'desocupado',
+        [currentUserName]: 'desocupado',
+        ...(currentUserPhone ? { [currentUserPhone]: 'desocupado' } : {}),
+      }));
+      alert('Viaje anulado. El estado del chofer ahora es ACTIVO · DESOCUPADO.');
+    } catch (err: any) {
+      alert('Error al anular viaje: ' + err.message);
+    }
+  };
+
+  // Prestadores visibles en pantalla:
+  // 1. Filtrados por vehículo y tiempo abonado vigente (endsAt > nowTimestamp).
+  // 2. Calculada la distancia GPS en kilómetros a la ubicación del usuario.
+  // 3. Ordenados por cercanía GPS, priorizando a los DESOCUPADOS primero.
+  const visibleTaxis = useMemo(() => {
+    const list = taxis
+      .filter((t) => {
+        if (vehicleFilter !== 'all' && t.vehicleType !== vehicleFilter) {
+          return false;
+        }
+        return t.endsAt > nowTimestamp;
+      })
+      .map((t) => {
+        const distKm = getDistanceKm(refCoords.lat, refCoords.lng, t.lat, t.lng);
+        const disponibilidad = getTaxiDisponibilidad(t);
+        const isDesocupado = disponibilidad === 'desocupado';
+        const formattedDistance =
+          distKm < 1
+            ? `${Math.round(distKm * 1000)} m`
+            : `${distKm.toFixed(1)} km`;
+        return {
+          ...t,
+          distanceKm: distKm,
+          formattedDistance,
+          isDesocupado,
+          isClosest: false,
+        };
+      });
+
+    // Ordenar: desocupados primero, luego por menor distancia GPS
+    list.sort((a, b) => {
+      if (a.isDesocupado && !b.isDesocupado) return -1;
+      if (!a.isDesocupado && b.isDesocupado) return 1;
+      return a.distanceKm - b.distanceKm;
     });
-  }, [taxis, vehicleFilter, nowTimestamp]);
+
+    // Marcar el primer prestador desocupado como el más cercano
+    const firstDesocupado = list.find((item) => item.isDesocupado);
+    if (firstDesocupado) {
+      firstDesocupado.isClosest = true;
+    }
+
+    return list;
+  }, [taxis, vehicleFilter, nowTimestamp, refCoords, disponibilidadMap]);
 
   const formatRemainingTime = (endsAt: number) => {
     const diff = endsAt - Date.now();
@@ -559,15 +667,84 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                               <span>Aceptar Viaje ({formattedTimer})</span>
                             </button>
                           ) : (
-                            <div className="pt-1.5 border-t border-emerald-500/20 space-y-1.5">
+                            <div className="pt-1.5 border-t border-emerald-500/20 space-y-2">
                               <div className="flex items-center justify-between text-[10px]">
                                 <p className="text-emerald-300 font-semibold truncate">
                                   Chofer: {sol.choferNombre || 'Asignado'}
                                 </p>
                                 <span className="text-[9px] text-emerald-400/80 font-mono shrink-0 ml-1">
-                                  {acceptedMins} min restantes
+                                  {acceptedMins}m restantes
                                 </span>
                               </div>
+
+                              {/* Sección de Validación de Código de Seguridad provisto por el Pasajero */}
+                              {!sol.codigoValidado ? (
+                                <div className="p-2 rounded-xl bg-amber-500/15 border border-amber-400/40 space-y-1.5">
+                                  <div className="flex items-center justify-between text-[10px]">
+                                    <span className="text-amber-200 font-bold flex items-center gap-1">
+                                      <KeyRound className="w-3 h-3 text-amber-300" />
+                                      Código provisto por pasajero:
+                                    </span>
+                                    {typeof sol.intentosFallidosCodigo === 'number' &&
+                                      sol.intentosFallidosCodigo > 0 && (
+                                        <span className="text-rose-300 font-mono font-bold text-[9px]">
+                                          {3 - sol.intentosFallidosCodigo} intentos restantes
+                                        </span>
+                                      )}
+                                  </div>
+
+                                  <div className="flex items-center gap-1.5">
+                                    <input
+                                      type="text"
+                                      maxLength={6}
+                                      value={codeInputs[sol.id] || ''}
+                                      onChange={(e) => {
+                                        const val = e.target.value.toUpperCase();
+                                        setCodeInputs((prev) => ({ ...prev, [sol.id]: val }));
+                                        setCodeErrors((prev) => ({ ...prev, [sol.id]: '' }));
+                                      }}
+                                      placeholder="CÓDIGO (4 CARACTERES)"
+                                      className="flex-1 h-7 px-2 rounded-lg bg-black/60 border border-amber-400/50 font-mono text-[11px] font-bold text-amber-200 placeholder-slate-500 uppercase tracking-wider focus:outline-none focus:border-amber-300"
+                                    />
+                                    <button
+                                      type="button"
+                                      disabled={isValidatingCode[sol.id] || !(codeInputs[sol.id] || '').trim()}
+                                      onClick={() => handleVerifyCode(sol.id)}
+                                      className="h-7 px-2.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 text-slate-950 font-black text-[10px] flex items-center gap-1 transition-all cursor-pointer shadow-sm active:scale-95 shrink-0"
+                                    >
+                                      {isValidatingCode[sol.id] ? '...' : 'Habilitar'}
+                                    </button>
+                                  </div>
+
+                                  {codeErrors[sol.id] && (
+                                    <p className="text-[10px] text-rose-300 font-medium flex items-center gap-1 leading-tight">
+                                      <AlertTriangle className="w-3 h-3 shrink-0 text-rose-400" />
+                                      <span>{codeErrors[sol.id]}</span>
+                                    </p>
+                                  )}
+
+                                  {codeSuccesses[sol.id] && (
+                                    <p className="text-[10px] text-emerald-300 font-medium flex items-center gap-1 leading-tight">
+                                      <CheckCircle2 className="w-3 h-3 shrink-0 text-emerald-400" />
+                                      <span>{codeSuccesses[sol.id]}</span>
+                                    </p>
+                                  )}
+
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAnularRide(sol.id, 'Código incorrecto o pasajero no abordó')}
+                                    className="w-full py-1 text-[9.5px] font-bold text-rose-300 hover:text-rose-200 hover:bg-rose-500/10 rounded border border-rose-500/30 transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                                  >
+                                    <X className="w-3 h-3 text-rose-400" />
+                                    <span>Anular viaje si el código no coincide</span>
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="p-1.5 rounded-lg bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 text-[10.5px] flex items-center gap-1.5 font-bold">
+                                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                                  <span>✅ Código verificado · Viaje habilitado</span>
+                                </div>
+                              )}
 
                               {/* Botón para que el prestador de servicio ubique al usuario con GPS */}
                               <button
@@ -643,7 +820,7 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                               Buscando chofer ({formattedTimer})
                             </span>
                           )}
-                          {sol.estado === 'aceptado' && (
+                          {(sol.estado === 'aceptado' || sol.estado === 'en_camino') && (
                             <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400/40">
                               ✓ Chofer asignado: {sol.choferNombre || 'En camino'}
                             </span>
@@ -651,6 +828,47 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                         </div>
                         <p className="text-[11px] text-slate-300">📍 Origen: {sol.origen}</p>
                         <p className="text-[11px] text-slate-300">🏁 Destino: {sol.destino}</p>
+
+                        {/* Código de Seguridad Confidencial para el Pasajero */}
+                        {(sol.estado === 'aceptado' || sol.estado === 'en_camino') && (
+                          <>
+                            {!sol.codigoValidado ? (
+                              <div className="mt-2.5 p-3 rounded-2xl bg-gradient-to-r from-amber-500/20 via-orange-500/15 to-yellow-500/20 border-2 border-amber-400/60 shadow-lg space-y-1.5">
+                                <div className="flex items-center justify-between gap-1 flex-wrap">
+                                  <span className="text-[10.5px] font-black uppercase text-amber-200 tracking-wider flex items-center gap-1.5">
+                                    <KeyRound className="w-3.5 h-3.5 text-amber-300 animate-pulse" />
+                                    <span>Tu Código Secreto de Abordaje</span>
+                                  </span>
+                                  <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-amber-400/25 text-amber-300 border border-amber-400/50">
+                                    Solo vos lo ves
+                                  </span>
+                                </div>
+
+                                <div className="flex items-center gap-3 pt-0.5">
+                                  <div className="px-3.5 py-1.5 rounded-xl bg-black/80 border-2 border-amber-400 font-mono text-xl font-black tracking-widest text-amber-300 shadow-inner select-all">
+                                    {sol.codigoSeguridad || '----'}
+                                  </div>
+                                  <div className="text-[11px] text-amber-100/90 leading-tight space-y-0.5">
+                                    <p className="font-bold text-white">
+                                      Pasáselo al chofer al subirte al vehículo.
+                                    </p>
+                                    <p className="text-[10px] text-amber-200/80">
+                                      El chofer debe validarlo para habilitar el viaje. Si el código no coincide, el viaje queda anulado.
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="mt-2 p-2.5 rounded-xl bg-emerald-500/20 border border-emerald-400/50 text-emerald-200 text-xs flex items-center gap-2">
+                                <CheckCircle2 className="w-4 h-4 text-emerald-300 shrink-0" />
+                                <div>
+                                  <span className="font-black text-white block">✅ ¡Código verificado por el chofer!</span>
+                                  <span className="text-[10.5px] text-emerald-300/90">Viaje habilitado y en curso con {sol.choferNombre || 'tu chofer'}.</span>
+                                </div>
+                              </div>
+                            )}
+                          </>
+                        )}
                       </div>
                     );
                   })}
@@ -809,6 +1027,26 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                     </p>
 
                     <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
+                      {/* Distancia GPS calculada */}
+                      <span
+                        className={`inline-flex items-center gap-1 font-mono font-bold px-2 py-0.5 rounded-lg text-[10px] ${
+                          taxi.isClosest && taxi.isDesocupado
+                            ? 'bg-emerald-500/25 text-emerald-200 border border-emerald-400/50 shadow-[0_0_8px_rgba(16,185,129,0.3)] animate-pulse'
+                            : 'bg-white/5 text-slate-300 border border-white/10'
+                        }`}
+                        title="Distancia aproximada en línea recta según coordenadas GPS"
+                      >
+                        <Navigation className="w-3 h-3 text-cyan-400" />
+                        <span>a {taxi.formattedDistance}</span>
+                        {taxi.isClosest && taxi.isDesocupado && (
+                          <span className="text-emerald-300 ml-0.5 font-extrabold uppercase tracking-wide">
+                            (Más cercano)
+                          </span>
+                        )}
+                      </span>
+
+                      <span>·</span>
+
                       <span className="flex items-center gap-1">
                         <MapPin className="w-3 h-3 text-blue-400" />
                         <span className="truncate max-w-[180px]">{taxi.zone}</span>

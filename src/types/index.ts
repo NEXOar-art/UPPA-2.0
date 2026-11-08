@@ -58,15 +58,16 @@ export interface UsuarioFirestore {
 }
 
 export type EventType =
-  | 'late'        // 🚌 Micro llega tarde / Demora
-  | 'breakdown'   // 🔧 Micro averiado
-  | 'missed'      // ❌ No pasó
-  | 'accident'    // 💥 Choque / Accidente (Rojo)
-  | 'traffic'     // 🚗 Tráfico denso / Congestión (Naranja)
-  | 'moving'      // ⚡ Unidad en movimiento / Normal (Verde)
-  | 'danger'      // 🚧 Calle cortada / Alerta
-  | 'corte'       // ⛔ Corte de ruta
-  | 'control';    // 👮 Control policial
+  | 'bus_location' // 📍 Ubicación del Colectivo en tiempo real (El más importante)
+  | 'late'         // 🚌 Micro llega tarde / Demora
+  | 'breakdown'    // 🔧 Micro averiado
+  | 'missed'       // ❌ No pasó
+  | 'accident'     // 💥 Choque / Accidente (Rojo)
+  | 'traffic'      // 🚗 Tráfico denso / Congestión (Naranja)
+  | 'moving'       // ⚡ Unidad en movimiento / Normal (Verde)
+  | 'danger'       // 🚧 Calle cortada / Alerta
+  | 'corte'        // ⛔ Corte de ruta
+  | 'control';     // 👮 Control policial
 
 export interface MapEvent {
   id: string;
@@ -82,6 +83,10 @@ export interface MapEvent {
   confirmedByUserIds: string[];
   reportedAt: string;
   direction?: 'hacia_malvinas' | 'hacia_zarate' | 'ambas';
+  sentido?: 'hacia_malvinas' | 'hacia_zarate';
+  velocidadKmH?: number;
+  createdAtMs?: number;
+  expiresAtMs?: number;
   isVerified?: boolean;
   ruta?: string;
   estado?: 'activo' | 'resuelto' | 'oculto';
@@ -91,13 +96,17 @@ export interface ReporteFirestore {
   id: string;
   usuarioId: string;
   nombreUsuario: string;
-  tipo: 'demora' | 'accidente' | 'corte' | 'control' | 'congestion' | 'alerta';
+  tipo: 'demora' | 'accidente' | 'corte' | 'control' | 'congestion' | 'alerta' | 'ubicacion_colectivo';
   descripcion: string;
   ubicacion: {
     lat: number;
     lng: number;
   };
   ruta: string; // 'campana-zarate' | 'zarate-campana' | 'vigalondo-mcdonalds' | 'general'
+  sentido?: 'hacia_malvinas' | 'hacia_zarate';
+  velocidadKmH?: number;
+  creadoEnMs?: number;
+  expiresAtMs?: number;
   estado: 'activo' | 'resuelto' | 'oculto';
   creadoEn: any;
   confirmaciones?: number;

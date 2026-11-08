@@ -26,6 +26,7 @@ import {
 } from './types';
 import { computeLineSentiment } from './utils/sentiment';
 import { UserLocation, reverseGeocode } from './utils/geolocation';
+import { recordGpsSample } from './utils/busSpeedEstimator';
 import { TeslaMap } from './components/map/TeslaMap';
 import { EventBottomSheet } from './components/map/EventBottomSheet';
 import { ReportEventModal } from './components/map/ReportEventModal';
@@ -479,18 +480,36 @@ export default function App() {
       if (realReports && realReports.length > 0) {
         const mapped: MapEvent[] = realReports.map((r) => {
           let evType: MapEvent['type'] = 'late';
-          if (r.tipo === 'accidente') evType = 'accident';
+          if (r.tipo === 'ubicacion_colectivo') evType = 'bus_location';
+          else if (r.tipo === 'accidente') evType = 'accident';
           else if (r.tipo === 'demora') evType = 'late';
           else if (r.tipo === 'congestion') evType = 'traffic';
           else if (r.tipo === 'corte') evType = 'corte' as any;
           else if (r.tipo === 'control') evType = 'control' as any;
           else evType = 'danger';
 
+          const createdMs =
+            typeof r.creadoEnMs === 'number'
+              ? r.creadoEnMs
+              : typeof r.creadoEn === 'number'
+              ? r.creadoEn
+              : typeof r.creadoEn?.seconds === 'number'
+              ? r.creadoEn.seconds * 1000
+              : Date.now();
+
+          const direction =
+            r.sentido || (r.ruta === 'campana-zarate' ? 'hacia_zarate' : 'hacia_malvinas');
+
+          const title =
+            evType === 'bus_location'
+              ? `Ubicación de colectivo ahora · ${direction === 'hacia_zarate' ? 'Hacia Zárate' : 'Hacia Malvinas'}`
+              : `${r.tipo.toUpperCase()}: ${r.ruta || 'Zárate ↔ Campana'}`;
+
           return {
             id: r.id,
             routeId: r.ruta === 'vigalondo-mcdonalds' ? 'route-vigalondo-mcdonalds' : 'route-zarate-malvinas',
             type: evType,
-            title: `${r.tipo.toUpperCase()}: ${r.ruta || 'Zárate ↔ Campana'}`,
+            title,
             description: r.descripcion,
             lat: r.ubicacion.lat,
             lng: r.ubicacion.lng,
@@ -500,6 +519,11 @@ export default function App() {
             confirmaciones: r.confirmaciones || 1,
             confirmedByUserIds: [],
             reportedAt: 'En vivo',
+            direction,
+            sentido: r.sentido,
+            velocidadKmH: r.velocidadKmH,
+            createdAtMs: createdMs,
+            expiresAtMs: evType === 'bus_location' ? createdMs + 60000 : r.expiresAtMs,
             isVerified: true,
             estado: r.estado,
           };
@@ -622,6 +646,7 @@ export default function App() {
     watchIdRef.current = navigator.geolocation.watchPosition(
       async (pos) => {
         const { latitude, longitude, accuracy, speed, heading } = pos.coords;
+        recordGpsSample({ latitude, longitude, speed, accuracy });
         const address = await reverseGeocode(latitude, longitude);
 
         setUserLocation((prev) => ({
@@ -746,20 +771,32 @@ export default function App() {
   };
 
   const handleCreateEvent = (newEventData: Omit<MapEvent, 'id' | 'confirmations' | 'confirmedByUserIds' | 'reportedAt'>) => {
+    const now = Date.now();
     const created: MapEvent = {
       ...newEventData,
-      id: `ev-${Date.now()}`,
+      id: `ev-${now}`,
       confirmations: 1,
       confirmedByUserIds: [currentUser.id],
       reportedAt: 'Recién',
+      createdAtMs: newEventData.createdAtMs || now,
+      expiresAtMs: newEventData.type === 'bus_location' ? now + 60000 : newEventData.expiresAtMs,
     };
     setEvents((prev) => [created, ...prev]);
     setSelectedEvent(created);
     setActiveTab('map');
-    showToast(`✅ ${created.title} registrado en el mapa`);
+
+    if (newEventData.type === 'bus_location') {
+      const dirText = newEventData.direction === 'hacia_zarate' ? 'Hacia Zárate' : 'Hacia Malvinas';
+      const speedText = newEventData.velocidadKmH ? ` · ${newEventData.velocidadKmH} km/h` : '';
+      showToast(`📍 Ubicación de colectivo ahora (${dirText}${speedText}) registrada`);
+    } else {
+      showToast(`✅ ${created.title} registrado en el mapa`);
+    }
 
     const firestoreType: any =
-      newEventData.type === 'accident'
+      newEventData.type === 'bus_location'
+        ? 'ubicacion_colectivo'
+        : newEventData.type === 'accident'
         ? 'accidente'
         : newEventData.type === 'late'
         ? 'demora'
@@ -778,6 +815,8 @@ export default function App() {
       descripcion: newEventData.description || newEventData.title,
       ubicacion: { lat: newEventData.lat, lng: newEventData.lng },
       ruta: newEventData.routeId === 'route-vigalondo-mcdonalds' ? 'vigalondo-mcdonalds' : 'campana-zarate',
+      sentido: newEventData.direction === 'hacia_zarate' ? 'hacia_zarate' : 'hacia_malvinas',
+      velocidadKmH: newEventData.velocidadKmH,
     }).catch((err) => console.warn('Firestore report write notice:', err));
   };
 
@@ -1732,7 +1771,8 @@ export default function App() {
         initialOrigin={userLocation?.address || 'Campana Centro (Plaza Eduardo Costa)'}
         userLocation={userLocation}
         onSuccess={() => {
-          showToast('¡Aviso de transporte emitido a choferes de Moto y Auto Taxi!');
+          showToast('¡Aviso emitido! Choferes habilitados ordenados por cercanía GPS.');
+          setActiveTab('taxi');
         }}
       />
 

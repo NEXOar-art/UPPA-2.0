@@ -25,6 +25,8 @@ export const EventBottomSheet: React.FC<EventBottomSheetProps> = ({
 
   const getEventMeta = (type: MapEvent['type']) => {
     switch (type) {
+      case 'bus_location':
+        return { label: 'Ubicación de colectivo ahora', icon: '📍', color: 'bg-cyan-500/25 text-cyan-200 border-cyan-400/50 shadow-sm' };
       case 'breakdown':
         return { label: 'Averiado', icon: '🔧', color: 'bg-rose-400/20 text-rose-300 border-rose-400/30' };
       case 'late':
@@ -45,6 +47,7 @@ export const EventBottomSheet: React.FC<EventBottomSheetProps> = ({
   };
 
   const meta = getEventMeta(event.type);
+  const isBusLocation = event.type === 'bus_location';
 
   return (
     <div className="fixed inset-x-0 bottom-0 z-50 p-3 sm:p-5 flex justify-center pointer-events-none animate-in slide-in-from-bottom duration-300">
@@ -57,7 +60,7 @@ export const EventBottomSheet: React.FC<EventBottomSheetProps> = ({
           <div className="flex items-center gap-2.5">
             <span className="text-2xl">{meta.icon}</span>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${meta.color}`}>
                   {meta.label}
                 </span>
@@ -73,6 +76,28 @@ export const EventBottomSheet: React.FC<EventBottomSheetProps> = ({
             <X className="w-4 h-4" />
           </button>
         </div>
+
+        {/* Bloque especial para Ubicación de Colectivo Ahora */}
+        {isBusLocation && (
+          <div className="p-2.5 rounded-2xl bg-cyan-950/40 border border-cyan-400/40 text-xs space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-cyan-200 flex items-center gap-1.5">
+                <span>🧭 Dirección:</span>
+                <span className="px-2 py-0.5 rounded-md bg-cyan-400 text-slate-950 font-black">
+                  {event.direction === 'hacia_zarate' ? '➡️ Hacia Zárate' : '⬅️ Hacia Malvinas'}
+                </span>
+              </span>
+              {event.velocidadKmH && (
+                <span className="font-mono text-emerald-300 font-bold bg-emerald-500/20 px-2 py-0.5 rounded-md border border-emerald-400/30">
+                  ⚡ {event.velocidadKmH} km/h
+                </span>
+              )}
+            </div>
+            <p className="text-[10.5px] text-cyan-200/80 leading-tight">
+              ⏱️ Marcador en vivo: permanece activo por 1 minuto en el mapa para asegurar máxima exactitud.
+            </p>
+          </div>
+        )}
 
         {event.description && (
           <p className="text-xs text-slate-300 bg-white/[0.03] p-2.5 rounded-2xl border border-white/5">
