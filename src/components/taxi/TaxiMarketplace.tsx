@@ -84,6 +84,18 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
   const [vehicleFilter, setVehicleFilter] = useState<'all' | 'auto' | 'moto'>('all');
   const [solicitudes, setSolicitudes] = useState<SolicitudTransporteFirestore[]>([]);
 
+  // Rol del usuario: ¿Es prestador de servicio habilitado?
+  const isPrestadorLogueado = useMemo(() => {
+    return Boolean(
+      isDriverHabilitado ||
+      currentUserRole === 'driver' ||
+      currentUserRole === 'chofer' ||
+      currentUserRole === 'chofer_auto' ||
+      currentUserRole === 'chofer_moto' ||
+      (typeof window !== 'undefined' && localStorage.getItem('uppa_active_driver_session'))
+    );
+  }, [isDriverHabilitado, currentUserRole]);
+
   // Alternative transport request modal
   const [isRequestRideOpen, setIsRequestRideOpen] = useState(false);
   const [reqOrigin, setReqOrigin] = useState('');
@@ -415,21 +427,51 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => setIsRequestRideOpen(true)}
-              className="px-3 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs rounded-2xl flex items-center gap-1.5 shadow-md shadow-blue-600/30 active:scale-95 transition-all cursor-pointer"
-            >
-              <Zap className="w-4 h-4 text-amber-300" />
-              <span>Pedir Viaje</span>
-            </button>
+            {isPrestadorLogueado ? (
+              <button
+                type="button"
+                onClick={() => {
+                  const isCurrentlyOcupado = (currentUserId && disponibilidadMap[currentUserId] === 'ocupado') || false;
+                  const nextDisp = isCurrentlyOcupado ? 'desocupado' : 'ocupado';
+                  if (currentUserId) setDriverDisponibilidad(currentUserId, nextDisp);
+                  if (currentUserName) setDriverDisponibilidad(currentUserName, nextDisp);
+                  if (currentUserPhone) setDriverDisponibilidad(currentUserPhone, nextDisp);
+                  setDisponibilidadMap((prev) => ({
+                    ...prev,
+                    ...(currentUserId ? { [currentUserId]: nextDisp } : {}),
+                    ...(currentUserName ? { [currentUserName]: nextDisp } : {}),
+                    ...(currentUserPhone ? { [currentUserPhone]: nextDisp } : {}),
+                  }));
+                }}
+                className={`px-3 py-2 rounded-2xl font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer border ${
+                  (currentUserId && disponibilidadMap[currentUserId] === 'ocupado')
+                    ? 'bg-amber-500/20 text-amber-300 border-amber-400/40 shadow-sm'
+                    : 'bg-emerald-500/20 text-emerald-300 border-emerald-400/40 shadow-sm'
+                }`}
+                title="Alternar tu disponibilidad como chofer"
+              >
+                <span className={`w-2 h-2 rounded-full ${(currentUserId && disponibilidadMap[currentUserId] === 'ocupado') ? 'bg-amber-400' : 'bg-emerald-400 animate-pulse'}`} />
+                <span>{(currentUserId && disponibilidadMap[currentUserId] === 'ocupado') ? 'Estado: OCUPADO' : 'Estado: DESOCUPADO'}</span>
+              </button>
+            ) : (
+              <>
+                <button
+                  onClick={() => setIsRequestRideOpen(true)}
+                  className="px-3 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs rounded-2xl flex items-center gap-1.5 shadow-md shadow-blue-600/30 active:scale-95 transition-all cursor-pointer"
+                >
+                  <Zap className="w-4 h-4 text-amber-300" />
+                  <span>Pedir Viaje</span>
+                </button>
 
-            <button
-              onClick={() => onOpenPublishModal('transfer')}
-              className="px-3 py-2 bg-gradient-to-r from-emerald-400 to-teal-400 hover:from-emerald-300 hover:to-teal-300 text-slate-950 font-black text-xs rounded-2xl flex items-center gap-1.5 shadow-lg shadow-emerald-400/20 active:scale-95 transition-all cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Prestar Servicio</span>
-            </button>
+                <button
+                  onClick={() => onOpenPublishModal('transfer')}
+                  className="px-3 py-2 bg-gradient-to-r from-emerald-400 to-teal-400 hover:from-emerald-300 hover:to-teal-300 text-slate-950 font-black text-xs rounded-2xl flex items-center gap-1.5 shadow-lg shadow-emerald-400/20 active:scale-95 transition-all cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Prestar Servicio</span>
+                </button>
+              </>
+            )}
           </div>
         </div>
 

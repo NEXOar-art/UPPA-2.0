@@ -1169,25 +1169,8 @@ export function getDriverExpiredRemainingSeconds(endsAt: number, now = Date.now(
   return Math.ceil(remaining / 1000);
 }
 
-const MOCK_INITIAL_SOLICITUDES: SolicitudTransporteFirestore[] = [
-  {
-    id: 'sol-init-1',
-    pasajeroId: 'usr-p1',
-    nombrePasajero: 'Carla Gomez',
-    telefonoPasajero: '3487552233',
-    origen: 'Justo Vigalondo 1419, B° Malvinas',
-    destino: "McDonald's Campana / Panamericana Km 72.5",
-    origenCoords: { lat: -34.2087, lng: -58.9431 },
-    destinoCoords: { lat: -34.1914, lng: -58.9447 },
-    estado: 'pendiente',
-    tipoVehiculoRequerido: 'moto',
-    choferId: null,
-    fechaSolicitud: Date.now() - 4 * 60 * 1000,
-    expiresAt: Date.now() + 8 * 60 * 1000,
-    precioEstimado: 2200,
-    distanciaKm: 4.2,
-  },
-];
+const MOCK_INITIAL_SOLICITUDES: SolicitudTransporteFirestore[] = [];
+
 
 // In-Memory Cross-Tab Broadcast Channel para solicitudes de transporte
 const solicitudesBroadcastChannel = typeof window !== 'undefined' && 'BroadcastChannel' in window
