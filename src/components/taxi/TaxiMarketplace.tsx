@@ -52,9 +52,29 @@ import {
   ChevronDown,
   ChevronUp,
   Award,
+  ArrowLeftRight,
 } from 'lucide-react';
 import { PoliticasTransporteModal } from './PoliticasTransporteModal';
 import { CalificarChoferModal } from './CalificarChoferModal';
+
+// Comercios y servicios locales destacados de la comunidad (inspirados en el diseño de referencia)
+const LOCAL_COMMUNITY_SPONSORS = [
+  {
+    id: 'sp-1',
+    name: 'Malvinas',
+    subtitle: 'Promo Viandas',
+    webUrl: 'https://wa.me/5493489690058?text=Hola%20Malvinas%20Viandas!%20Quiero%20conocer%20el%20men%C3%BA%20del%20d%C3%ADa.',
+    whatsapp: '5493489690058',
+  },
+  {
+    id: 'sp-2',
+    name: 'Rotisería Malvinas',
+    subtitle: 'Empanadas, pizzas ...',
+    image: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=150&auto=format&fit=crop&q=80',
+    webUrl: 'https://wa.me/5493489690058?text=Hola%20Rotiser%C3%ADa%20Malvinas!%20Quiero%20hacer%20un%20pedido.',
+    whatsapp: '5493489690058',
+  },
+];
 
 interface TaxiMarketplaceProps {
   taxis: TaxiListing[];
@@ -100,11 +120,33 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
   const [isRequestRideOpen, setIsRequestRideOpen] = useState(false);
   const [reqOrigin, setReqOrigin] = useState('');
   const [reqDestination, setReqDestination] = useState('');
-  const [reqType, setReqType] = useState<'moto' | 'auto'>('moto');
+  const [reqType, setReqType] = useState<'moto' | 'auto'>('auto');
   const [aceptaPoliticasRide, setAceptaPoliticasRide] = useState(false);
   const [isSubmittingRide, setIsSubmittingRide] = useState(false);
   const [rideSuccessNotice, setRideSuccessNotice] = useState<string | null>(null);
   const [isPoliticasOpen, setIsPoliticasOpen] = useState(false);
+
+  // Consola Interactiva Central (Inspirada directamente en TAXI_AUTO y TAXI_MOTO)
+  const [consoleVehicleType, setConsoleVehicleType] = useState<'auto' | 'moto'>('auto');
+  const [showConsoleRequestForm, setShowConsoleRequestForm] = useState(false);
+
+  // Sincronizar ubicación inicial para recogida
+  useEffect(() => {
+    if (!reqOrigin && userLocation?.address) {
+      setReqOrigin(userLocation.address);
+    }
+  }, [userLocation]);
+
+  // Sincronizar tipo de vehículo al cambiar filtros superiores
+  useEffect(() => {
+    if (vehicleFilter === 'auto') {
+      setConsoleVehicleType('auto');
+      setReqType('auto');
+    } else if (vehicleFilter === 'moto') {
+      setConsoleVehicleType('moto');
+      setReqType('moto');
+    }
+  }, [vehicleFilter]);
 
   // Live 1-second ticker for 12-minute countdown timer
   const [nowTimestamp, setNowTimestamp] = useState<number>(Date.now());
@@ -411,22 +453,72 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
     return `https://wa.me/${taxi.whatsapp}?text=${text}`;
   };
 
+  // Conductor destacado para la consola interactiva (primer conductor habilitado real o showcase referencial)
+  const activeDriverFeatured = useMemo(() => {
+    if (visibleTaxis.length > 0) {
+      const match = visibleTaxis.find((t) => t.vehicleType === consoleVehicleType) || visibleTaxis[0];
+      return {
+        driverName: match.driverName,
+        vehicleModel: match.vehicleType === 'moto' ? 'Moto Taxi Habilitada' : 'Honda CRV',
+        plateNumber: match.plate || (match as any).plateNumber || 'AB6299ZG',
+        rating: match.rating || 4.9,
+        completedRides: match.completedRides || 482,
+        whatsapp: match.whatsapp || '5493489690058',
+        avatarUrl: match.avatarUrl || 'https://api.dicebear.com/7.x/bottts/svg?seed=Robert&backgroundColor=12141c',
+        isReal: true,
+      };
+    }
+    return {
+      driverName: 'Robert',
+      vehicleModel: consoleVehicleType === 'moto' ? 'Honda CB 250' : 'Honda CRV',
+      plateNumber: 'AB6299ZG',
+      rating: 4.9,
+      completedRides: 482,
+      whatsapp: '5493489690058',
+      avatarUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=Robert&backgroundColor=12141c',
+      isReal: false,
+    };
+  }, [visibleTaxis, consoleVehicleType]);
+
+  const dynamicEtaMin = useMemo(() => {
+    if (visibleTaxis.length > 0) {
+      const match = visibleTaxis.find((t) => t.vehicleType === consoleVehicleType) || visibleTaxis[0];
+      return Math.max(2, Math.round((match.distanceKm || 1.2) * 2.5));
+    }
+    return 3;
+  }, [visibleTaxis, consoleVehicleType]);
+
+  const chatWhatsAppUrl = useMemo(() => {
+    const phone = activeDriverFeatured.whatsapp || '5493489690058';
+    const origenText = reqOrigin.trim() || 'mi ubicación';
+    const destinoText = reqDestination.trim() || 'mi destino';
+    const vehiculoText = consoleVehicleType === 'moto' ? 'Moto Taxi' : 'Auto Taxi';
+    const text = encodeURIComponent(
+      `Hola ${activeDriverFeatured.driverName}! Te contacto por UPPA (${vehiculoText}). Necesito un viaje desde ${origenText} hacia ${destinoText}. ¿Tenés disponibilidad para realizar el viaje?`
+    );
+    return `https://wa.me/${phone}?text=${text}`;
+  }, [activeDriverFeatured, reqOrigin, reqDestination, consoleVehicleType]);
+
   return (
     <div className="w-full h-full flex flex-col bg-[#07090e] text-slate-100 overflow-hidden font-sans">
-      {/* Top Glass Header */}
-      <div className="p-4 sm:p-5 border-b border-white/5 bg-[#0b0e17]/80 backdrop-blur-xl shrink-0">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-2xl bg-blue-500/20 border border-blue-400/30 flex items-center justify-center text-blue-300 shadow-sm">
-              <Car className="w-4 h-4" />
+      {/* Top Glass Header (Inspirado en TAXI_AUTO & TAXI_MOTO) */}
+      <div className="p-3.5 sm:p-5 border-b border-white/5 bg-[#080d16]/90 backdrop-blur-xl shrink-0">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-emerald-950/70 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.25)] shrink-0">
+              <Car className="w-5 h-5 text-emerald-400" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-white font-display">Taxis & Motos</h2>
-              <span className="text-[11px] text-blue-300">Transporte Alternativo Colaborativo · En Tiempo Real</span>
+              <h2 className="text-base sm:text-lg font-black text-emerald-400 font-display leading-tight tracking-tight">
+                Taxis & Motos
+              </h2>
+              <span className="text-[11px] text-slate-400">
+                Transporte Alternativo Colaborativo - En Tiempo Real
+              </span>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap ml-auto">
             {isPrestadorLogueado ? (
               <button
                 type="button"
@@ -443,21 +535,21 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                     ...(currentUserPhone ? { [currentUserPhone]: nextDisp } : {}),
                   }));
                 }}
-                className={`px-3 py-2 rounded-2xl font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer border ${
+                className={`px-4 py-2 rounded-full font-bold text-xs flex items-center gap-2 transition-all cursor-pointer border-2 ${
                   (currentUserId && disponibilidadMap[currentUserId] === 'ocupado')
-                    ? 'bg-amber-500/20 text-amber-300 border-amber-400/40 shadow-sm'
-                    : 'bg-emerald-500/20 text-emerald-300 border-emerald-400/40 shadow-sm'
+                    ? 'bg-amber-500/20 text-amber-300 border-amber-400 shadow-[0_0_18px_rgba(245,158,11,0.5)]'
+                    : 'bg-emerald-500/20 text-emerald-300 border-emerald-400 shadow-[0_0_18px_rgba(16,185,129,0.5)]'
                 }`}
                 title="Alternar tu disponibilidad como chofer"
               >
-                <span className={`w-2 h-2 rounded-full ${(currentUserId && disponibilidadMap[currentUserId] === 'ocupado') ? 'bg-amber-400' : 'bg-emerald-400 animate-pulse'}`} />
+                <span className={`w-2.5 h-2.5 rounded-full ${(currentUserId && disponibilidadMap[currentUserId] === 'ocupado') ? 'bg-amber-400' : 'bg-emerald-400 animate-pulse'}`} />
                 <span>{(currentUserId && disponibilidadMap[currentUserId] === 'ocupado') ? 'Estado: OCUPADO' : 'Estado: DESOCUPADO'}</span>
               </button>
             ) : (
               <>
                 <button
                   onClick={() => setIsRequestRideOpen(true)}
-                  className="px-3 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs rounded-2xl flex items-center gap-1.5 shadow-md shadow-blue-600/30 active:scale-95 transition-all cursor-pointer"
+                  className="px-3.5 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs rounded-2xl flex items-center gap-1.5 shadow-md shadow-emerald-600/30 active:scale-95 transition-all cursor-pointer"
                 >
                   <Zap className="w-4 h-4 text-amber-300" />
                   <span>Pedir Viaje</span>
@@ -465,13 +557,24 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
 
                 <button
                   onClick={() => onOpenPublishModal('transfer')}
-                  className="px-3 py-2 bg-gradient-to-r from-emerald-400 to-teal-400 hover:from-emerald-300 hover:to-teal-300 text-slate-950 font-black text-xs rounded-2xl flex items-center gap-1.5 shadow-lg shadow-emerald-400/20 active:scale-95 transition-all cursor-pointer"
+                  className="px-3.5 py-2 bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10 font-bold text-xs rounded-2xl flex items-center gap-1.5 transition-all cursor-pointer"
                 >
-                  <Plus className="w-4 h-4" />
+                  <Plus className="w-4 h-4 text-emerald-400" />
                   <span>Prestar Servicio</span>
                 </button>
               </>
             )}
+
+            {/* Botón Políticas & Descargo en barra superior */}
+            <button
+              type="button"
+              onClick={() => setIsPoliticasOpen(true)}
+              className="px-3.5 py-2 rounded-full border border-amber-500/50 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 text-xs font-bold flex items-center gap-1.5 shadow-[0_0_12px_rgba(245,158,11,0.25)] transition-all cursor-pointer"
+              title="Ver Políticas de Uso y Descargo de Responsabilidad"
+            >
+              <ShieldAlert className="w-3.5 h-3.5 text-amber-400" />
+              <span>Políticas & Descargo</span>
+            </button>
           </div>
         </div>
 
@@ -483,118 +586,126 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
           </div>
         )}
 
-        {/* Desplegable de Ranking de Prestadores */}
-        <div className="mt-3 rounded-2xl border border-amber-500/30 bg-[#0c121e]/90 overflow-hidden shadow-md transition-all">
-          <button
-            type="button"
-            onClick={() => setIsRankingDropdownOpen(!isRankingDropdownOpen)}
-            className="w-full px-3.5 py-2.5 flex items-center justify-between text-left hover:bg-white/[0.04] transition-colors cursor-pointer"
-          >
-            <div className="flex items-center gap-2.5">
-              <div className="w-7 h-7 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-400/40 flex items-center justify-center shrink-0">
+        {/* Barra de Filtros y Ranking (Inspirada en el diseño de referencia) */}
+        <div className="mt-3.5 pt-3 border-t border-white/5 flex flex-wrap items-center justify-between gap-2.5">
+          {/* Desplegable de Ranking de Prestadores */}
+          <div className="rounded-2xl border border-amber-500/30 bg-[#0d121e]/90 overflow-hidden shadow-sm">
+            <button
+              type="button"
+              onClick={() => setIsRankingDropdownOpen(!isRankingDropdownOpen)}
+              className="px-3.5 py-2 flex items-center gap-2 text-left hover:bg-white/[0.04] transition-colors cursor-pointer"
+            >
+              <div className="w-6 h-6 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-400/40 flex items-center justify-center shrink-0">
                 <Trophy className="w-3.5 h-3.5 text-amber-300" />
               </div>
               <span className="text-xs font-bold text-white tracking-wide">
                 Ranking de Prestadores
               </span>
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-400/20 text-amber-300 border border-amber-400/30">
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-400/20 text-amber-300 border border-amber-400/30">
                 {rankingList.length}
               </span>
-            </div>
+              <div className="w-5 h-5 flex items-center justify-center text-amber-400 ml-1">
+                {isRankingDropdownOpen ? (
+                  <ChevronUp className="w-3.5 h-3.5" />
+                ) : (
+                  <ChevronDown className="w-3.5 h-3.5" />
+                )}
+              </div>
+            </button>
+          </div>
 
-            <div className="w-6 h-6 rounded-lg bg-white/5 flex items-center justify-center text-amber-400">
-              {isRankingDropdownOpen ? (
-                <ChevronUp className="w-4 h-4" />
-              ) : (
-                <ChevronDown className="w-4 h-4" />
-              )}
-            </div>
-          </button>
+          {/* Filter Pills */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setVehicleFilter('all')}
+              className={`px-3.5 py-1.5 text-xs font-bold rounded-2xl transition-all cursor-pointer ${
+                vehicleFilter === 'all'
+                  ? 'bg-emerald-500/20 text-emerald-300 border-2 border-emerald-400/80 shadow-[0_0_15px_rgba(16,185,129,0.35)]'
+                  : 'bg-[#101420] hover:bg-[#151b2a] text-slate-400 hover:text-white border border-white/5'
+              }`}
+            >
+              Todos ({visibleTaxis.length})
+            </button>
+            <button
+              onClick={() => {
+                setVehicleFilter('auto');
+                setConsoleVehicleType('auto');
+                setReqType('auto');
+              }}
+              className={`px-3.5 py-1.5 text-xs font-bold rounded-2xl flex items-center gap-1.5 transition-all cursor-pointer ${
+                vehicleFilter === 'auto'
+                  ? 'bg-emerald-500/20 text-emerald-300 border-2 border-emerald-400/80 shadow-[0_0_15px_rgba(16,185,129,0.35)]'
+                  : 'bg-[#101420] hover:bg-[#151b2a] text-slate-400 hover:text-white border border-white/5'
+              }`}
+            >
+              <Car className="w-3.5 h-3.5" />
+              <span>Autos ({visibleTaxis.filter((t) => t.vehicleType === 'auto').length})</span>
+            </button>
+            <button
+              onClick={() => {
+                setVehicleFilter('moto');
+                setConsoleVehicleType('moto');
+                setReqType('moto');
+              }}
+              className={`px-3.5 py-1.5 text-xs font-bold rounded-2xl flex items-center gap-1.5 transition-all cursor-pointer ${
+                vehicleFilter === 'moto'
+                  ? 'bg-emerald-500/20 text-emerald-300 border-2 border-emerald-400/80 shadow-[0_0_15px_rgba(16,185,129,0.35)]'
+                  : 'bg-[#101420] hover:bg-[#151b2a] text-slate-400 hover:text-white border border-white/5'
+              }`}
+            >
+              <Bike className="w-3.5 h-3.5" />
+              <span>Motos ({visibleTaxis.filter((t) => t.vehicleType === 'moto').length})</span>
+            </button>
+          </div>
+        </div>
 
-          {/* Lista desplegable al apretar */}
-          {isRankingDropdownOpen && (
-            <div className="border-t border-white/5 p-2.5 bg-[#090d16]/95 animate-in slide-in-from-top-2 duration-200">
-              {rankingList.length === 0 ? (
-                <div className="py-3 text-center text-xs text-slate-400">
-                  Sin calificaciones registradas
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-64 overflow-y-auto pr-1">
-                  {rankingList.slice(0, 20).map((item, idx) => {
-                    const info = getCalificacionInfo(item.puntuacion);
-                    return (
-                      <div
-                        key={item.id}
-                        className="px-2.5 py-2 rounded-xl bg-white/[0.02] border border-white/5 hover:border-amber-400/30 flex items-center justify-between gap-2 text-xs transition-colors"
-                      >
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span
-                            className={`w-5 h-5 rounded-md font-mono font-bold text-[10px] flex items-center justify-center shrink-0 ${
-                              idx === 0
-                                ? 'bg-amber-400 text-slate-950 font-black'
-                                : idx === 1
-                                ? 'bg-slate-300 text-slate-950 font-bold'
-                                : idx === 2
-                                ? 'bg-amber-700 text-amber-100 font-bold'
-                                : 'bg-white/5 text-slate-400'
-                            }`}
-                          >
-                            #{idx + 1}
-                          </span>
-                          <span className="font-bold text-white truncate text-xs">
-                            {item.driverName}
-                          </span>
-                        </div>
-
+        {/* Lista desplegable de ranking si está abierta */}
+        {isRankingDropdownOpen && (
+          <div className="mt-2.5 rounded-2xl border border-white/10 p-2.5 bg-[#090d16]/98 animate-in slide-in-from-top-2 duration-200">
+            {rankingList.length === 0 ? (
+              <div className="py-3 text-center text-xs text-slate-400">
+                Sin calificaciones registradas en las últimas 3 horas
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-60 overflow-y-auto pr-1">
+                {rankingList.slice(0, 20).map((item, idx) => {
+                  const info = getCalificacionInfo(item.puntuacion);
+                  return (
+                    <div
+                      key={item.id}
+                      className="px-2.5 py-2 rounded-xl bg-white/[0.02] border border-white/5 hover:border-amber-400/30 flex items-center justify-between gap-2 text-xs transition-colors"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
                         <span
-                          className={`px-2 py-0.5 rounded-lg text-[10px] font-extrabold uppercase border flex items-center gap-1 shrink-0 ${info.badgeClass}`}
+                          className={`w-5 h-5 rounded-md font-mono font-bold text-[10px] flex items-center justify-center shrink-0 ${
+                            idx === 0
+                              ? 'bg-amber-400 text-slate-950 font-black'
+                              : idx === 1
+                              ? 'bg-slate-300 text-slate-950 font-bold'
+                              : idx === 2
+                              ? 'bg-amber-700 text-amber-100 font-bold'
+                              : 'bg-white/5 text-slate-400'
+                          }`}
                         >
-                          <span>{item.puntuacion} - {info.label}</span>
+                          #{idx + 1}
+                        </span>
+                        <span className="font-bold text-white truncate text-xs">
+                          {item.driverName}
                         </span>
                       </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
 
-        {/* Filter Pills */}
-        <div className="flex items-center gap-2 mt-3 pt-3 border-t border-white/5">
-          <button
-            onClick={() => setVehicleFilter('all')}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-xl transition-all ${
-              vehicleFilter === 'all'
-                ? 'bg-blue-600/30 text-blue-200 border border-blue-400/40 shadow-sm'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            Todos ({visibleTaxis.length})
-          </button>
-          <button
-            onClick={() => setVehicleFilter('auto')}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-xl flex items-center gap-1.5 transition-all ${
-              vehicleFilter === 'auto'
-                ? 'bg-blue-600/30 text-blue-200 border border-blue-400/40 shadow-sm'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            <Car className="w-3.5 h-3.5" />
-            <span>Autos ({visibleTaxis.filter((t) => t.vehicleType === 'auto').length})</span>
-          </button>
-          <button
-            onClick={() => setVehicleFilter('moto')}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-xl flex items-center gap-1.5 transition-all ${
-              vehicleFilter === 'moto'
-                ? 'bg-blue-600/30 text-blue-200 border border-blue-400/40 shadow-sm'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            <Bike className="w-3.5 h-3.5" />
-            <span>Motos ({visibleTaxis.filter((t) => t.vehicleType === 'moto').length})</span>
-          </button>
-        </div>
+                      <span
+                        className={`px-2 py-0.5 rounded-lg text-[10px] font-extrabold uppercase border flex items-center gap-1 shrink-0 ${info.badgeClass}`}
+                      >
+                        <span>{item.puntuacion} - {info.label}</span>
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Main Scrollable Area (Scrolling Web) */}
@@ -938,12 +1049,276 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
           );
         })()}
 
-        {/* Prestadores de Servicio Habilitados: VISIBLES ÚNICAMENTE PARA PASAJEROS */}
+        {/* Prestadores de Servicio Habilitados y Consola Interactiva: VISIBLES ÚNICAMENTE PARA PASAJEROS */}
         {!isPrestadorLogueado ? (
           <>
-            <div className="flex items-center justify-between pt-1 pb-0.5">
+            {/* =========================================================================
+                CONSOLA INTERACTIVA CENTRAL (Inspirada en TAXI_AUTO & TAXI_MOTO)
+               ========================================================================= */}
+            <div className="w-full max-w-[440px] mx-auto rounded-3xl bg-[#090d16]/95 backdrop-blur-2xl border border-white/10 p-3.5 sm:p-4 shadow-[0_16px_50px_rgba(0,0,0,0.85)] space-y-3 relative overflow-hidden ring-1 ring-white/5">
+              {/* Contenedor de Inputs de Recogida y Destino con Botón de Inversión */}
+              <div className="rounded-2xl bg-[#111624] border border-white/10 p-2 space-y-1.5 relative">
+                {/* Origen Input */}
+                <div className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-black/50 border border-white/5 focus-within:border-emerald-400/60 transition-colors">
+                  <MapPin className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <input
+                    type="text"
+                    value={reqOrigin}
+                    onChange={(e) => setReqOrigin(e.target.value)}
+                    placeholder="Añadir ubicación de recogida"
+                    className="flex-1 bg-transparent text-xs text-white placeholder-slate-400 font-medium focus:outline-none"
+                  />
+                  {reqOrigin && (
+                    <button
+                      type="button"
+                      onClick={() => setReqOrigin('')}
+                      className="text-slate-400 hover:text-white text-xs p-0.5"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Botón Circular Central de Inversión (Swap) */}
+                <div className="absolute right-3.5 top-1/2 -translate-y-1/2 z-10">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const temp = reqOrigin;
+                      setReqOrigin(reqDestination);
+                      setReqDestination(temp);
+                    }}
+                    className="w-7 h-7 rounded-full bg-[#1b2235] hover:bg-[#252f48] text-slate-300 hover:text-white border border-white/10 flex items-center justify-center text-xs shadow-md active:rotate-180 transition-all cursor-pointer"
+                    title="Invertir ubicación de recogida y destino"
+                  >
+                    <ArrowLeftRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                {/* Destino Input */}
+                <div className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-black/50 border border-white/5 focus-within:border-emerald-400/60 transition-colors">
+                  <MapPin className="w-4 h-4 text-cyan-400 shrink-0" />
+                  <input
+                    type="text"
+                    value={reqDestination}
+                    onChange={(e) => setReqDestination(e.target.value)}
+                    placeholder="Añadir destino"
+                    className="flex-1 bg-transparent text-xs text-white placeholder-slate-400 font-medium focus:outline-none"
+                  />
+                  {reqDestination && (
+                    <button
+                      type="button"
+                      onClick={() => setReqDestination('')}
+                      className="text-slate-400 hover:text-white text-xs p-0.5"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Fila de Estado de Llegada y Tarifa */}
+              <div className="flex items-center justify-between px-1">
+                <div className="text-emerald-400 font-bold text-xs sm:text-sm flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  <span>El conductor llegará en {dynamicEtaMin} min</span>
+                </div>
+                <div className="px-3.5 py-1 rounded-full bg-emerald-500 text-slate-950 font-black text-xs shadow-[0_0_14px_rgba(16,185,129,0.5)]">
+                  $10
+                </div>
+              </div>
+
+              {/* Visualización Interactiva del Vehículo & Tarjeta del Conductor */}
+              <div className="grid grid-cols-12 gap-2.5 items-stretch">
+                {/* Lado Izquierdo: Vista Cenital del Vehículo (Auto o Moto con toque interactivo) */}
+                <div
+                  onClick={() => {
+                    const next = consoleVehicleType === 'auto' ? 'moto' : 'auto';
+                    setConsoleVehicleType(next);
+                    setReqType(next);
+                  }}
+                  className="col-span-5 rounded-2xl bg-gradient-to-b from-[#080c14] via-[#0d1322] to-[#12192b] border border-white/10 hover:border-emerald-500/40 p-2 flex flex-col items-center justify-between cursor-pointer transition-all group relative overflow-hidden shadow-inner"
+                  title="Tocar para alternar entre Auto y Moto"
+                >
+                  <div className="w-full flex items-center justify-between text-[9px] font-bold uppercase tracking-wider text-slate-400 px-1">
+                    <span className="text-emerald-400 font-mono font-black">
+                      {consoleVehicleType === 'auto' ? 'Auto' : 'Moto'}
+                    </span>
+                    <span className="text-[8px] bg-white/10 px-1 py-0.2 rounded text-slate-300">
+                      {consoleVehicleType === 'auto' ? '4 as.' : 'Rápido'}
+                    </span>
+                  </div>
+
+                  <div className="my-1 flex items-center justify-center h-[175px] w-full relative">
+                    <img
+                      src={consoleVehicleType === 'auto' ? '/assets/aistudio/car_cropped.png' : '/assets/aistudio/moto_cropped.png'}
+                      alt={consoleVehicleType === 'auto' ? 'Taxi Auto' : 'Moto Taxi'}
+                      className="max-h-full object-contain drop-shadow-[0_10px_20px_rgba(0,0,0,0.95)] group-hover:scale-105 transition-transform duration-300"
+                    />
+                  </div>
+
+                  <div className="text-[9px] text-emerald-400/90 font-medium text-center flex items-center gap-1">
+                    <span>Tocar ⇄</span>
+                    <span className="text-white font-bold">{consoleVehicleType === 'auto' ? 'Ver Moto' : 'Ver Auto'}</span>
+                  </div>
+                </div>
+
+                {/* Lado Derecho: Ficha del Conductor */}
+                <div className="col-span-7 rounded-2xl bg-[#121726] border border-white/5 p-3 flex flex-col justify-between space-y-2">
+                  {/* Avatar, Nombre y Modelo */}
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-10 h-10 rounded-full bg-slate-800 border-2 border-emerald-400/40 overflow-hidden flex items-center justify-center shrink-0 shadow-md">
+                      <img
+                        src={activeDriverFeatured?.avatarUrl || "https://api.dicebear.com/7.x/bottts/svg?seed=Robert&backgroundColor=12141c"}
+                        alt="Conductor"
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                    <div className="min-w-0">
+                      <h4 className="font-bold text-white text-sm truncate leading-tight">
+                        {activeDriverFeatured?.driverName || 'Robert'}
+                      </h4>
+                      <p className="text-[11px] text-slate-400 truncate">
+                        {activeDriverFeatured?.vehicleModel || (consoleVehicleType === 'auto' ? 'Honda CRV' : 'Honda CB 250')}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Patente y Calificación */}
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="px-2 py-0.5 rounded-md bg-white text-slate-950 font-mono font-black text-[10.5px] border border-slate-300 shadow-sm tracking-wider">
+                      {activeDriverFeatured?.plateNumber || 'AB6299ZG'}
+                    </span>
+                    <span className="text-amber-300 font-bold text-xs flex items-center gap-1">
+                      <Star className="w-3.5 h-3.5 fill-amber-300 text-amber-300" />
+                      <span>{activeDriverFeatured?.rating ? activeDriverFeatured.rating.toFixed(1) : '4.9'}</span>
+                    </span>
+                  </div>
+
+                  {/* Categoría y Tiempo */}
+                  <div className="text-xs text-slate-300 font-semibold">
+                    Standard · {dynamicEtaMin} min
+                  </div>
+
+                  {/* Asientos y Viajes */}
+                  <div className="flex items-center gap-3 text-[11px] text-slate-400">
+                    <span className="flex items-center gap-1">
+                      <span>👤</span>
+                      <span>{consoleVehicleType === 'auto' ? '4 asientos' : '1 pasajero'}</span>
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span>✈</span>
+                      <span>{activeDriverFeatured?.completedRides || 482} viajes</span>
+                    </span>
+                  </div>
+
+                  {/* Índice de Seguridad */}
+                  <div className="pt-1 border-t border-white/5 space-y-1">
+                    <div className="text-[10px] text-slate-400 leading-tight">
+                      98% de índice de seguridad del usuario
+                    </div>
+                    <div className="flex items-center gap-1 text-emerald-400 text-xs font-bold">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block shadow-[0_0_6px_rgba(52,211,153,0.8)]" />
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block shadow-[0_0_6px_rgba(52,211,153,0.8)]" />
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block shadow-[0_0_6px_rgba(52,211,153,0.8)]" />
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block shadow-[0_0_6px_rgba(52,211,153,0.8)]" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Botón Principal Cápsula: Chatear con el conductor */}
+              <a
+                href={chatWhatsAppUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full p-1.5 rounded-full bg-[#181f2f] hover:bg-[#1f283e] border border-white/10 flex items-center justify-between transition-all cursor-pointer shadow-md group active:scale-[0.98]"
+              >
+                <div className="w-9 h-9 rounded-full bg-emerald-500 group-hover:bg-emerald-400 flex items-center justify-center text-slate-950 shadow-md group-hover:scale-105 transition-transform shrink-0">
+                  <MessageCircle className="w-4 h-4 fill-slate-950 text-slate-950" />
+                </div>
+                <div className="text-xs font-bold text-white tracking-wide group-hover:text-emerald-300 transition-colors flex items-center gap-1">
+                  <span>Chatear con el conductor</span>
+                  <span className="text-emerald-400 font-black">› › ›</span>
+                </div>
+                <div className="w-9" />
+              </a>
+
+              {/* Opción Desplegable para Emitir Pedido a Toda la Red (Con temporizador de 12 min y código de abordaje) */}
+              <div className="pt-0.5 border-t border-white/5">
+                <button
+                  type="button"
+                  onClick={() => setShowConsoleRequestForm(!showConsoleRequestForm)}
+                  className="w-full py-1.5 text-center text-[11px] font-semibold text-slate-300 hover:text-emerald-300 flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <Zap className="w-3.5 h-3.5 text-amber-300" />
+                  <span>
+                    {showConsoleRequestForm
+                      ? 'Ocultar formulario de pedido a choferes'
+                      : 'O emitir pedido a choferes con código de abordaje (12 min)'}
+                  </span>
+                  {showConsoleRequestForm ? (
+                    <ChevronUp className="w-3.5 h-3.5 text-slate-400" />
+                  ) : (
+                    <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+                  )}
+                </button>
+
+                {showConsoleRequestForm && (
+                  <div className="mt-2.5 p-3 rounded-2xl bg-black/40 border border-white/10 space-y-3 animate-in fade-in duration-200">
+                    <div className="flex items-start gap-2.5 text-[11px] text-slate-300">
+                      <Clock className="w-3.5 h-3.5 text-amber-300 shrink-0 mt-0.5" />
+                      <span>
+                        Se emitirá aviso a todos los choferes habilitados con temporizador de <strong className="text-white">12 minutos</strong> y se te asignará un código secreto para habilitar el viaje al abordar.
+                      </span>
+                    </div>
+
+                    <div className="p-2.5 rounded-xl border border-amber-400/40 bg-amber-500/10 text-xs">
+                      <label className="flex items-start gap-2 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={aceptaPoliticasRide}
+                          onChange={(e) => setAceptaPoliticasRide(e.target.checked)}
+                          className="mt-0.5 w-4 h-4 rounded border-slate-700 text-amber-500 focus:ring-amber-400 bg-[#0f1422] cursor-pointer"
+                        />
+                        <div className="text-[11px] text-slate-300 leading-snug">
+                          <span>Acepto la </span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              setIsPoliticasOpen(true);
+                            }}
+                            className="font-bold text-amber-300 underline underline-offset-2"
+                          >
+                            Política & Descargo de Responsabilidad
+                          </button>
+                        </div>
+                      </label>
+                    </div>
+
+                    <button
+                      type="button"
+                      disabled={isSubmittingRide || !aceptaPoliticasRide || !reqOrigin.trim() || !reqDestination.trim()}
+                      onClick={(e) => handleCreateRideRequest(e)}
+                      className={`w-full py-2.5 rounded-xl font-black text-xs flex items-center justify-center gap-2 shadow-lg transition-all active:scale-98 ${
+                        !aceptaPoliticasRide || !reqOrigin.trim() || !reqDestination.trim() || isSubmittingRide
+                          ? 'bg-slate-800 text-slate-500 cursor-not-allowed opacity-60'
+                          : 'bg-gradient-to-r from-amber-500 via-orange-500 to-yellow-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 shadow-amber-500/25 ring-1 ring-amber-300 cursor-pointer'
+                      }`}
+                    >
+                      <Send className="w-3.5 h-3.5 fill-current" />
+                      <span>{isSubmittingRide ? 'Emitiendo solicitud...' : 'Emitir Pedido de Transporte Alternativo'}</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Encabezado de Prestadores de Servicio Habilitados */}
+            <div className="flex items-center justify-between pt-3 pb-0.5">
               <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
                 <h3 className="text-sm font-bold text-white tracking-wide flex items-center gap-1.5">
                   <span>Prestadores de Servicio Habilitados</span>
                   <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-400/20 text-emerald-300 border border-emerald-400/30 font-mono">
@@ -1145,6 +1520,78 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
           })
         )}
         </div>
+
+            {/* Servicios & Comercios de la Comunidad (Inspirado en el diseño de referencia) */}
+            <div className="pt-3 border-t border-white/5 space-y-2">
+              <div className="flex items-center justify-between px-1">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                  <span className="text-xs font-bold text-slate-300">
+                    Servicios & Comercios Locales (Malvinas · Zárate)
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onOpenPublishModal('transfer')}
+                  className="px-3.5 py-1.5 rounded-full bg-emerald-950/50 hover:bg-emerald-900/60 text-emerald-300 border border-emerald-500/40 text-[11px] font-bold flex items-center gap-1.5 transition-all cursor-pointer active:scale-95 shadow-sm"
+                >
+                  <Plus className="w-3 h-3 text-emerald-400" />
+                  <span>Anunciar</span>
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2.5 overflow-x-auto pb-1.5 scrollbar-thin scrollbar-thumb-white/10">
+                {LOCAL_COMMUNITY_SPONSORS.map((sp) => (
+                  <div
+                    key={sp.id}
+                    className="p-2.5 rounded-2xl bg-[#0e1422] border border-white/10 flex items-center justify-between gap-3 min-w-[270px] max-w-[320px] shrink-0 shadow-md hover:border-emerald-500/30 transition-colors"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      {sp.image ? (
+                        <img
+                          src={sp.image}
+                          alt={sp.name}
+                          className="w-10 h-10 rounded-xl object-cover shrink-0 border border-white/10 shadow-sm"
+                        />
+                      ) : (
+                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-950/60 to-slate-900 border border-emerald-500/30 flex items-center justify-center text-xl shrink-0">
+                          🧑
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <h5 className="font-bold text-white text-xs truncate leading-tight">
+                          {sp.name}
+                        </h5>
+                        <p className="text-[10.5px] text-slate-400 truncate mt-0.5">
+                          {sp.subtitle}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <a
+                        href={sp.webUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-2.5 py-1 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10 text-[11px] font-semibold flex items-center gap-1 transition-colors"
+                      >
+                        <span>Web</span>
+                        <span className="text-[9px]">↗</span>
+                      </a>
+                      <a
+                        href={`https://wa.me/${sp.whatsapp}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-2.5 py-1 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-[11px] font-black flex items-center gap-1 shadow-sm transition-all active:scale-95"
+                      >
+                        <MessageCircle className="w-3 h-3 fill-slate-950" />
+                        <span>WhatsApp</span>
+                      </a>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
         </>
         ) : null}
       </div>
