@@ -219,13 +219,16 @@ async function executeLocalSimulator<T>(
     case 'login': {
       const { email, password } = body;
       const cleanEmail = String(email || '').trim().toLowerCase();
+      if (!cleanEmail) {
+        return { ok: false, data: null, error: { code: 'INVALID_CREDENTIALS', message: 'Email requerido' }, timestamp: now };
+      }
       const users = getSheetData<any>('USUARIOS', []);
       let user = users.find((u) => u.email.toLowerCase() === cleanEmail);
 
-      // Si no existe, crear automáticamente para no bloquear el acceso en desarrollo
+      // Si no existe, registrar cuenta de usuario
       if (!user) {
         const uid = `usr_${now}_${Math.random().toString(36).substring(2, 7)}`;
-        const isAdmin = cleanEmail.includes('admin') || cleanEmail === 'gastonrobertogimenez@gmail.com';
+        const isAdmin = cleanEmail.includes('admin');
         user = {
           uid,
           nombre: cleanEmail.split('@')[0],
@@ -234,8 +237,8 @@ async function executeLocalSimulator<T>(
           esChofer: false,
           tipoVehiculo: null,
           activo: true,
-          telefono: '+54 9 3487 55-2190',
-          barrio: 'Campana Centro',
+          telefono: '',
+          barrio: '',
           avatarUrl: `https://api.dicebear.com/7.x/bottts/svg?seed=${uid}&backgroundColor=12141c`,
           fechaRegistro: new Date().toISOString(),
           ultimoAcceso: new Date().toISOString(),
@@ -258,23 +261,32 @@ async function executeLocalSimulator<T>(
 
     case 'googleLogin': {
       const { credential, email, name, sub } = body;
-      const cleanEmail = (email || 'gastonrobertogimenez@gmail.com').toLowerCase().trim();
+      if (!email) {
+        return {
+          ok: false,
+          data: null,
+          error: { code: 'NO_GOOGLE_ACCOUNT', message: 'No se seleccionó ninguna cuenta de Google.' },
+          timestamp: now,
+        };
+      }
+      const cleanEmail = String(email).toLowerCase().trim();
       const users = getSheetData<any>('USUARIOS', []);
       let user = users.find((u) => u.email.toLowerCase() === cleanEmail);
 
       if (!user) {
         const uid = `usr_g_${now}`;
-        const isAdmin = cleanEmail.includes('admin') || cleanEmail === 'gastonrobertogimenez@gmail.com';
+        const isAdmin = cleanEmail.includes('admin');
+        const defaultName = name || cleanEmail.split('@')[0] || 'Usuario';
         user = {
           uid,
-          nombre: name || 'Gaston Gimenez',
+          nombre: defaultName,
           email: cleanEmail,
           rol: isAdmin ? 'administrador' : 'pasajero',
           esChofer: false,
           tipoVehiculo: null,
           activo: true,
-          telefono: '+54 9 3487 55-2190',
-          barrio: 'Campana Centro',
+          telefono: '',
+          barrio: '',
           avatarUrl: `https://api.dicebear.com/7.x/bottts/svg?seed=${uid}&backgroundColor=12141c`,
           fechaRegistro: new Date().toISOString(),
           ultimoAcceso: new Date().toISOString(),
@@ -495,7 +507,7 @@ async function executeLocalSimulator<T>(
         confirmaciones: 1,
         estado: 'activo',
         creadoEn: now,
-        expiraEn: now + 15 * 60 * 1000,
+        expiraEn: now + 20 * 1000,
       };
       reports.unshift(newReport);
       saveSheetData('REPORTES', reports);

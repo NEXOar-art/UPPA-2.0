@@ -1297,12 +1297,14 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
     });
   }, [liveBuses]);
 
-  // Taxi Markers (Clean Vehicle Icons)
+  // Taxi Markers (Clean Vehicle Icons) - VISIBLE ÚNICAMENTE PARA PASAJEROS
   useEffect(() => {
     if (!mapInstanceRef.current || !taxisLayerRef.current) return;
     const layer = taxisLayerRef.current;
     layer.clearLayers();
-    if (!showTaxis) return;
+
+    // Regla de Visibilidad: Los choferes/prestadores de servicio NO ven taxis en el mapa, solo los pasajeros
+    if (isDriverMode || !showTaxis) return;
 
     const uLat = userLocation?.lat ?? -34.1683;
     const uLng = userLocation?.lng ?? -58.9592;
@@ -1345,7 +1347,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
       });
       marker.addTo(layer);
     });
-  }, [taxis, onSelectTaxi, activeTrackingTaxi, showTaxis, userLocation]);
+  }, [taxis, onSelectTaxi, activeTrackingTaxi, showTaxis, userLocation, isDriverMode]);
 
   // =========================================================================
   // DRIVER TRACKING TRAJECTORY & ETA (Punto A -> Punto B Titilando)
@@ -1961,22 +1963,24 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
           <span className="leading-none select-none">🏫</span>
         </button>
 
-        {/* Botón Prestadores de Servicio (Taxi & Motos con icono 🚕 para mostrar/ocultar y limpiar el mapa) */}
-        <button
-          onClick={() => {
-            resetHideTimer();
-            const next = !showTaxis;
-            setShowTaxis(next);
-          }}
-          className={`w-10 h-10 rounded-2xl flex items-center justify-center text-lg shadow-xl backdrop-blur-xl border transition-all active:scale-95 cursor-pointer ${
-            showTaxis
-              ? 'bg-blue-500/25 text-blue-200 border-blue-400 ring-2 ring-blue-400/40 shadow-[0_0_15px_rgba(59,130,246,0.35)] scale-105'
-              : 'glass-panel text-slate-500 border-white/5 opacity-40 hover:opacity-75 grayscale'
-          }`}
-          title={showTaxis ? 'Ocultar Prestadores de Servicio en el mapa (🚕)' : 'Mostrar Prestadores de Servicio en el mapa (🚕)'}
-        >
-          <span className="leading-none select-none">🚕</span>
-        </button>
+        {/* Botón Prestadores de Servicio (Taxi & Motos con icono 🚕 para mostrar/ocultar y filtrar en el mapa) - Solo para Pasajeros */}
+        {!isDriverMode && (
+          <button
+            onClick={() => {
+              resetHideTimer();
+              const next = !showTaxis;
+              setShowTaxis(next);
+            }}
+            className={`w-10 h-10 rounded-2xl flex items-center justify-center text-lg shadow-xl backdrop-blur-xl border transition-all active:scale-95 cursor-pointer ${
+              showTaxis
+                ? 'bg-blue-500/25 text-blue-200 border-blue-400 ring-2 ring-blue-400/40 shadow-[0_0_15px_rgba(59,130,246,0.35)] scale-105'
+                : 'glass-panel text-slate-500 border-white/5 opacity-40 hover:opacity-75 grayscale'
+            }`}
+            title={showTaxis ? 'Ocultar Prestadores de Servicio en el mapa (🚕)' : 'Mostrar Prestadores de Servicio en el mapa (🚕)'}
+          >
+            <span className="leading-none select-none">🚕</span>
+          </button>
+        )}
 
         {/* Botón 4: Filtro de Eventos y Capas por Categoría (solo icono 🎛️ sin texto) */}
         <div className="relative">

@@ -109,6 +109,12 @@ export default function App() {
       const stored = localStorage.getItem('uppa_session_user');
       if (stored) {
         const parsed = JSON.parse(stored);
+        if (parsed && parsed.email === 'gastonrobertogimenez@gmail.com') {
+          // Limpiar cuenta privada previa para conectar exclusivamente cuentas personales
+          localStorage.removeItem('uppa_session_user');
+          localStorage.removeItem('UPPA_AUTH_USER');
+          return false;
+        }
         if (parsed && parsed.email && !parsed.email.includes('guest')) {
           return true;
         }
@@ -122,6 +128,11 @@ export default function App() {
       const stored = localStorage.getItem('uppa_session_user');
       if (stored) {
         const parsed = JSON.parse(stored);
+        if (parsed && parsed.email === 'gastonrobertogimenez@gmail.com') {
+          localStorage.removeItem('uppa_session_user');
+          localStorage.removeItem('UPPA_AUTH_USER');
+          return INITIAL_USER;
+        }
         if (parsed && parsed.email && !parsed.email.includes('guest')) {
           return parsed;
         }
@@ -465,12 +476,12 @@ export default function App() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isHeaderMenuOpen, isProfileDropdownOpen]);
 
-  // Limpieza periódica de eventos push que superaron los 15 minutos de exposición
+  // Limpieza periódica de eventos push en pantalla tras 20 segundos de exposición (no 15 minutos)
   useEffect(() => {
     const cleaner = setInterval(() => {
       const now = Date.now();
       setScreenPushEvents((prev) => prev.filter((ev) => (ev.exposureExpiresAt || 0) > now));
-    }, 3000);
+    }, 1000);
     return () => clearInterval(cleaner);
   }, []);
 
@@ -595,8 +606,8 @@ export default function App() {
           return prev; // No duplicar en pantalla
         }
 
-        // De lo contrario, se publica con tiempo de exposición de 15 minutos (900000 ms)
-        const exposureExpiresAt = notif.exposureExpiresAt || Date.now() + 15 * 60 * 1000;
+        // De lo contrario, se publica con tiempo de exposición en pantalla de 20 segundos (no 15 minutos)
+        const exposureExpiresAt = notif.exposureExpiresAt || Date.now() + 20 * 1000;
         return [{ ...notif, exposureExpiresAt }, ...prev];
       });
     });
@@ -868,7 +879,7 @@ export default function App() {
     });
 
     // 2. Si el conductor actual tiene sesión activa habilitada con código y tiempo vigente
-    if (driverSession && driverSession.status === 'active' && driverSession.endsAt > now) {
+    if (driverSession && driverSession.endsAt > now) {
       const sName = (driverSession.driverName || currentUser.name || '').trim().toLowerCase();
       if (!seen.has(sName)) {
         seen.add(sName);

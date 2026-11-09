@@ -11,6 +11,7 @@ import {
   signOut,
   sendPasswordResetEmail,
   sendEmailVerification,
+  GoogleAuthProvider,
   User as FirebaseUser,
 } from 'firebase/auth';
 import { auth, googleProvider } from '../config/firebase';
@@ -125,8 +126,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               setUser(mappedUser);
               localStorage.setItem(LOCAL_SESSION_KEY, JSON.stringify(mappedUser));
             } else if (isMounted) {
-              // Si no existe el doc en Firestore, crearlo o sincronizarlo
-              const isAdmin = fbUser.email?.includes('admin') || fbUser.email === 'gastonrobertogimenez@gmail.com';
+              const isAdmin = Boolean(fbUser.email?.includes('admin'));
               const defaultUser: User = {
                 id: fbUser.uid,
                 uid: fbUser.uid,
@@ -365,8 +365,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       let fbEmail = email;
       let fbName = name;
 
+      // Proveedor de Google configurado con selector explícito de cuenta
+      const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: 'select_account' });
+
       try {
-        const cred = await signInWithPopup(auth, googleProvider);
+        const cred = await signInWithPopup(auth, provider);
         fbUid = cred.user.uid;
         fbEmail = cred.user.email || email;
         fbName = cred.user.displayName || name;
@@ -377,7 +381,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           emailVerified: true,
         });
       } catch (popupErr: any) {
-        console.warn('Google Popup notice, usando fallback de sesión:', popupErr.message);
+        console.warn('Google Popup result:', popupErr?.code || popupErr?.message);
+        if (popupErr?.code === 'auth/popup-closed-by-user' || popupErr?.code === 'auth/cancelled-popup-request') {
+          throw new Error('Inicio de sesión cancelado. Por favor, seleccioná tu cuenta de Google.');
+        }
+        // Si no hay email provisto, exigir autenticación
+        if (!fbEmail && !credential) {
+          throw new Error(popupErr?.message || 'No se pudo conectar con la cuenta de Google seleccionada.');
+        }
+      }
+
+      if (!fbEmail && !credential) {
+        throw new Error('Por favor seleccioná tu cuenta personal de Google para ingresar.');
       }
 
       const logged = await authService.googleLogin(credential, fbEmail, fbName);

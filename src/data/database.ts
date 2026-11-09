@@ -19,19 +19,6 @@ const STORAGE_KEY = 'BASE_DE_DATO_DE_UPPA_USERS';
 // Default initial records for BASE DE DATO DE UPPA
 const INITIAL_DATABASE_USERS: DatabaseUser[] = [
   {
-    id: 'usr-1',
-    name: 'Gaston Gimenez',
-    email: 'gastonrobertogimenez@gmail.com',
-    password: 'uppa2026password',
-    role: 'passenger',
-    phone: '+54 9 3487 55-2190',
-    barrio: 'Barrio Malvinas, Campana',
-    avatarUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=gaston&backgroundColor=12141c',
-    registeredAt: '2026-03-01 10:30',
-    lastLoginAt: '2026-10-07 19:15',
-    status: 'active',
-  },
-  {
     id: 'usr-driver-carlos',
     name: 'Carlos Chofer Zárate',
     email: 'carlos.chofer@uppa.ar',

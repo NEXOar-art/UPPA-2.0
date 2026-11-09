@@ -938,63 +938,65 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
           );
         })()}
 
-        {/* Prestadores de Servicio Habilitados Header */}
-        <div className="flex items-center justify-between pt-1 pb-0.5">
-          <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
-            <h3 className="text-sm font-bold text-white tracking-wide flex items-center gap-1.5">
-              <span>Prestadores de Servicio Habilitados</span>
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-400/20 text-emerald-300 border border-emerald-400/30 font-mono">
-                {visibleTaxis.length}
+        {/* Prestadores de Servicio Habilitados: VISIBLES ÚNICAMENTE PARA PASAJEROS */}
+        {!isPrestadorLogueado ? (
+          <>
+            <div className="flex items-center justify-between pt-1 pb-0.5">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+                <h3 className="text-sm font-bold text-white tracking-wide flex items-center gap-1.5">
+                  <span>Prestadores de Servicio Habilitados</span>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-400/20 text-emerald-300 border border-emerald-400/30 font-mono">
+                    {visibleTaxis.length}
+                  </span>
+                </h3>
+              </div>
+              <span className="text-[11px] text-emerald-400 font-semibold hidden sm:inline">
+                Directo por WhatsApp y Teléfono
               </span>
-            </h3>
-          </div>
-          <span className="text-[11px] text-emerald-400 font-semibold hidden sm:inline">
-            Directo por WhatsApp y Teléfono
-          </span>
-        </div>
+            </div>
 
-        {/* Driver Cards Stream - Solo Prestadores 100% Reales Habilitados */}
-        <div className="space-y-2.5">
-        {visibleTaxis.length === 0 ? (
-          <div className="p-8 text-center text-xs text-slate-400 rounded-2xl bg-white/[0.02] border border-white/5 space-y-3.5 shadow-inner">
-            <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-400/30 text-emerald-300 mx-auto flex items-center justify-center text-xl">
-              🚕
-            </div>
-            <div>
-              <h4 className="text-sm font-bold text-white">No hay prestadores de servicio habilitados en este momento</h4>
-              <p className="text-[11px] text-slate-400 mt-1 max-w-md mx-auto leading-relaxed">
-                Todos los prestadores mostrados en UPPA son reales y habilitados con turno vigente. Podés presionar "Pedir Viaje" para emitir tu solicitud a la red o comunicarte directamente a la administración.
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
-              <button
-                type="button"
-                onClick={() => setIsRequestRideOpen(true)}
-                className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs rounded-xl shadow-md transition-all cursor-pointer"
-              >
-                Pedir Viaje Ahora
-              </button>
-              <a
-                href="https://wa.me/5493489690058?text=Hola%20Administraci%C3%B3n%20UPPA!%20Necesito%20un%20m%C3%B3vil%20de%20transporte%20alternativo%20(Taxi%20o%20Moto)."
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-4 py-2 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-400/40 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all"
-              >
-                <MessageCircle className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Contactar Central (WhatsApp 3489690058)</span>
-              </a>
-              <button
-                type="button"
-                onClick={() => onOpenPublishModal('transfer')}
-                className="px-4 py-2 bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10 rounded-xl font-semibold text-xs transition-colors cursor-pointer"
-              >
-                Habilitar mi Moto o Auto Taxi
-              </button>
-            </div>
-          </div>
-        ) : (
-          visibleTaxis.map((taxi) => {
+            {/* Driver Cards Stream - Solo Prestadores 100% Reales Habilitados */}
+            <div className="space-y-2.5">
+            {visibleTaxis.length === 0 ? (
+              <div className="p-8 text-center text-xs text-slate-400 rounded-2xl bg-white/[0.02] border border-white/5 space-y-3.5 shadow-inner">
+                <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-400/30 text-emerald-300 mx-auto flex items-center justify-center text-xl">
+                  🚕
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-white">No hay prestadores de servicio habilitados en este momento</h4>
+                  <p className="text-[11px] text-slate-400 mt-1 max-w-md mx-auto leading-relaxed">
+                    Todos los prestadores mostrados en UPPA son reales y habilitados con turno vigente. Podés presionar "Pedir Viaje" para emitir tu solicitud a la red o comunicarte directamente a la administración.
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setIsRequestRideOpen(true)}
+                    className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs rounded-xl shadow-md transition-all cursor-pointer"
+                  >
+                    Pedir Viaje Ahora
+                  </button>
+                  <a
+                    href="https://wa.me/5493489690058?text=Hola%20Administraci%C3%B3n%20UPPA!%20Necesito%20un%20m%C3%B3vil%20de%20transporte%20alternativo%20(Taxi%20o%20Moto)."
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-4 py-2 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-400/40 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all"
+                  >
+                    <MessageCircle className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Contactar Central (WhatsApp 3489690058)</span>
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => onOpenPublishModal('transfer')}
+                    className="px-4 py-2 bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10 rounded-xl font-semibold text-xs transition-colors cursor-pointer"
+                  >
+                    Registrarme como Prestador
+                  </button>
+                </div>
+              </div>
+            ) : (
+              visibleTaxis.map((taxi) => {
             const isMoto = taxi.vehicleType === 'moto';
             const isOcupado = getTaxiDisponibilidad(taxi) === 'ocupado';
 
@@ -1143,6 +1145,8 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
           })
         )}
         </div>
+        </>
+        ) : null}
       </div>
 
       {/* Request Ride Modal Dialog */}

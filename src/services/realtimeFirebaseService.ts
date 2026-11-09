@@ -46,8 +46,8 @@ export const COL_ANALYTICS = 'analytics';
 // Master Admin Security PIN
 export const ADMIN_MASTER_PIN = '0608';
 
-// Tiempo de exposición en pantalla de eventos push: 15 minutos exactos
-export const PUSH_EVENT_EXPOSURE_TIME_MS = 15 * 60 * 1000;
+// Tiempo de exposición en pantalla de eventos push y diagnósticos: 20 segundos exactos (no 15 minutos)
+export const PUSH_EVENT_EXPOSURE_TIME_MS = 20 * 1000;
 
 // Registro de eventos activos para deduplicación: si se repiten, solo se toma 1
 const activePushEventsMap = new Map<string, number>();
@@ -2379,54 +2379,8 @@ export function getCalificacionInfo(puntuacion: number): {
   }
 }
 
-// Datos iniciales de calificaciones recientes dentro de la ventana de 3 horas
-const nowRef = Date.now();
-const MOCK_INITIAL_RATINGS: CalificacionChoferFirestore[] = [
-  {
-    id: 'cal-mock-1',
-    driverId: 'tx-gaston',
-    driverName: 'Gaston Gimenez',
-    pasajeroId: 'usr-samanta',
-    pasajeroNombre: 'Samanta',
-    puntuacion: 5, // Muy Bueno
-    comentario: 'Excelente viaje, puntual y muy atento.',
-    timestamp: nowRef - 22 * 60 * 1000, // Hace 22 min
-    expiresAt: nowRef - 22 * 60 * 1000 + RANKING_WINDOW_MS,
-  },
-  {
-    id: 'cal-mock-2',
-    driverId: 'tx-lucia',
-    driverName: 'Lucia Veronica Gimenez',
-    pasajeroId: 'usr-p1',
-    pasajeroNombre: 'Carla Gomez',
-    puntuacion: 5, // Muy Bueno
-    comentario: 'Viaje impecable en auto taxi.',
-    timestamp: nowRef - 45 * 60 * 1000, // Hace 45 min
-    expiresAt: nowRef - 45 * 60 * 1000 + RANKING_WINDOW_MS,
-  },
-  {
-    id: 'cal-mock-3',
-    driverId: 'tx-franco',
-    driverName: 'Franco Colapinto',
-    pasajeroId: 'usr-roberto',
-    pasajeroNombre: 'Roberto Fernandez',
-    puntuacion: 5, // Muy Bueno
-    comentario: 'Rápido y seguro en moto taxi.',
-    timestamp: nowRef - 75 * 60 * 1000, // Hace 1h 15m
-    expiresAt: nowRef - 75 * 60 * 1000 + RANKING_WINDOW_MS,
-  },
-  {
-    id: 'cal-mock-4',
-    driverId: 'tx-marcos',
-    driverName: 'Marcos Fernandez',
-    pasajeroId: 'usr-p3',
-    pasajeroNombre: 'Martin Diaz',
-    puntuacion: 4, // Bueno
-    comentario: 'Buen servicio y trato cordial.',
-    timestamp: nowRef - 110 * 60 * 1000, // Hace 1h 50m
-    expiresAt: nowRef - 110 * 60 * 1000 + RANKING_WINDOW_MS,
-  },
-];
+// Calificaciones 100% Reales dentro de la ventana de 3 horas (sin datos simulados)
+const MOCK_INITIAL_RATINGS: CalificacionChoferFirestore[] = [];
 
 const ratingsBroadcastChannel = typeof window !== 'undefined' && 'BroadcastChannel' in window
   ? new BroadcastChannel('uppa_calificaciones_ranking')
