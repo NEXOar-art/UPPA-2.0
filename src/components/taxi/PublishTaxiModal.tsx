@@ -9,8 +9,6 @@ import {
 } from '../../services/driverActivationService';
 import {
   solicitarHabilitacionChofer,
-  ADMIN_MASTER_PIN,
-  habilitarChofer,
 } from '../../services/realtimeFirebaseService';
 import {
   X,
@@ -76,8 +74,6 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
 
   // Generated code presentation state
   const [generatedCodeResult, setGeneratedCodeResult] = useState<string | null>(null);
-  const [adminPinInput, setAdminPinInput] = useState<string>('');
-  const [pinValidationErr, setPinValidationErr] = useState<string>('');
   const [codeSuccessMsg, setCodeSuccessMsg] = useState<string | null>(null);
 
   useEffect(() => {
@@ -85,12 +81,10 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
       setGeneratedCodeResult(null);
       setErrorMsg('');
       setCodeSuccessMsg(null);
-      setPinValidationErr('');
       setDriverName('');
       setWhatsapp('');
       setVehicleModel('');
       setZone('');
-      setAdminPinInput('');
     }
   }, [isOpen]);
 
@@ -209,35 +203,6 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
 
     // Show generated code to user
     setGeneratedCodeResult(generatedCodeObj.code);
-  };
-
-  // Step 2: Administrator activation with PIN "0608"
-  const handleAdminPinActivation = (codeToUse: string) => {
-    setPinValidationErr('');
-    if (adminPinInput.trim() !== ADMIN_MASTER_PIN) {
-      setPinValidationErr('Clave de administrador incorrecta. Verificá los 4 dígitos e intentá nuevamente.');
-      return;
-    }
-
-    const res = validateAndActivateCode(codeToUse, {
-      driverName,
-      vehicleType,
-      vehicleModel,
-      whatsapp,
-      zone,
-    });
-
-    if (res.success && res.session) {
-      if (onActivateDriverSession) {
-        onActivateDriverSession(res.session);
-      }
-      setCodeSuccessMsg(res.message);
-      setTimeout(() => {
-        onClose();
-      }, 1200);
-    } else {
-      setErrorMsg(res.message);
-    }
   };
 
 
@@ -364,42 +329,13 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
                 </p>
               </div>
 
-              {/* Admin Quick Unlock Form (Clave 0608 directa si está el admin en la pantalla) */}
-              <div className="p-3 sm:p-3.5 rounded-2xl bg-black/60 border border-white/10 max-w-sm mx-auto space-y-2 text-left">
-                <label className="block text-[11px] font-bold text-slate-300">
-                  Ingreso de Clave de Administrador
-                </label>
-                <div className="flex flex-col sm:flex-row gap-2">
-                  <input
-                    type="password"
-                    value={adminPinInput}
-                    onChange={(e) => {
-                      setAdminPinInput(e.target.value);
-                      setPinValidationErr('');
-                    }}
-                    placeholder="••••"
-                    className="flex-1 h-10 px-3 rounded-xl bg-slate-900 border border-purple-400/40 text-white font-mono text-center text-sm font-bold focus:outline-none focus:border-purple-300"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => handleAdminPinActivation(generatedCodeResult || 'UPPA-HABILITADO')}
-                    className="h-10 px-4 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs rounded-xl shadow-md transition-all cursor-pointer whitespace-nowrap flex items-center justify-center"
-                  >
-                    Habilitar Servicio
-                  </button>
-                </div>
-                {pinValidationErr && (
-                  <p className="text-[11px] text-rose-400 font-semibold">{pinValidationErr}</p>
-                )}
-              </div>
-
-              <div className="pt-1">
+              <div className="pt-2 max-w-sm mx-auto">
                 <button
                   type="button"
                   onClick={onClose}
-                  className="px-5 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-slate-300 hover:text-white text-xs font-semibold transition-colors cursor-pointer"
+                  className="w-full py-2.5 px-5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 text-xs font-bold transition-all cursor-pointer shadow-sm active:scale-95"
                 >
-                  Cerrar
+                  Entendido / Cerrar
                 </button>
               </div>
             </div>
