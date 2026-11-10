@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { authService } from '../../services/authService';
 import { updateUserDocument } from '../../services/firestoreService';
 import { ResetPasswordModal } from './ResetPasswordModal';
+import { GoogleAccountChooserModal } from './GoogleAccountChooserModal';
 import {
   X,
   Mail,
@@ -97,6 +98,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   // UI state
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
+  const [isGoogleChooserOpen, setIsGoogleChooserOpen] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [verificationSentNotice, setVerificationSentNotice] = useState<string | null>(null);
   const [isCheckingVerification, setIsCheckingVerification] = useState(false);
@@ -331,34 +333,25 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
   };
 
-  // Handler: Iniciar sesión con Google
-  const handleGoogleAuth = async () => {
-    setAuthError(null);
-    setIsSubmitting(true);
-    try {
-      const profile = await loginWithGoogle();
-      onUpdateUser({
-        ...currentUser,
-        id: profile.uid || profile.id || currentUser.id,
-        uid: profile.uid || profile.id || currentUser.uid,
-        name: profile.nombre || profile.name || currentUser.name,
-        nombre: profile.nombre || profile.name || currentUser.nombre,
-        email: profile.email,
-        role: profile.rol === 'administrador' ? 'admin' : 'passenger',
-        rol: profile.rol as any,
-        phone: profile.phone,
-        barrio: profile.barrio,
-        estado: profile.estado,
-        fechaRegistro: profile.fechaRegistro,
-        avatarUrl: profile.avatarUrl,
-      });
-      setSuccessMessage('¡Conectado con cuenta de Google!');
-      setMode('profile');
-    } catch (err: any) {
-      console.error('Error Google:', err);
-    } finally {
-      setIsSubmitting(false);
-    }
+  // Handler: Iniciar sesión con Google seleccionado
+  const handleGoogleSuccess = (profile: User) => {
+    onUpdateUser({
+      ...currentUser,
+      id: profile.uid || profile.id || currentUser.id,
+      uid: profile.uid || profile.id || currentUser.uid,
+      name: profile.nombre || profile.name || currentUser.name,
+      nombre: profile.nombre || profile.name || currentUser.nombre,
+      email: profile.email,
+      role: profile.rol === 'administrador' ? 'admin' : (profile.esChofer ? 'driver' : 'passenger'),
+      rol: profile.rol as any,
+      phone: profile.phone,
+      barrio: profile.barrio,
+      estado: profile.estado,
+      fechaRegistro: profile.fechaRegistro,
+      avatarUrl: profile.avatarUrl,
+    });
+    setSuccessMessage('¡Conectado con tu cuenta de Google!');
+    setMode('profile');
   };
 
   // Handler: Guardar cambios del perfil en Firestore
@@ -837,7 +830,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
             <button
               type="button"
-              onClick={handleGoogleAuth}
+              onClick={() => setIsGoogleChooserOpen(true)}
               disabled={isSubmitting}
               className="w-full h-10 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 text-white font-semibold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
             >
@@ -1238,6 +1231,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           isOpen={isResetModalOpen}
           onClose={() => setIsResetModalOpen(false)}
           initialEmail={firebaseUser?.email || currentUser.email}
+        />
+
+        <GoogleAccountChooserModal
+          isOpen={isGoogleChooserOpen}
+          onClose={() => setIsGoogleChooserOpen(false)}
+          onSuccess={handleGoogleSuccess}
         />
       </div>
     </div>

@@ -178,6 +178,7 @@ async function executeLocalSimulator<T>(
         uid,
         nombre: nombre || cleanEmail.split('@')[0],
         email: cleanEmail,
+        password: password,
         rol: rol || 'pasajero',
         esChofer: isChofer,
         tipoVehiculo: tipoVehiculo || (rol === 'chofer_moto' ? 'moto' : rol === 'chofer_auto' ? 'auto' : null),
@@ -220,32 +221,32 @@ async function executeLocalSimulator<T>(
       const { email, password } = body;
       const cleanEmail = String(email || '').trim().toLowerCase();
       if (!cleanEmail) {
-        return { ok: false, data: null, error: { code: 'INVALID_CREDENTIALS', message: 'Email requerido' }, timestamp: now };
+        return { ok: false, data: null, error: { code: 'INVALID_CREDENTIALS', message: 'Ingresá tu correo electrónico' }, timestamp: now };
+      }
+      if (!password) {
+        return { ok: false, data: null, error: { code: 'INVALID_CREDENTIALS', message: 'Ingresá tu contraseña' }, timestamp: now };
       }
       const users = getSheetData<any>('USUARIOS', []);
       let user = users.find((u) => u.email.toLowerCase() === cleanEmail);
 
-      // Si no existe, registrar cuenta de usuario
+      // Si no existe el usuario, retornar error claro para que se registre
       if (!user) {
-        const uid = `usr_${now}_${Math.random().toString(36).substring(2, 7)}`;
-        const isAdmin = cleanEmail.includes('admin');
-        user = {
-          uid,
-          nombre: cleanEmail.split('@')[0],
-          email: cleanEmail,
-          rol: isAdmin ? 'administrador' : 'pasajero',
-          esChofer: false,
-          tipoVehiculo: null,
-          activo: true,
-          telefono: '',
-          barrio: '',
-          avatarUrl: `https://api.dicebear.com/7.x/bottts/svg?seed=${uid}&backgroundColor=12141c`,
-          fechaRegistro: new Date().toISOString(),
-          ultimoAcceso: new Date().toISOString(),
-          emailVerificado: true,
+        return {
+          ok: false,
+          data: null,
+          error: { code: 'USER_NOT_FOUND', message: 'No encontramos una cuenta registrada con este correo. Por favor registrate en la pestaña de Registro.' },
+          timestamp: now,
         };
-        users.push(user);
-        saveSheetData('USUARIOS', users);
+      }
+
+      // Si tiene contraseña guardada, verificar coincidencia
+      if (user.password && user.password !== password) {
+        return {
+          ok: false,
+          data: null,
+          error: { code: 'WRONG_PASSWORD', message: 'Contraseña incorrecta. Por favor verificá los datos ingresados.' },
+          timestamp: now,
+        };
       }
 
       const sessionToken = `tok_${now}_${Math.random().toString(36).substring(2, 10)}`;
@@ -274,7 +275,7 @@ async function executeLocalSimulator<T>(
       let user = users.find((u) => u.email.toLowerCase() === cleanEmail);
 
       if (!user) {
-        const uid = `usr_g_${now}`;
+        const uid = `usr_g_${now}_${Math.random().toString(36).substring(2, 6)}`;
         const isAdmin = cleanEmail.includes('admin');
         const defaultName = name || cleanEmail.split('@')[0] || 'Usuario';
         user = {
@@ -286,7 +287,7 @@ async function executeLocalSimulator<T>(
           tipoVehiculo: null,
           activo: true,
           telefono: '',
-          barrio: '',
+          barrio: 'Campana Centro',
           avatarUrl: `https://api.dicebear.com/7.x/bottts/svg?seed=${uid}&backgroundColor=12141c`,
           fechaRegistro: new Date().toISOString(),
           ultimoAcceso: new Date().toISOString(),
@@ -294,6 +295,9 @@ async function executeLocalSimulator<T>(
           emailVerificado: true,
         };
         users.push(user);
+        saveSheetData('USUARIOS', users);
+      } else if (name && (!user.nombre || user.nombre === 'Usuario')) {
+        user.nombre = name;
         saveSheetData('USUARIOS', users);
       }
 

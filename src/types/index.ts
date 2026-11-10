@@ -176,6 +176,12 @@ export interface HabilitacionChofer {
   createdAt?: any;
   habilitadoPor?: string;
   adminNotes?: string;
+  // Confort y Capacidad del Servicio
+  asientos?: number;
+  aireAcondicionado?: boolean;
+  baul?: boolean;
+  aceptaMascotas?: boolean;
+  cascoExtra?: boolean;
 }
 
 export interface TaxiListing {
@@ -199,6 +205,12 @@ export interface TaxiListing {
   activationCode?: string;
   isOnline?: boolean;
   disponibilidad?: 'desocupado' | 'ocupado';
+  // Confort y Capacidad del Servicio
+  asientos?: number;
+  aireAcondicionado?: boolean;
+  baul?: boolean;
+  aceptaMascotas?: boolean;
+  cascoExtra?: boolean;
 }
 
 export interface SolicitudTransporteFirestore {

@@ -229,45 +229,53 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         ? 'micro'
         : null);
 
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanPass = pass.trim();
+    const cleanName = name.trim() || cleanEmail.split('@')[0];
+
     try {
       // 1. Intentar registrar en Firebase Auth real
       let fbUid = '';
       try {
-        const cred = await createUserWithEmailAndPassword(auth, email, pass);
+        const cred = await createUserWithEmailAndPassword(auth, cleanEmail, cleanPass);
         fbUid = cred.user.uid;
         setFirebaseUser({
           uid: cred.user.uid,
-          email: cred.user.email || undefined,
-          displayName: name,
+          email: cred.user.email || cleanEmail,
+          displayName: cleanName,
           emailVerified: false,
         });
         // Disparar email de verificación de Firebase Auth
         sendEmailVerification(cred.user).catch(() => {});
         setEmailVerificationSent(true);
       } catch (fbErr: any) {
-        console.warn('Firebase Auth createUser notice:', fbErr.message);
+        console.warn('Firebase Auth createUser notice:', fbErr.code, fbErr.message);
         if (fbErr.code === 'auth/email-already-in-use') {
           // Intentar iniciar sesión automáticamente con esa contraseña
           try {
-            const loginCred = await signInWithEmailAndPassword(auth, email, pass);
+            const loginCred = await signInWithEmailAndPassword(auth, cleanEmail, cleanPass);
             fbUid = loginCred.user.uid;
             setFirebaseUser({
               uid: loginCred.user.uid,
-              email: loginCred.user.email || undefined,
-              displayName: loginCred.user.displayName || name,
+              email: loginCred.user.email || cleanEmail,
+              displayName: loginCred.user.displayName || cleanName,
               emailVerified: loginCred.user.emailVerified,
             });
           } catch (loginErr) {
             throw new Error('El correo electrónico ya está registrado en UPPA. Podés iniciar sesión con tu contraseña.');
           }
+        } else if (fbErr.code === 'auth/weak-password') {
+          throw new Error('La contraseña debe tener al menos 6 caracteres.');
+        } else if (fbErr.code === 'auth/invalid-email') {
+          throw new Error('El formato del correo electrónico ingresado no es válido.');
         }
       }
 
       // 2. Registrar usuario en Firestore / Base de datos centralizada
       const registered = await authService.register({
-        email,
-        password: pass,
-        nombre: name,
+        email: cleanEmail,
+        password: cleanPass,
+        nombre: cleanName,
         rol: (requestedRole as any) || 'pasajero',
         phone: extraData?.phone,
         barrio: extraData?.barrio,
@@ -280,8 +288,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         ...registered,
         id: effectiveUid,
         uid: effectiveUid,
-        name,
-        nombre: name,
+        name: cleanName,
+        nombre: cleanName,
         role: mapFirestoreRolToAppRole(registered.rol, isChofer),
         esChofer: isChofer,
         tipoVehiculo,
@@ -291,8 +299,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       // Guardar también en Firestore collection 'usuarios'
       createUserDocument(effectiveUid, {
-        nombre: name,
-        email: email,
+        nombre: cleanName,
+        email: cleanEmail,
         rol: (requestedRole as any) || 'pasajero',
         estado: 'activo',
         fechaRegistro: new Date().toISOString(),
@@ -316,34 +324,70 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setAuthError(null);
     setAuthNotice(null);
 
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanPass = pass?.trim() || '';
+
     try {
       // 1. Intentar inicio de sesión con Firebase Auth
       let fbUid = '';
-      if (pass) {
+      if (cleanPass) {
         try {
-          const cred = await signInWithEmailAndPassword(auth, email, pass);
+          const cred = await signInWithEmailAndPassword(auth, cleanEmail, cleanPass);
           fbUid = cred.user.uid;
           setFirebaseUser({
             uid: cred.user.uid,
-            email: cred.user.email || undefined,
+            email: cred.user.email || cleanEmail,
             displayName: cred.user.displayName || undefined,
             emailVerified: cred.user.emailVerified,
           });
         } catch (fbErr: any) {
-          console.warn('Firebase Auth signIn notice, fallback resiliente:', fbErr.message);
+          console.warn('Firebase Auth signIn notice:', fbErr.code, fbErr.message);
+          // Si es un error explícito de contraseña o credenciales, informar al usuario
+          if (
+            fbErr.code === 'auth/wrong-password' ||
+            fbErr.code === 'auth/invalid-credential' ||
+            fbErr.code === 'auth/invalid-login-credentials'
+          ) {
+            throw new Error('Contraseña o credenciales incorrectas. Verificá los datos ingresados o utilizá ¿Olvidaste tu contraseña?.');
+          }
+          if (fbErr.code === 'auth/user-not-found') {
+            throw new Error('No encontramos una cuenta registrada con este correo electrónico. Por favor registrate en la pestaña de Registro.');
+          }
+          if (fbErr.code === 'auth/invalid-email') {
+            throw new Error('El formato del correo electrónico ingresado no es válido.');
+          }
+          if (fbErr.code === 'auth/too-many-requests') {
+            throw new Error('Demasiados intentos fallidos. Por seguridad, esperá unos minutos antes de volver a intentar.');
+          }
+          if (fbErr.code === 'auth/user-disabled') {
+            throw new Error('Esta cuenta ha sido deshabilitada.');
+          }
         }
       }
 
       // 2. Autenticar con el servicio para asegurar perfil completo
-      const logged = await authService.login(email, pass);
+      const logged = await authService.login(cleanEmail, cleanPass);
       const effectiveUid = fbUid || logged.uid || logged.id;
+
+      // 3. Sincronizar / cargar perfil de Firestore si existe
+      try {
+        const fsDoc = await getUserDocument(effectiveUid);
+        if (fsDoc) {
+          logged.rol = fsDoc.rol || logged.rol;
+          logged.esChofer = fsDoc.esChofer ?? logged.esChofer;
+          logged.tipoVehiculo = fsDoc.tipoVehiculo ?? logged.tipoVehiculo;
+          logged.phone = fsDoc.phone || logged.phone;
+          logged.barrio = fsDoc.barrio || logged.barrio;
+        }
+      } catch {}
 
       const finalUser: User = {
         ...logged,
         id: effectiveUid,
         uid: effectiveUid,
-        name: logged.name || logged.nombre || email.split('@')[0],
-        nombre: logged.name || logged.nombre || email.split('@')[0],
+        name: logged.name || logged.nombre || cleanEmail.split('@')[0],
+        nombre: logged.name || logged.nombre || cleanEmail.split('@')[0],
+        email: cleanEmail,
       };
 
       setUser(finalUser);
@@ -362,32 +406,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     try {
       let fbUid = '';
-      let fbEmail = email;
-      let fbName = name;
+      let fbEmail = email?.trim().toLowerCase();
+      let fbName = name?.trim();
 
-      // Proveedor de Google configurado con selector explícito de cuenta
-      const provider = new GoogleAuthProvider();
-      provider.setCustomParameters({ prompt: 'select_account' });
+      // Si no viene email directo, intentar ventana emergente con selector explícito de cuenta
+      if (!fbEmail) {
+        const provider = new GoogleAuthProvider();
+        provider.setCustomParameters({ prompt: 'select_account' });
 
-      try {
-        const cred = await signInWithPopup(auth, provider);
-        fbUid = cred.user.uid;
-        fbEmail = cred.user.email || email;
-        fbName = cred.user.displayName || name;
-        setFirebaseUser({
-          uid: cred.user.uid,
-          email: cred.user.email || undefined,
-          displayName: cred.user.displayName || undefined,
-          emailVerified: true,
-        });
-      } catch (popupErr: any) {
-        console.warn('Google Popup result:', popupErr?.code || popupErr?.message);
-        if (popupErr?.code === 'auth/popup-closed-by-user' || popupErr?.code === 'auth/cancelled-popup-request') {
-          throw new Error('Inicio de sesión cancelado. Por favor, seleccioná tu cuenta de Google.');
-        }
-        // Si no hay email provisto, exigir autenticación
-        if (!fbEmail && !credential) {
-          throw new Error(popupErr?.message || 'No se pudo conectar con la cuenta de Google seleccionada.');
+        try {
+          const cred = await signInWithPopup(auth, provider);
+          fbUid = cred.user.uid;
+          fbEmail = (cred.user.email || '').trim().toLowerCase();
+          fbName = cred.user.displayName || fbEmail.split('@')[0];
+          setFirebaseUser({
+            uid: cred.user.uid,
+            email: cred.user.email || undefined,
+            displayName: cred.user.displayName || undefined,
+            emailVerified: true,
+          });
+        } catch (popupErr: any) {
+          console.warn('Google Popup result:', popupErr?.code || popupErr?.message);
+          if (popupErr?.code === 'auth/popup-closed-by-user' || popupErr?.code === 'auth/cancelled-popup-request') {
+            throw new Error('Inicio de sesión cancelado.');
+          }
+          if (
+            popupErr?.code === 'auth/popup-blocked' ||
+            popupErr?.code === 'auth/unauthorized-domain' ||
+            popupErr?.message?.includes('popup')
+          ) {
+            throw new Error('popup-blocked: La ventana emergente fue bloqueada por el navegador.');
+          }
+          if (!fbEmail && !credential) {
+            throw new Error(popupErr?.message || 'No se pudo conectar con la cuenta de Google seleccionada.');
+          }
         }
       }
 
@@ -397,6 +449,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       const logged = await authService.googleLogin(credential, fbEmail, fbName);
       const effectiveUid = fbUid || logged.uid || logged.id;
+
+      // Sincronizar o crear documento en Firestore
+      try {
+        await createUserDocument(effectiveUid, {
+          nombre: fbName || logged.name || 'Usuario Google',
+          email: fbEmail || logged.email,
+          rol: logged.rol || 'pasajero',
+          estado: 'activo',
+          fechaRegistro: logged.fechaRegistro || new Date().toISOString(),
+          esChofer: logged.esChofer || false,
+        });
+      } catch {}
 
       const finalUser: User = {
         ...logged,

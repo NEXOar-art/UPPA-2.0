@@ -157,8 +157,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [broadcastDesc, setBroadcastDesc] = useState('');
   const [broadcastSent, setBroadcastSent] = useState(false);
 
-  // Live Timer ticker for active drivers
-  const [, setNowTick] = useState(Date.now());
+  // Live Timer ticker for active drivers and pending timeout calculations
+  const [nowTick, setNowTick] = useState(Date.now());
   useEffect(() => {
     const timer = setInterval(() => setNowTick(Date.now()), 1000);
     return () => clearInterval(timer);
@@ -326,11 +326,33 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     );
   }
 
-  // Active Admin Screen - Solo solicitudes de choferes 100% reales (sin simular)
-  const pendingHabilitaciones = habilitaciones.filter(
-    (h) => h.estado === 'pendiente' && h.id !== 'hab-2' && h.driverId !== 'drv-carlos'
+  // Helper para obtener timestamp en milisegundos de una habilitación
+  const getHabTimestamp = (hab: HabilitacionChofer): number => {
+    if (typeof hab.createdAt === 'number') return hab.createdAt;
+    if (hab.createdAt?.toMillis) return hab.createdAt.toMillis();
+    if (hab.createdAt) {
+      const ms = new Date(hab.createdAt).getTime();
+      if (!isNaN(ms)) return ms;
+    }
+    return 0;
+  };
+
+  const HABILITACION_TIMEOUT_MS = 25 * 60 * 1000; // 25 minutos ventana de habilitación
+
+  // Solicitudes Pendientes: Tienen 25 minutos de vigencia desde su envío. Pasado ese tiempo desaparecen.
+  const pendingHabilitaciones = habilitaciones.filter((h) => {
+    if (h.estado !== 'pendiente' || h.id === 'hab-2' || h.driverId === 'drv-carlos') return false;
+    const createdMs = getHabTimestamp(h);
+    if (createdMs > 0 && nowTick - createdMs > HABILITACION_TIMEOUT_MS) {
+      return false; // Expirada tras 25 minutos sin habilitar
+    }
+    return true;
+  });
+
+  // Choferes Habilitados: Una vez cumplido su temporizador (endsAt <= nowTick), desaparecen de la lista activa
+  const activeHabilitaciones = habilitaciones.filter(
+    (h) => h.estado === 'activo' && Boolean(h.endsAt && h.endsAt > nowTick)
   );
-  const activeHabilitaciones = habilitaciones.filter((h) => h.estado === 'activo');
 
   const tabsScrollRef = React.useRef<HTMLDivElement>(null);
 
@@ -672,57 +694,79 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {pendingHabilitaciones.map((hab) => (
-                  <div
-                    key={hab.id}
-                    className="p-4 rounded-2xl bg-[#0f1422] border border-amber-500/30 shadow-lg space-y-3"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-400/40 flex items-center justify-center text-amber-300">
-                          {hab.vehicleType === 'moto' ? <Bike className="w-5 h-5" /> : <Car className="w-5 h-5" />}
-                        </div>
-                        <div>
-                          <h4 className="text-sm font-bold text-white">{hab.driverName}</h4>
-                          <span className="text-[11px] text-slate-400 block">
-                            {hab.vehicleModel} • {hab.vehicleType.toUpperCase()}
-                          </span>
-                        </div>
-                      </div>
-                      <span className="px-2 py-0.5 rounded-md bg-amber-500/20 border border-amber-400/40 text-[10px] font-bold text-amber-300">
-                        Pendiente Clave 0608
-                      </span>
-                    </div>
+                {pendingHabilitaciones.map((hab) => {
+                  const createdMs = getHabTimestamp(hab);
+                  const remainingMs = createdMs > 0 ? Math.max(0, HABILITACION_TIMEOUT_MS - (nowTick - createdMs)) : HABILITACION_TIMEOUT_MS;
+                  const remMins = Math.floor(remainingMs / 60000);
+                  const remSecs = Math.floor((remainingMs % 60000) / 1000);
+                  const formattedPendingTimer = `${remMins}:${remSecs.toString().padStart(2, '0')}`;
 
-                    <div className="text-xs space-y-1 bg-black/40 p-2.5 rounded-xl border border-white/5">
-                      <div className="flex justify-between text-slate-300">
-                        <span className="text-slate-400">WhatsApp:</span>
-                        <a
-                          href={`https://wa.me/${hab.whatsapp}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-emerald-400 font-bold hover:underline"
-                        >
-                          +{hab.whatsapp}
-                        </a>
-                      </div>
-                      <div className="flex justify-between text-slate-300">
-                        <span className="text-slate-400">Zona:</span>
-                        <span>{hab.zone}</span>
-                      </div>
-                      <div className="flex justify-between text-slate-300">
-                        <span className="text-slate-400">Tiempo Solicitado:</span>
-                        <span className="font-bold text-amber-300">{hab.horas} horas</span>
-                      </div>
-                      {hab.comprobanteFileName && (
-                        <div className="flex justify-between text-slate-300">
-                          <span className="text-slate-400">Comprobante:</span>
-                          <span className="font-mono text-[11px] text-sky-300 truncate max-w-[180px]">
-                            {hab.comprobanteFileName}
+                  return (
+                    <div
+                      key={hab.id}
+                      className="p-4 rounded-2xl bg-[#0f1422] border border-amber-500/30 shadow-lg space-y-3"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-400/40 flex items-center justify-center text-amber-300">
+                            {hab.vehicleType === 'moto' ? <Bike className="w-5 h-5" /> : <Car className="w-5 h-5" />}
+                          </div>
+                          <div>
+                            <h4 className="text-sm font-bold text-white">{hab.driverName}</h4>
+                            <span className="text-[11px] text-slate-400 block">
+                              {hab.vehicleModel} • {hab.vehicleType.toUpperCase()}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-col items-end gap-1">
+                          <span className="px-2 py-0.5 rounded-md bg-amber-500/20 border border-amber-400/40 text-[10px] font-bold text-amber-300">
+                            Estado: Pendiente
+                          </span>
+                          <span className="px-2 py-0.5 rounded-md bg-rose-500/15 border border-rose-400/30 text-[9.5px] font-mono font-bold text-rose-300 flex items-center gap-1">
+                            <Clock className="w-2.5 h-2.5" />
+                            <span>{formattedPendingTimer} restante</span>
                           </span>
                         </div>
-                      )}
-                    </div>
+                      </div>
+
+                      <div className="text-xs space-y-1 bg-black/40 p-2.5 rounded-xl border border-white/5">
+                        <div className="flex justify-between text-slate-300">
+                          <span className="text-slate-400">WhatsApp:</span>
+                          <a
+                            href={`https://wa.me/${hab.whatsapp}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-emerald-400 font-bold hover:underline"
+                          >
+                            +{hab.whatsapp}
+                          </a>
+                        </div>
+                        <div className="flex justify-between text-slate-300">
+                          <span className="text-slate-400">Zona:</span>
+                          <span>{hab.zone}</span>
+                        </div>
+                        <div className="flex justify-between text-slate-300">
+                          <span className="text-slate-400">Tiempo Solicitado:</span>
+                          <span className="font-bold text-amber-300">{hab.horas} horas</span>
+                        </div>
+                        <div className="flex justify-between text-slate-300">
+                          <span className="text-slate-400">Confort / Capacidad:</span>
+                          <span className="text-emerald-300 font-medium">
+                            {hab.vehicleType === 'moto'
+                              ? `${hab.cascoExtra !== false ? '🪖 Casco extra' : 'Sin casco'}${hab.baul !== false ? ' · 📦 Baúl' : ''}`
+                              : `${hab.asientos || 4} asientos${hab.aireAcondicionado !== false ? ' · ❄️ Aire' : ''}${hab.baul !== false ? ' · 🧳 Baúl' : ''}${hab.aceptaMascotas ? ' · 🐾 Mascotas' : ''}`}
+                          </span>
+                        </div>
+                        {hab.comprobanteFileName && (
+                          <div className="flex justify-between text-slate-300">
+                            <span className="text-slate-400">Comprobante:</span>
+                            <span className="font-mono text-[11px] text-sky-300 truncate max-w-[180px]">
+                              {hab.comprobanteFileName}
+                            </span>
+                          </div>
+                        )}
+                      </div>
 
                     {/* Enablement action form with PIN 0608 */}
                     {selectedHabIdForActivation === hab.id ? (
@@ -802,9 +846,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                       </div>
                     )}
                   </div>
-                ))}
-              </div>
-            )}
+                );
+              })}
+            </div>
+          )}
           </div>
 
           {/* Generador de Códigos Únicos en Firestore (codigos_habilitacion) */}
@@ -939,8 +984,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                           </div>
                         </div>
 
-                        {/* Live Timer Countdown Badge */}
-                        <div className="text-right">
+                        {/* Live Timer Countdown Badge & Status */}
+                        <div className="text-right flex flex-col items-end gap-1">
+                          <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 border border-emerald-400/40 text-[10px] font-bold text-emerald-300">
+                            Estado: Habilitado
+                          </span>
                           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-900 border border-emerald-400/50 text-emerald-300 font-mono text-xs font-black shadow-inner">
                             <Clock className="w-3.5 h-3.5 text-emerald-400 animate-spin" style={{ animationDuration: '6s' }} />
                             <span>{timer.formatted}</span>
@@ -963,6 +1011,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                         <div className="flex justify-between text-slate-300">
                           <span className="text-slate-400">Zona:</span>
                           <span>{hab.zone}</span>
+                        </div>
+                        <div className="flex justify-between text-slate-300">
+                          <span className="text-slate-400">Confort / Capacidad:</span>
+                          <span className="text-emerald-300 font-medium">
+                            {hab.vehicleType === 'moto'
+                              ? `${hab.cascoExtra !== false ? '🪖 Casco extra' : 'Sin casco'}${hab.baul !== false ? ' · 📦 Baúl' : ''}`
+                              : `${hab.asientos || 4} asientos${hab.aireAcondicionado !== false ? ' · ❄️ Aire' : ''}${hab.baul !== false ? ' · 🧳 Baúl' : ''}${hab.aceptaMascotas ? ' · 🐾 Mascotas' : ''}`}
+                          </span>
                         </div>
                       </div>
 

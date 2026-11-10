@@ -122,6 +122,7 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
   const [reqDestination, setReqDestination] = useState('');
   const [reqType, setReqType] = useState<'moto' | 'auto'>('auto');
   const [aceptaPoliticasRide, setAceptaPoliticasRide] = useState(false);
+  const [reqPhone, setReqPhone] = useState(currentUserPhone || '');
   const [isSubmittingRide, setIsSubmittingRide] = useState(false);
   const [rideSuccessNotice, setRideSuccessNotice] = useState<string | null>(null);
   const [isPoliticasOpen, setIsPoliticasOpen] = useState(false);
@@ -200,6 +201,7 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
       await crearSolicitudTransporte({
         pasajeroId: currentUserId,
         nombrePasajero: currentUserName,
+        telefonoPasajero: reqPhone.trim() || currentUserPhone || '',
         origen: reqOrigin.trim(),
         destino: reqDestination.trim(),
         tipoVehiculoRequerido: reqType,
@@ -466,6 +468,11 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
         whatsapp: match.whatsapp || '5493489690058',
         avatarUrl: match.avatarUrl || 'https://api.dicebear.com/7.x/bottts/svg?seed=Robert&backgroundColor=12141c',
         isReal: true,
+        asientos: match.asientos || 4,
+        aireAcondicionado: match.aireAcondicionado !== false,
+        baul: match.baul !== false,
+        aceptaMascotas: Boolean(match.aceptaMascotas),
+        cascoExtra: match.cascoExtra !== false,
       };
     }
     return {
@@ -477,6 +484,11 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
       whatsapp: '5493489690058',
       avatarUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=Robert&backgroundColor=12141c',
       isReal: false,
+      asientos: 4,
+      aireAcondicionado: true,
+      baul: true,
+      aceptaMascotas: false,
+      cascoExtra: true,
     };
   }, [visibleTaxis, consoleVehicleType]);
 
@@ -830,6 +842,48 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                                 </span>
                               </div>
 
+                              {/* WhatsApp del Pasajero para que envíe el código al prestador */}
+                              {(() => {
+                                const pPhone = sol.telefonoPasajero || '';
+                                const cleanPhone = pPhone.replace(/\D/g, '');
+                                const hasPhone = cleanPhone.length >= 6;
+                                const fullPhone = cleanPhone.startsWith('54') ? cleanPhone : `549${cleanPhone}`;
+
+                                return (
+                                  <div className="p-2 rounded-xl bg-emerald-950/40 border border-emerald-500/30 space-y-1.5">
+                                    <div className="flex items-center justify-between text-[10.5px]">
+                                      <span className="text-slate-400 font-medium">Pasajero a llevar:</span>
+                                      <span className="font-bold text-white truncate">{sol.nombrePasajero}</span>
+                                    </div>
+
+                                    <div className="flex items-center justify-between text-[10.5px]">
+                                      <span className="text-slate-400 font-medium">WhatsApp Pasajero:</span>
+                                      <span className="font-mono text-emerald-300 font-bold">
+                                        {hasPhone ? `+${cleanPhone}` : 'No especificado'}
+                                      </span>
+                                    </div>
+
+                                    {hasPhone ? (
+                                      <a
+                                        href={`https://wa.me/${fullPhone}?text=${encodeURIComponent(
+                                          `Hola ${sol.nombrePasajero}! Soy tu chofer (${sol.choferNombre || 'UPPA'}). Ya acepté tu viaje hacia ${sol.destino}. Por favor pasame por aquí tu código de seguridad de 4 caracteres para iniciar el viaje.`
+                                        )}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="w-full py-1.5 px-2.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-[10.5px] flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                                      >
+                                        <MessageCircle className="w-3.5 h-3.5 fill-slate-950 text-slate-950 shrink-0" />
+                                        <span>WhatsApp Pasajero: +{cleanPhone} (Pedir Código)</span>
+                                      </a>
+                                    ) : (
+                                      <p className="text-[9.5px] text-amber-300/80 leading-tight">
+                                        El pasajero te brindará el código de 4 caracteres de su pantalla al abordar.
+                                      </p>
+                                    )}
+                                  </div>
+                                );
+                              })()}
+
                               {/* Sección de Validación de Código de Seguridad provisto por el Pasajero */}
                               {!sol.codigoValidado ? (
                                 <div className="p-2 rounded-xl bg-amber-500/15 border border-amber-400/40 space-y-1.5">
@@ -1010,6 +1064,20 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                                     </p>
                                   </div>
                                 </div>
+
+                                {sol.choferTelefono && (
+                                  <a
+                                    href={`https://wa.me/${sol.choferTelefono.replace(/\D/g, '')}?text=${encodeURIComponent(
+                                      `Hola ${sol.choferNombre || 'Chofer'}! Soy ${sol.nombrePasajero}. Mi código de abordaje de UPPA es: ${sol.codigoSeguridad}`
+                                    )}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="mt-2 w-full py-2 px-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs flex items-center justify-center gap-1.5 shadow-md shadow-emerald-500/20 active:scale-95 transition-all"
+                                  >
+                                    <MessageCircle className="w-3.5 h-3.5 fill-slate-950" />
+                                    <span>Enviar Código ({sol.codigoSeguridad}) a {sol.choferNombre || 'Chofer'} por WhatsApp</span>
+                                  </a>
+                                )}
                               </div>
                             ) : (
                               <div className="mt-2 p-2.5 rounded-xl bg-emerald-500/20 border border-emerald-400/50 text-emerald-200 text-xs flex items-center gap-2">
@@ -1200,14 +1268,24 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                     Standard · {dynamicEtaMin} min
                   </div>
 
-                  {/* Asientos y Viajes */}
-                  <div className="flex items-center gap-3 text-[11px] text-slate-400">
-                    <span className="flex items-center gap-1">
-                      <span>👤</span>
-                      <span>{consoleVehicleType === 'auto' ? '4 asientos' : '1 pasajero'}</span>
+                  {/* Asientos, Confort y Viajes */}
+                  <div className="flex items-center gap-2.5 text-[11px] text-slate-300 flex-wrap">
+                    <span className="flex items-center gap-1 font-semibold text-emerald-300">
+                      <span>{consoleVehicleType === 'auto' ? '👤' : '🪖'}</span>
+                      <span>
+                        {consoleVehicleType === 'auto'
+                          ? `${activeDriverFeatured?.asientos || 4} asientos`
+                          : (activeDriverFeatured?.cascoExtra !== false ? 'Casco extra' : '1 pasajero')}
+                      </span>
                     </span>
-                    <span className="flex items-center gap-1">
-                      <span>✈</span>
+                    {consoleVehicleType === 'auto' && activeDriverFeatured?.aireAcondicionado !== false && (
+                      <span className="text-[10px] text-cyan-300 font-medium">· ❄️ Aire</span>
+                    )}
+                    {activeDriverFeatured?.baul !== false && (
+                      <span className="text-[10px] text-slate-300 font-medium">· 🧳 Baúl</span>
+                    )}
+                    <span className="flex items-center gap-1 text-slate-400 text-[10.5px]">
+                      <span>· ✈</span>
                       <span>{activeDriverFeatured?.completedRides || 482} viajes</span>
                     </span>
                   </div>
@@ -1444,6 +1522,49 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                     <p className="text-xs text-slate-300 font-medium">
                       {taxi.vehicleModel}
                     </p>
+
+                    {/* Ficha de Confort y Capacidad del Servicio */}
+                    <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                      {isMoto ? (
+                        <>
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold bg-amber-500/15 border border-amber-400/30 text-amber-200">
+                            <span>🪖</span>
+                            <span>{taxi.cascoExtra !== false ? 'Casco extra para pasajero' : 'Sin casco extra'}</span>
+                          </span>
+                          {taxi.baul !== false && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold bg-white/5 border border-white/10 text-slate-300">
+                              <span>📦</span>
+                              <span>Baúl / Portaequipaje</span>
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold bg-cyan-500/15 border border-cyan-400/30 text-cyan-200">
+                            <span>👥</span>
+                            <span>{taxi.asientos || 4} asientos</span>
+                          </span>
+                          {taxi.aireAcondicionado !== false && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold bg-emerald-500/15 border border-emerald-400/30 text-emerald-200">
+                              <span>❄️</span>
+                              <span>Aire Acondicionado</span>
+                            </span>
+                          )}
+                          {taxi.baul !== false && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold bg-white/5 border border-white/10 text-slate-300">
+                              <span>🧳</span>
+                              <span>Baúl</span>
+                            </span>
+                          )}
+                          {taxi.aceptaMascotas && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold bg-purple-500/15 border border-purple-400/30 text-purple-200">
+                              <span>🐾</span>
+                              <span>Mascotas OK</span>
+                            </span>
+                          )}
+                        </>
+                      )}
+                    </div>
 
                     <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
                       {/* Distancia GPS calculada */}

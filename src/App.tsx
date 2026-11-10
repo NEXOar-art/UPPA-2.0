@@ -63,6 +63,7 @@ import {
   setDriverDisponibilidad,
   finalizarViajeDeChofer,
   isRealCommunityReport,
+  enviarMensajeChat,
 } from './services/realtimeFirebaseService';
 
 import {
@@ -835,6 +836,34 @@ export default function App() {
       sentido: newEventData.direction === 'hacia_zarate' ? 'hacia_zarate' : 'hacia_malvinas',
       velocidadKmH: newEventData.velocidadKmH,
     }).catch((err) => console.warn('Firestore report write notice:', err));
+
+    // Publicar automáticamente el evento en el chat comunitario en tiempo real
+    const eventChatText =
+      newEventData.type === 'bus_location'
+        ? `📍 [UBICACIÓN COLECTIVO AHORA] Colectivo reportado por ${currentUser.name}: ${
+            newEventData.direction === 'hacia_zarate' ? '➡️ Hacia Zárate' : '⬅️ Hacia Malvinas'
+          }${newEventData.velocidadKmH ? ` · Velocidad: ${newEventData.velocidadKmH} km/h` : ''}. Visible en el mapa.`
+        : `📢 [EVENTO EN VIVO] ${created.title}: ${created.description || created.title}. Reportado por ${currentUser.name}. Ya plasmado en el mapa.`;
+
+    enviarMensajeChat('todos', {
+      usuarioId: currentUser.id || 'sistema-alertas',
+      nombreUsuario: currentUser.name || 'Vecino UPPA',
+      texto: eventChatText,
+      rol: currentUser.role || 'pasajero',
+      avatarUrl: currentUser.avatarUrl,
+    }).catch((err) => console.warn('Chat auto-event broadcast notice:', err));
+
+    const chatNoticeMsg: ChatMessage = {
+      id: `msg-ev-${now}`,
+      channel: 'general',
+      userId: currentUser.id || 'usr-auto',
+      userName: currentUser.name || 'Alerta Comunitaria',
+      content: eventChatText,
+      timestamp: new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }),
+      sentiment: 'neutral',
+      mapEventId: created.id,
+    };
+    setMessages((prev) => [...prev, chatNoticeMsg]);
   };
 
   // Prestadores de Servicio Habilitados por el Administrador UPPA (Tiempo Real)
@@ -874,6 +903,11 @@ export default function App() {
           rating: 5.0,
           completedRides: 10,
           activationCode: hab.activationCode,
+          asientos: hab.asientos,
+          aireAcondicionado: hab.aireAcondicionado,
+          baul: hab.baul,
+          aceptaMascotas: hab.aceptaMascotas,
+          cascoExtra: hab.cascoExtra,
         });
       }
     });
@@ -900,6 +934,11 @@ export default function App() {
           rating: 5.0,
           completedRides: 5,
           activationCode: driverSession.activationCode,
+          asientos: (driverSession as any).asientos,
+          aireAcondicionado: (driverSession as any).aireAcondicionado,
+          baul: (driverSession as any).baul,
+          aceptaMascotas: (driverSession as any).aceptaMascotas,
+          cascoExtra: (driverSession as any).cascoExtra,
         });
       }
     }

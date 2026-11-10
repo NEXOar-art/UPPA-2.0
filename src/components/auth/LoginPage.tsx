@@ -3,6 +3,7 @@ import { User, UserRole, mapFirestoreRolToAppRole } from '../../types';
 import heroCorridorImg from '../../assets/images/uppa_zarate_corridor_1791318316432.jpg';
 import { useAuth } from '../../context/AuthContext';
 import { ResetPasswordModal } from './ResetPasswordModal';
+import { GoogleAccountChooserModal } from './GoogleAccountChooserModal';
 import {
   Car,
   Shield,
@@ -50,6 +51,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onExploreGuest })
 
   const [showPassword, setShowPassword] = useState(false);
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
+  const [isGoogleChooserOpen, setIsGoogleChooserOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [localNotice, setLocalNotice] = useState<string | null>(null);
   const [showFirebaseInfo, setShowFirebaseInfo] = useState(false);
@@ -142,37 +144,23 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onExploreGuest })
     }
   };
 
-  const handleGoogleLogin = async () => {
-    setIsSubmitting(true);
-    setAuthError(null);
-    setLocalNotice('Conectando con Google Authentication...');
-
-    try {
-      const userProfile = await loginWithGoogle();
-      setLocalNotice('¡Acceso concedido mediante Google!');
-
-      setTimeout(() => {
-        setIsSubmitting(false);
-        const computedRole = mapFirestoreRolToAppRole(userProfile.rol, userProfile.esChofer);
-        onLogin({
-          id: userProfile.uid || userProfile.id || 'usr_' + Date.now(),
-          uid: userProfile.uid || userProfile.id,
-          name: userProfile.nombre || userProfile.name || 'Usuario',
-          nombre: userProfile.nombre || userProfile.name || 'Usuario',
-          email: userProfile.email,
-          role: computedRole,
-          rol: userProfile.rol,
-          estado: userProfile.estado,
-          fechaRegistro: userProfile.fechaRegistro,
-          barrio: userProfile.barrio,
-          phone: userProfile.phone,
-          avatarUrl: userProfile.avatarUrl,
-        });
-      }, 300);
-    } catch (err: any) {
-      setIsSubmitting(false);
-      setLocalNotice(null);
-    }
+  const handleGoogleSuccess = (userProfile: User) => {
+    setLocalNotice('¡Acceso concedido mediante Google!');
+    const computedRole = mapFirestoreRolToAppRole(userProfile.rol, userProfile.esChofer);
+    onLogin({
+      id: userProfile.uid || userProfile.id || 'usr_' + Date.now(),
+      uid: userProfile.uid || userProfile.id,
+      name: userProfile.nombre || userProfile.name || 'Usuario',
+      nombre: userProfile.nombre || userProfile.name || 'Usuario',
+      email: userProfile.email,
+      role: computedRole,
+      rol: userProfile.rol,
+      estado: userProfile.estado,
+      fechaRegistro: userProfile.fechaRegistro,
+      barrio: userProfile.barrio,
+      phone: userProfile.phone,
+      avatarUrl: userProfile.avatarUrl,
+    });
   };
 
   return (
@@ -537,9 +525,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onExploreGuest })
                 <div className="pt-1">
                   <button
                     type="button"
-                    onClick={handleGoogleLogin}
+                    onClick={() => setIsGoogleChooserOpen(true)}
                     disabled={isSubmitting}
-                    className="w-full h-10 rounded-2xl glass-button text-slate-300 hover:text-white text-xs font-semibold flex items-center justify-center gap-2 shadow-sm disabled:opacity-50"
+                    className="w-full h-10 rounded-2xl glass-button text-slate-300 hover:text-white text-xs font-semibold flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 cursor-pointer"
                   >
                     <svg className="w-4 h-4" viewBox="0 0 24 24">
                       <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -577,6 +565,13 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onExploreGuest })
         isOpen={isResetModalOpen}
         onClose={() => setIsResetModalOpen(false)}
         initialEmail={email}
+      />
+
+      {/* Selector Interactivo de Cuentas de Google */}
+      <GoogleAccountChooserModal
+        isOpen={isGoogleChooserOpen}
+        onClose={() => setIsGoogleChooserOpen(false)}
+        onSuccess={handleGoogleSuccess}
       />
 
       {/* Minimal Footer */}

@@ -1818,7 +1818,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
               <div className="flex items-center justify-between pb-2 border-b border-white/10 shrink-0">
                 <div className="flex items-center gap-1.5">
                   <span className="text-sm">🚏</span>
-                  <h3 className="text-xs font-black text-white">Paradas Malvinas ↔ Zárate</h3>
+                  <h3 className="text-xs font-black text-white">Paradas Línea 228</h3>
                   <span className="px-1.5 py-0.2 rounded-full bg-cyan-500/20 text-cyan-300 text-[10px] font-mono font-bold">
                     {LINEA_228_STOPS.length}
                   </span>

@@ -46,8 +46,8 @@ interface PublishTaxiModalProps {
 const PRESET_TIERS = [
   { hours: 2, price: 6000, label: '2 Horas', badge: 'Turno Corto' },
   { hours: 6, price: 16000, label: '6 Horas', badge: 'Medio Turno' },
-  { hours: 12, price: 30000, label: '12 Horas', badge: 'Promoción' },
-  { hours: 24, price: 50000, label: '24 Horas', badge: 'Día Completo' },
+  { hours: 12, price: 25000, label: '12 Horas', badge: 'Promoción' },
+  { hours: 24, price: 45000, label: '24 Horas', badge: 'Día Completo' },
 ];
 
 export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
@@ -72,6 +72,13 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
   const [copiedCbu, setCopiedCbu] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
+  // Confort y Capacidad del Servicio
+  const [asientos, setAsientos] = useState<number>(4);
+  const [aireAcondicionado, setAireAcondicionado] = useState<boolean>(true);
+  const [baul, setBaul] = useState<boolean>(true);
+  const [aceptaMascotas, setAceptaMascotas] = useState<boolean>(false);
+  const [cascoExtra, setCascoExtra] = useState<boolean>(true);
+
   // Generated code presentation state
   const [generatedCodeResult, setGeneratedCodeResult] = useState<string | null>(null);
   const [codeSuccessMsg, setCodeSuccessMsg] = useState<string | null>(null);
@@ -85,6 +92,11 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
       setWhatsapp('');
       setVehicleModel('');
       setZone('');
+      setAsientos(4);
+      setAireAcondicionado(true);
+      setBaul(true);
+      setAceptaMascotas(false);
+      setCascoExtra(true);
     }
   }, [isOpen]);
 
@@ -152,6 +164,11 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
         zone: zone.trim() || 'Zárate ↔ Campana',
         horas: selectedHours,
         comprobanteFileName: proofFileName || 'Comprobante WhatsApp 3489690058',
+        asientos: vehicleType === 'auto' ? asientos : 1,
+        aireAcondicionado: vehicleType === 'auto' ? aireAcondicionado : false,
+        baul,
+        aceptaMascotas: vehicleType === 'auto' ? aceptaMascotas : false,
+        cascoExtra: vehicleType === 'moto' ? cascoExtra : false,
       });
     } catch (err) {
       console.warn('Sync driver request warning:', err);
@@ -170,6 +187,11 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
         lng: -58.965 + (Math.random() - 0.5) * 0.03,
         hoursPaid: selectedHours,
         activationCode: generatedCodeObj.code,
+        asientos: vehicleType === 'auto' ? asientos : 1,
+        aireAcondicionado: vehicleType === 'auto' ? aireAcondicionado : false,
+        baul,
+        aceptaMascotas: vehicleType === 'auto' ? aceptaMascotas : false,
+        cascoExtra: vehicleType === 'moto' ? cascoExtra : false,
       },
       {
         userId: currentUserId,
@@ -192,6 +214,11 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
       `Hola Lucia Veronica Gimenez! Te envío los datos y el comprobante de transferencia para la Habilitación de Chofer en UPPA.\n\n` +
       `• Chofer: ${driverName.trim()}\n` +
       `• Vehículo: ${vehicleType === 'moto' ? 'Moto Taxi' : 'Auto Taxi'} (${vehicleModel.trim()})\n` +
+      `• Confort/Capacidad: ${
+        vehicleType === 'moto'
+          ? `${cascoExtra ? 'Cuenta con casco extra para el pasajero' : 'Sin casco extra'}${baul ? ' · Con baúl' : ''}`
+          : `${asientos} asientos${aireAcondicionado ? ' · Aire Acondicionado' : ''}${baul ? ' · Baúl' : ''}${aceptaMascotas ? ' · Mascotas OK' : ''}`
+      }\n` +
       `• WhatsApp de contacto: ${whatsapp.trim()}\n` +
       `• Plan: ${selectedHours} horas ($${totalAmount.toLocaleString('es-AR')} ARS)\n` +
       `• Código generado: ${generatedCodeObj.code}\n` +
@@ -212,19 +239,16 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
         {/* Ambient Top Pastel Line */}
         <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400" />
 
-        {/* Modal Header */}
-        <div className="flex items-start sm:items-center justify-between pb-2.5 sm:pb-3 border-b border-white/5 shrink-0 gap-2">
-          <div className="flex items-start sm:items-center gap-2 sm:gap-2.5 min-w-0">
-            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl sm:rounded-2xl bg-emerald-400/15 border border-emerald-400/30 flex items-center justify-center text-emerald-300 shrink-0 mt-0.5 sm:mt-0">
+        {/* Modal Header (Sin el subtítulo de transferencia para una visual más limpia) */}
+        <div className="flex items-center justify-between pb-2.5 sm:pb-3 border-b border-white/5 shrink-0 gap-2">
+          <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl sm:rounded-2xl bg-emerald-400/15 border border-emerald-400/30 flex items-center justify-center text-emerald-300 shrink-0">
               {vehicleType === 'moto' ? <Bike className="w-4 h-4" /> : <Car className="w-4 h-4" />}
             </div>
             <div className="min-w-0">
               <h2 className="text-sm sm:text-base font-bold text-white font-display leading-tight truncate">
                 Habilitación de Chofer
               </h2>
-              <p className="text-[10px] sm:text-[11px] text-slate-400 leading-tight mt-0.5 line-clamp-2 sm:line-clamp-none">
-                Transferí a Alias: <strong className="text-emerald-300 font-mono">luciaveronicag</strong>, adjuntá el comprobante al WhatsApp <strong>3489690058</strong> y activá tu temporizador
-              </p>
             </div>
           </div>
 
@@ -298,6 +322,14 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
                 <div className="flex justify-between text-slate-300">
                   <span className="text-slate-400">WhatsApp de contacto:</span>
                   <span className="font-mono text-slate-200">+{whatsapp}</span>
+                </div>
+                <div className="flex justify-between text-slate-300 pt-1 border-t border-white/5">
+                  <span className="text-slate-400">Confort / Capacidad:</span>
+                  <span className="text-emerald-300 font-medium">
+                    {vehicleType === 'moto'
+                      ? `${cascoExtra ? '🪖 Casco extra' : 'Sin casco'}${baul ? ' · 📦 Baúl' : ''}`
+                      : `${asientos} asientos${aireAcondicionado ? ' · ❄️ Aire' : ''}${baul ? ' · 🧳 Baúl' : ''}${aceptaMascotas ? ' · 🐾 Mascotas' : ''}`}
+                  </span>
                 </div>
               </div>
 
@@ -454,6 +486,155 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
                     className="w-full bg-white/[0.04] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-400"
                   />
                 </div>
+              </div>
+
+              {/* Confort y Capacidad del Servicio */}
+              <div className="p-3 rounded-2xl bg-white/[0.03] border border-white/10 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-bold text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Confort y Capacidad del Servicio</span>
+                  </label>
+                  <span className="text-[10px] text-emerald-400 font-medium">Visible para pasajeros</span>
+                </div>
+
+                {vehicleType === 'auto' ? (
+                  <div className="space-y-2">
+                    {/* Selector de Asientos */}
+                    <div>
+                      <span className="text-[10px] text-slate-400 block mb-1 font-medium">Cantidad de Asientos para Pasajeros:</span>
+                      <div className="grid grid-cols-4 sm:grid-cols-6 gap-1.5">
+                        {[1, 2, 3, 4, 5, 6].map((num) => (
+                          <button
+                            key={num}
+                            type="button"
+                            onClick={() => setAsientos(num)}
+                            className={`py-1.5 px-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                              asientos === num
+                                ? 'bg-emerald-500/25 border-emerald-400 text-emerald-200 ring-1 ring-emerald-400 shadow-sm'
+                                : 'bg-white/[0.03] border-white/5 text-slate-400 hover:text-white'
+                            }`}
+                          >
+                            {num} {num === 1 ? 'lugar' : 'lugares'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Toggles de Confort: Aire, Baúl, Mascotas */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setAireAcondicionado(!aireAcondicionado)}
+                        className={`p-2 rounded-xl border text-left text-xs font-semibold flex items-center justify-between gap-1 transition-all cursor-pointer ${
+                          aireAcondicionado
+                            ? 'bg-emerald-500/20 border-emerald-400/60 text-white'
+                            : 'bg-white/[0.02] border-white/5 text-slate-500'
+                        }`}
+                      >
+                        <span className="flex items-center gap-1.5 truncate">
+                          <span>❄️</span>
+                          <span>Aire Acondicionado</span>
+                        </span>
+                        <span className={`w-3.5 h-3.5 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0 ${
+                          aireAcondicionado ? 'bg-emerald-400 text-slate-950' : 'bg-slate-700 text-slate-400'
+                        }`}>
+                          {aireAcondicionado ? '✓' : '×'}
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setBaul(!baul)}
+                        className={`p-2 rounded-xl border text-left text-xs font-semibold flex items-center justify-between gap-1 transition-all cursor-pointer ${
+                          baul
+                            ? 'bg-emerald-500/20 border-emerald-400/60 text-white'
+                            : 'bg-white/[0.02] border-white/5 text-slate-500'
+                        }`}
+                      >
+                        <span className="flex items-center gap-1.5 truncate">
+                          <span>🧳</span>
+                          <span>Baúl Disponible</span>
+                        </span>
+                        <span className={`w-3.5 h-3.5 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0 ${
+                          baul ? 'bg-emerald-400 text-slate-950' : 'bg-slate-700 text-slate-400'
+                        }`}>
+                          {baul ? '✓' : '×'}
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setAceptaMascotas(!aceptaMascotas)}
+                        className={`p-2 rounded-xl border text-left text-xs font-semibold flex items-center justify-between gap-1 transition-all cursor-pointer ${
+                          aceptaMascotas
+                            ? 'bg-emerald-500/20 border-emerald-400/60 text-white'
+                            : 'bg-white/[0.02] border-white/5 text-slate-500'
+                        }`}
+                      >
+                        <span className="flex items-center gap-1.5 truncate">
+                          <span>🐾</span>
+                          <span>Lleva Mascotas</span>
+                        </span>
+                        <span className={`w-3.5 h-3.5 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0 ${
+                          aceptaMascotas ? 'bg-emerald-400 text-slate-950' : 'bg-slate-700 text-slate-400'
+                        }`}>
+                          {aceptaMascotas ? '✓' : '×'}
+                        </span>
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setCascoExtra(!cascoExtra)}
+                        className={`p-2.5 rounded-xl border text-left text-xs font-semibold flex items-center justify-between gap-2 transition-all cursor-pointer ${
+                          cascoExtra
+                            ? 'bg-emerald-500/20 border-emerald-400/60 text-white'
+                            : 'bg-white/[0.02] border-white/5 text-slate-500'
+                        }`}
+                      >
+                        <span className="flex items-center gap-1.5">
+                          <span className="text-base">🪖</span>
+                          <div>
+                            <span className="block font-bold">Casco extra para pasajero</span>
+                            <span className="text-[10px] text-slate-400 block">Cuenta con casco extra para el pasajero</span>
+                          </div>
+                        </span>
+                        <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${
+                          cascoExtra ? 'bg-emerald-400 text-slate-950' : 'bg-slate-700 text-slate-400'
+                        }`}>
+                          {cascoExtra ? '✓' : '×'}
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setBaul(!baul)}
+                        className={`p-2.5 rounded-xl border text-left text-xs font-semibold flex items-center justify-between gap-2 transition-all cursor-pointer ${
+                          baul
+                            ? 'bg-emerald-500/20 border-emerald-400/60 text-white'
+                            : 'bg-white/[0.02] border-white/5 text-slate-500'
+                        }`}
+                      >
+                        <span className="flex items-center gap-1.5">
+                          <span className="text-base">📦</span>
+                          <div>
+                            <span className="block font-bold">Baúl / Portaequipaje</span>
+                            <span className="text-[10px] text-slate-400 block">Espacio para bolso o mochila</span>
+                          </div>
+                        </span>
+                        <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${
+                          baul ? 'bg-emerald-400 text-slate-950' : 'bg-slate-700 text-slate-400'
+                        }`}>
+                          {baul ? '✓' : '×'}
+                        </span>
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Bank Transfer Box (Alias: luciaveronicag, CVU: 0000003100020253501840, Nombre: Lucia Veronica Gimenez) */}

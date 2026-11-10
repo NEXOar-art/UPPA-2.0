@@ -338,10 +338,9 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
           </div>
         </div>
 
-        {/* Corredor Card: "B° Malvinas ↔ Zárate Terminal" 62 paradas
-            y Telemetría: "Linea 228(Malvinas-Zarate) +18m 42 km/h · ETA 1m" */}
+        {/* Corredor Card Línea 228 con Telemetría en Vivo */}
         <div className="px-3.5 sm:px-5 pb-3">
-          <div className="p-3 rounded-2xl bg-[#121829] border border-cyan-500/30 shadow-lg space-y-2.5">
+          <div className="p-3.5 rounded-2xl bg-[#0c1222]/90 backdrop-blur-xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.6)] space-y-2.5">
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <div className="flex items-center gap-2">
                 <div className="w-7 h-7 rounded-xl bg-cyan-500/20 text-cyan-300 flex items-center justify-center border border-cyan-400/30">
@@ -349,7 +348,7 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
                 </div>
                 <div>
                   <h3 className="text-xs sm:text-sm font-black text-white flex items-center gap-1.5">
-                    <span>B° Malvinas ↔ Zárate Terminal</span>
+                    <span>Línea 228</span>
                     <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse inline-block" />
                   </h3>
                   <p className="text-[10px] text-slate-300 font-medium">
