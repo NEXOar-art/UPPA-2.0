@@ -176,12 +176,16 @@ export interface HabilitacionChofer {
   createdAt?: any;
   habilitadoPor?: string;
   adminNotes?: string;
-  // Confort y Capacidad del Servicio
+  // Confort, Patente y Capacidad del Servicio
+  patente?: string;
   asientos?: number;
   aireAcondicionado?: boolean;
   baul?: boolean;
   aceptaMascotas?: boolean;
   cascoExtra?: boolean;
+  indiceSeguridad?: number;
+  rating?: number;
+  completedRides?: number;
 }
 
 export interface TaxiListing {
@@ -191,6 +195,7 @@ export interface TaxiListing {
   vehicleType: 'moto' | 'auto';
   vehicleModel: string;
   plate?: string;
+  patente?: string;
   whatsapp: string;
   zone: string;
   lat: number;
@@ -211,6 +216,7 @@ export interface TaxiListing {
   baul?: boolean;
   aceptaMascotas?: boolean;
   cascoExtra?: boolean;
+  indiceSeguridad?: number;
 }
 
 export interface SolicitudTransporteFirestore {

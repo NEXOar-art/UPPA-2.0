@@ -42,6 +42,7 @@ export interface ActiveDriverSession {
   driverName: string;
   vehicleType: 'auto' | 'moto';
   vehicleModel: string;
+  patente?: string;
   whatsapp: string;
   zone: string;
   activationCode: string;
@@ -49,6 +50,11 @@ export interface ActiveDriverSession {
   startsAt: number;
   endsAt: number;
   isOnline: boolean;
+  asientos?: number;
+  aireAcondicionado?: boolean;
+  baul?: boolean;
+  aceptaMascotas?: boolean;
+  cascoExtra?: boolean;
 }
 
 // Get all codes

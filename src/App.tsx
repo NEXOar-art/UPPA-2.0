@@ -251,19 +251,26 @@ export default function App() {
 
   // Verificar si el usuario es prestador de servicio (chofer registrado o con solicitud de servicio)
   const isDriverUser = useMemo(() => {
+    // Si el usuario es pasajero o administrador, NUNCA debe ver herramientas de conductor
+    if (
+      currentUser.role === 'passenger' ||
+      currentUser.role === 'admin' ||
+      currentUser.rol === 'pasajero' ||
+      currentUser.rol === 'administrador'
+    ) {
+      if (!currentUser.esChofer && currentUser.rol !== 'chofer_moto' && currentUser.rol !== 'chofer_auto') {
+        return false;
+      }
+    }
     const hasDriverRole = Boolean(
       currentUser.esChofer ||
       currentUser.rol === 'chofer_moto' ||
       currentUser.rol === 'chofer_auto' ||
       currentUser.role === 'driver'
     );
-    const hasDriverHabilitacion = Boolean(userHabilitacionRecord);
-    const hasSession = Boolean(
-      driverSession &&
-      (driverSession.driverName === currentUser.name || driverSession.driverId === currentUser.id)
-    );
-    return hasDriverRole || hasDriverHabilitacion || hasSession;
-  }, [currentUser, userHabilitacionRecord, driverSession]);
+    const hasDriverHabilitacion = Boolean(userHabilitacionRecord && userHabilitacionRecord.estado === 'activo');
+    return hasDriverRole && hasDriverHabilitacion;
+  }, [currentUser, userHabilitacionRecord]);
 
   // HABILITADO POR EL ADMINISTRADOR:
   // Condición lógica indispensable: Solo aparece como habilitado cuando el Administrador
@@ -892,6 +899,7 @@ export default function App() {
           driverName: hab.driverName,
           vehicleType: hab.vehicleType,
           vehicleModel: hab.vehicleModel,
+          patente: hab.patente || '',
           whatsapp: hab.whatsapp,
           zone: hab.zone || 'Zárate ↔ Campana',
           lat: userLocation ? userLocation.lat : -34.175 + (Math.random() - 0.5) * 0.02,
@@ -900,8 +908,9 @@ export default function App() {
           startsAt: hab.startsAt || now,
           endsAt: hab.endsAt || now + 12 * 3600 * 1000,
           status: 'active',
-          rating: 5.0,
-          completedRides: 10,
+          rating: typeof hab.rating === 'number' ? hab.rating : 0,
+          completedRides: (hab as any).completedRides || (hab as any).viajesRealizados || 0,
+          indiceSeguridad: hab.indiceSeguridad,
           activationCode: hab.activationCode,
           asientos: hab.asientos,
           aireAcondicionado: hab.aireAcondicionado,
@@ -923,6 +932,7 @@ export default function App() {
           driverName: driverSession.driverName || currentUser.name,
           vehicleType: driverSession.vehicleType || 'auto',
           vehicleModel: driverSession.vehicleModel || 'Vehículo Habilitado',
+          patente: (driverSession as any).patente || '',
           whatsapp: driverSession.whatsapp || (currentUser.phone ? currentUser.phone.replace(/\D/g, '') : '5493487552190'),
           zone: driverSession.zone || userLocation?.address || 'Zárate ↔ Campana',
           lat: userLocation ? userLocation.lat : -34.1914,
@@ -931,8 +941,9 @@ export default function App() {
           startsAt: driverSession.startsAt || now,
           endsAt: driverSession.endsAt,
           status: 'active',
-          rating: 5.0,
-          completedRides: 5,
+          rating: typeof (driverSession as any).rating === 'number' ? (driverSession as any).rating : 0,
+          completedRides: (driverSession as any).completedRides || 0,
+          indiceSeguridad: (driverSession as any).indiceSeguridad,
           activationCode: driverSession.activationCode,
           asientos: (driverSession as any).asientos,
           aireAcondicionado: (driverSession as any).aireAcondicionado,
@@ -1562,6 +1573,10 @@ export default function App() {
                 userName={currentUser.name || 'Pasajero'}
                 onOpenPedirTransporte={() => setIsPedirTransporteOpen(true)}
                 onOpenTaxis={() => setActiveTab('taxi')}
+                onOpenPrestarServicio={() => {
+                  setPublishTaxiInitialTab('transfer');
+                  setIsPublishTaxiOpen(true);
+                }}
                 onOpenChat={() => setActiveTab('chat')}
                 onSelectStop={(stop) => {
                   setFocusedStopOnMap(stop);

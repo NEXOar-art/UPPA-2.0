@@ -28,6 +28,7 @@ interface MobilityBottomSheetProps {
   userName?: string;
   onOpenPedirTransporte: () => void;
   onOpenTaxis: () => void;
+  onOpenPrestarServicio?: () => void;
   onOpenChat: () => void;
   onSelectStop?: (stop: Linea228Stop) => void;
   unreadChatCount?: number;
@@ -37,6 +38,7 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
   userName = 'Pasajero',
   onOpenPedirTransporte,
   onOpenTaxis,
+  onOpenPrestarServicio,
   onOpenChat,
   onSelectStop,
   unreadChatCount = 0,
@@ -241,8 +243,14 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
             2. "Taxi & Motos" con 3 puntitos para "Ranking de Prestadores"
             3. "Chat Comunitario"
         */}
+        {/* 4 Action Cards Inspiradas en el panel de opciones de movilidad:
+            1. "Pedir Transporte Alternativo"
+            2. "Taxi & Motos" con 3 puntitos para "Ranking de Prestadores"
+            3. "Prestar Servicio" (Habilitación de Chofer Auto & Moto)
+            4. "Chat Comunitario"
+        */}
         <div className="px-3.5 sm:px-5 pb-3">
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {/* Card 1: Pedir Transporte Alternativo */}
             <button
               onClick={onOpenPedirTransporte}
@@ -258,7 +266,7 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
               </div>
               <div>
                 <span className="text-[11px] sm:text-xs font-black text-amber-100 block leading-tight group-hover:text-amber-200">
-                  Pedir Transporte Alternativo
+                  Pedir Transporte
                 </span>
                 <span className="text-[9px] text-amber-300/80 block mt-0.5 truncate">
                   Moto & Auto Taxi
@@ -302,12 +310,41 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
                   </span>
                 </div>
                 <span className="text-[9px] text-emerald-300/80 block mt-0.5 truncate">
-                  Prestadores · 3 puntos
+                  Prestadores en vivo
                 </span>
               </button>
             </div>
 
-            {/* Card 3: Chat Comunitario */}
+            {/* Card 3: Prestar Servicio (Habilitación Chofer) */}
+            <button
+              onClick={() => {
+                if (onOpenPrestarServicio) {
+                  onOpenPrestarServicio();
+                } else {
+                  onOpenTaxis();
+                }
+              }}
+              className="p-2 sm:p-2.5 rounded-2xl bg-gradient-to-b from-cyan-500/15 to-blue-500/5 hover:from-cyan-500/25 hover:to-blue-500/15 border border-cyan-400/40 text-left transition-all group shadow-md shadow-cyan-500/5 active:scale-95 cursor-pointer flex flex-col justify-between"
+            >
+              <div className="flex items-center justify-between mb-1.5">
+                <div className="w-8 h-8 rounded-xl bg-cyan-500/20 text-cyan-300 flex items-center justify-center border border-cyan-400/30 group-hover:scale-105 transition-transform">
+                  <Sparkles className="w-4 h-4 text-cyan-300" />
+                </div>
+                <span className="px-1.5 py-0.2 rounded text-[8.5px] font-black uppercase tracking-wider bg-cyan-400/20 text-cyan-300 border border-cyan-400/30">
+                  Choferes
+                </span>
+              </div>
+              <div>
+                <span className="text-[11px] sm:text-xs font-black text-cyan-100 block leading-tight group-hover:text-cyan-200">
+                  Prestar Servicio
+                </span>
+                <span className="text-[9px] text-cyan-300/80 block mt-0.5 truncate">
+                  Habilitá tu unidad
+                </span>
+              </div>
+            </button>
+
+            {/* Card 4: Chat Comunitario */}
             <button
               onClick={onOpenChat}
               className="p-2 sm:p-2.5 rounded-2xl bg-gradient-to-b from-purple-500/15 to-indigo-500/5 hover:from-purple-500/25 hover:to-indigo-500/15 border border-purple-400/40 text-left transition-all group shadow-md shadow-purple-500/5 active:scale-95 cursor-pointer flex flex-col justify-between"

@@ -1893,15 +1893,36 @@ export async function solicitarHabilitacionChofer(data: {
   horas: number;
   comprobanteUrl?: string;
   comprobanteFileName?: string;
+  patente?: string;
   asientos?: number;
   aireAcondicionado?: boolean;
   baul?: boolean;
   aceptaMascotas?: boolean;
   cascoExtra?: boolean;
+  indiceSeguridad?: number;
 }): Promise<HabilitacionChofer> {
   const localId = `hab-${Date.now()}`;
   const cleanWhatsapp = data.whatsapp.replace(/\D/g, '');
   const now = Date.now();
+  const cleanPatente = (data.patente || '').trim().toUpperCase();
+
+  // Calcular índice de seguridad real según ítems cargados
+  const isAuto = data.vehicleType === 'auto';
+  let completedCount = 0;
+  const totalCount = isAuto ? 6 : 4;
+  if (cleanPatente) completedCount++;
+  if (isAuto) {
+    if ((data.asientos || 0) >= 1) completedCount++;
+    if (data.aireAcondicionado !== false) completedCount++;
+    if (data.baul !== false) completedCount++;
+    if (data.aceptaMascotas) completedCount++;
+    if (cleanWhatsapp) completedCount++;
+  } else {
+    if (data.cascoExtra !== false) completedCount++;
+    if (data.baul !== false) completedCount++;
+    if (cleanWhatsapp) completedCount++;
+  }
+  const indiceSeguridad = Math.round((completedCount / totalCount) * 100);
 
   const newHab: HabilitacionChofer = {
     id: localId,
@@ -1909,6 +1930,7 @@ export async function solicitarHabilitacionChofer(data: {
     driverName: data.driverName.trim(),
     vehicleType: data.vehicleType,
     vehicleModel: data.vehicleModel.trim(),
+    patente: cleanPatente,
     whatsapp: cleanWhatsapp.startsWith('54') ? cleanWhatsapp : `549${cleanWhatsapp}`,
     zone: data.zone.trim() || 'Zárate ↔ Campana',
     horas: data.horas || 12,
@@ -1927,6 +1949,7 @@ export async function solicitarHabilitacionChofer(data: {
     baul: data.baul,
     aceptaMascotas: data.aceptaMascotas,
     cascoExtra: data.cascoExtra,
+    indiceSeguridad,
   };
 
   // 1. Actualizar inmediatamente la caché local y notificar en tiempo real a Administración UPPA
@@ -2046,6 +2069,7 @@ export async function habilitarChoferConClaveAdmin(
       driverName: docData.driverName,
       vehicleType: docData.vehicleType || 'auto',
       vehicleModel: docData.vehicleModel || 'Vehículo Habilitado',
+      patente: docData.patente || '',
       whatsapp: docData.whatsapp,
       zone: docData.zone || 'Zárate ↔ Campana',
       activationCode,
@@ -2053,6 +2077,11 @@ export async function habilitarChoferConClaveAdmin(
       startsAt: now,
       endsAt,
       isOnline: true,
+      asientos: docData.asientos,
+      aireAcondicionado: docData.aireAcondicionado,
+      baul: docData.baul,
+      aceptaMascotas: docData.aceptaMascotas,
+      cascoExtra: docData.cascoExtra,
     };
 
     saveActiveDriverSession(session);

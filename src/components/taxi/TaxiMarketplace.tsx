@@ -23,6 +23,7 @@ import {
   RANKING_WINDOW_MS,
 } from '../../services/realtimeFirebaseService';
 import { getDistanceKm, UserLocation } from '../../utils/geolocation';
+import { calculateDriverSafetyIndex } from '../../utils/driverSafety';
 import {
   Car,
   Bike,
@@ -36,6 +37,7 @@ import {
   CheckCircle2,
   Shield,
   ShieldAlert,
+  ShieldCheck,
   Navigation,
   KeyRound,
   Sparkles,
@@ -106,13 +108,21 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
 
   // Rol del usuario: ¿Es prestador de servicio habilitado?
   const isPrestadorLogueado = useMemo(() => {
+    // Pasajeros y Administradores son exclusivamente roles de usuario o admin, NUNCA prestadores
+    if (
+      currentUserRole === 'admin' ||
+      currentUserRole === 'administrador' ||
+      currentUserRole === 'passenger' ||
+      currentUserRole === 'pasajero'
+    ) {
+      return false;
+    }
     return Boolean(
-      isDriverHabilitado ||
-      currentUserRole === 'driver' ||
-      currentUserRole === 'chofer' ||
-      currentUserRole === 'chofer_auto' ||
-      currentUserRole === 'chofer_moto' ||
-      (typeof window !== 'undefined' && localStorage.getItem('uppa_active_driver_session'))
+      isDriverHabilitado &&
+      (currentUserRole === 'driver' ||
+        currentUserRole === 'chofer' ||
+        currentUserRole === 'chofer_auto' ||
+        currentUserRole === 'chofer_moto')
     );
   }, [isDriverHabilitado, currentUserRole]);
 
@@ -455,53 +465,60 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
     return `https://wa.me/${taxi.whatsapp}?text=${text}`;
   };
 
-  // Conductor destacado para la consola interactiva (primer conductor habilitado real o showcase referencial)
+  // Conductor destacado para la consola interactiva (Solo prestadores REALES habilitados para el vehículo seleccionado)
   const activeDriverFeatured = useMemo(() => {
-    if (visibleTaxis.length > 0) {
-      const match = visibleTaxis.find((t) => t.vehicleType === consoleVehicleType) || visibleTaxis[0];
+    const matching = visibleTaxis.filter((t) => t.vehicleType === consoleVehicleType);
+    if (matching.length > 0) {
+      const match = matching[0];
+      const safetyIndex = typeof match.indiceSeguridad === 'number'
+        ? match.indiceSeguridad
+        : calculateDriverSafetyIndex({
+            vehicleType: match.vehicleType,
+            patente: match.patente || match.plate,
+            asientos: match.asientos,
+            aireAcondicionado: match.aireAcondicionado,
+            baul: match.baul,
+            aceptaMascotas: match.aceptaMascotas,
+            cascoExtra: match.cascoExtra,
+            whatsapp: match.whatsapp,
+          }).percentage;
+
       return {
         driverName: match.driverName,
-        vehicleModel: match.vehicleType === 'moto' ? 'Moto Taxi Habilitada' : 'Honda CRV',
-        plateNumber: match.plate || (match as any).plateNumber || 'AB6299ZG',
-        rating: match.rating || 4.9,
-        completedRides: match.completedRides || 482,
-        whatsapp: match.whatsapp || '5493489690058',
-        avatarUrl: match.avatarUrl || 'https://api.dicebear.com/7.x/bottts/svg?seed=Robert&backgroundColor=12141c',
+        vehicleModel: match.vehicleModel || (match.vehicleType === 'moto' ? 'Moto Taxi Habilitada' : 'Auto Taxi Habilitado'),
+        plateNumber: match.patente || match.plate || (match as any).plateNumber || 'No declarada',
+        rating: typeof match.rating === 'number' ? match.rating : 0,
+        completedRides: match.completedRides || 0,
+        whatsapp: match.whatsapp || '',
+        avatarUrl: match.avatarUrl,
         isReal: true,
-        asientos: match.asientos || 4,
+        asientos: match.asientos || (match.vehicleType === 'auto' ? 4 : 1),
         aireAcondicionado: match.aireAcondicionado !== false,
         baul: match.baul !== false,
         aceptaMascotas: Boolean(match.aceptaMascotas),
         cascoExtra: match.cascoExtra !== false,
+        safetyIndex,
       };
     }
-    return {
-      driverName: 'Robert',
-      vehicleModel: consoleVehicleType === 'moto' ? 'Honda CB 250' : 'Honda CRV',
-      plateNumber: 'AB6299ZG',
-      rating: 4.9,
-      completedRides: 482,
-      whatsapp: '5493489690058',
-      avatarUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=Robert&backgroundColor=12141c',
-      isReal: false,
-      asientos: 4,
-      aireAcondicionado: true,
-      baul: true,
-      aceptaMascotas: false,
-      cascoExtra: true,
-    };
+    // Si no hay prestador habilitado real de esta categoría, retorna null (cero simulación)
+    return null;
   }, [visibleTaxis, consoleVehicleType]);
 
   const dynamicEtaMin = useMemo(() => {
-    if (visibleTaxis.length > 0) {
-      const match = visibleTaxis.find((t) => t.vehicleType === consoleVehicleType) || visibleTaxis[0];
+    const matching = visibleTaxis.filter((t) => t.vehicleType === consoleVehicleType);
+    if (matching.length > 0) {
+      const match = matching[0];
       return Math.max(2, Math.round((match.distanceKm || 1.2) * 2.5));
     }
     return 3;
   }, [visibleTaxis, consoleVehicleType]);
 
   const chatWhatsAppUrl = useMemo(() => {
-    const phone = activeDriverFeatured.whatsapp || '5493489690058';
+    if (!activeDriverFeatured?.whatsapp) {
+      return 'https://wa.me/5493489690058?text=Hola%20Administraci%C3%B3n%20UPPA!%20Consulto%20por%20choferes%20disponibles.';
+    }
+    const clean = activeDriverFeatured.whatsapp.replace(/\D/g, '');
+    const phone = clean.startsWith('54') ? clean : `549${clean}`;
     const origenText = reqOrigin.trim() || 'mi ubicación';
     const destinoText = reqDestination.trim() || 'mi destino';
     const vehiculoText = consoleVehicleType === 'moto' ? 'Moto Taxi' : 'Auto Taxi';
@@ -724,17 +741,6 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
       <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
         {/* Lógica de Visibilidad: Las Solicitudes de Pasajeros SOLO le aparecen a los Prestadores de Servicio logueados */}
         {(() => {
-          const isPrestadorLogueado = Boolean(
-            isDriverHabilitado ||
-            currentUserRole === 'driver' ||
-            currentUserRole === 'chofer' ||
-            currentUserRole === 'chofer_auto' ||
-            currentUserRole === 'chofer_moto' ||
-            currentUserRole === 'admin' ||
-            currentUserRole === 'administrador' ||
-            (typeof window !== 'undefined' && localStorage.getItem('uppa_active_driver_session'))
-          );
-
           const myPassengerSolicitudes = visibleSolicitudes.filter(
             (s) => s.pasajeroId === currentUserId || (currentUserName && s.nombrePasajero === currentUserName)
           );
@@ -1185,15 +1191,19 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                 </div>
               </div>
 
-              {/* Fila de Estado de Llegada y Tarifa */}
+              {/* Fila de Estado de Llegada (Sin tarifa ficticia $10) */}
               <div className="flex items-center justify-between px-1">
                 <div className="text-emerald-400 font-bold text-xs sm:text-sm flex items-center gap-1.5">
                   <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                  <span>El conductor llegará en {dynamicEtaMin} min</span>
+                  <span>
+                    {activeDriverFeatured
+                      ? `El conductor llegará en ~${dynamicEtaMin} min`
+                      : `Disponibilidad de ${consoleVehicleType === 'moto' ? 'Moto Taxi' : 'Auto Taxi'}`}
+                  </span>
                 </div>
-                <div className="px-3.5 py-1 rounded-full bg-emerald-500 text-slate-950 font-black text-xs shadow-[0_0_14px_rgba(16,185,129,0.5)]">
-                  $10
-                </div>
+                <span className="px-2.5 py-0.5 rounded-full bg-white/5 border border-white/10 text-slate-300 font-mono text-[10.5px]">
+                  {consoleVehicleType === 'moto' ? '🏍️ Moto' : '🚕 Auto'}
+                </span>
               </div>
 
               {/* Visualización Interactiva del Vehículo & Tarjeta del Conductor */}
@@ -1204,16 +1214,17 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                     const next = consoleVehicleType === 'auto' ? 'moto' : 'auto';
                     setConsoleVehicleType(next);
                     setReqType(next);
+                    setVehicleFilter(next);
                   }}
                   className="col-span-5 rounded-2xl bg-gradient-to-b from-[#080c14] via-[#0d1322] to-[#12192b] border border-white/10 hover:border-emerald-500/40 p-2 flex flex-col items-center justify-between cursor-pointer transition-all group relative overflow-hidden shadow-inner"
-                  title="Tocar para alternar entre Auto y Moto"
+                  title={`Tocar para ver ${consoleVehicleType === 'auto' ? 'Motos' : 'Autos'}`}
                 >
                   <div className="w-full flex items-center justify-between text-[9px] font-bold uppercase tracking-wider text-slate-400 px-1">
                     <span className="text-emerald-400 font-mono font-black">
                       {consoleVehicleType === 'auto' ? 'Auto' : 'Moto'}
                     </span>
                     <span className="text-[8px] bg-white/10 px-1 py-0.2 rounded text-slate-300">
-                      {consoleVehicleType === 'auto' ? '4 as.' : 'Rápido'}
+                      {consoleVehicleType === 'auto' ? 'Auto Taxi' : 'Moto Taxi'}
                     </span>
                   </div>
 
@@ -1227,82 +1238,128 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
 
                   <div className="text-[9px] text-emerald-400/90 font-medium text-center flex items-center gap-1">
                     <span>Tocar ⇄</span>
-                    <span className="text-white font-bold">{consoleVehicleType === 'auto' ? 'Ver Moto' : 'Ver Auto'}</span>
+                    <span className="text-white font-bold">{consoleVehicleType === 'auto' ? 'Ver Motos' : 'Ver Autos'}</span>
                   </div>
                 </div>
 
-                {/* Lado Derecho: Ficha del Conductor */}
-                <div className="col-span-7 rounded-2xl bg-[#121726] border border-white/5 p-3 flex flex-col justify-between space-y-2">
-                  {/* Avatar, Nombre y Modelo */}
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-10 h-10 rounded-full bg-slate-800 border-2 border-emerald-400/40 overflow-hidden flex items-center justify-center shrink-0 shadow-md">
-                      <img
-                        src={activeDriverFeatured?.avatarUrl || "https://api.dicebear.com/7.x/bottts/svg?seed=Robert&backgroundColor=12141c"}
-                        alt="Conductor"
-                        className="w-full h-full object-cover"
-                      />
+                {/* Lado Derecho: Ficha del Conductor (100% Real, Sin Simular) */}
+                {activeDriverFeatured ? (
+                  <div className="col-span-7 rounded-2xl bg-[#121726] border border-white/5 p-3 flex flex-col justify-between space-y-2">
+                    {/* Avatar, Nombre y Modelo Real */}
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-10 h-10 rounded-full bg-slate-800 border-2 border-emerald-400/40 overflow-hidden flex items-center justify-center shrink-0 shadow-md">
+                        {activeDriverFeatured.avatarUrl ? (
+                          <img
+                            src={activeDriverFeatured.avatarUrl}
+                            alt={activeDriverFeatured.driverName}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <span className="text-xs font-black text-emerald-300">
+                            {activeDriverFeatured.driverName.charAt(0).toUpperCase()}
+                          </span>
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <h4 className="font-bold text-white text-sm truncate leading-tight">
+                          {activeDriverFeatured.driverName}
+                        </h4>
+                        <p className="text-[11px] text-slate-400 truncate">
+                          {activeDriverFeatured.vehicleModel}
+                        </p>
+                      </div>
                     </div>
-                    <div className="min-w-0">
-                      <h4 className="font-bold text-white text-sm truncate leading-tight">
-                        {activeDriverFeatured?.driverName || 'Robert'}
-                      </h4>
-                      <p className="text-[11px] text-slate-400 truncate">
-                        {activeDriverFeatured?.vehicleModel || (consoleVehicleType === 'auto' ? 'Honda CRV' : 'Honda CB 250')}
+
+                    {/* Patente Real y Calificación Real */}
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="px-2 py-0.5 rounded-md bg-white text-slate-950 font-mono font-black text-[10.5px] border border-slate-300 shadow-sm tracking-wider uppercase truncate max-w-[120px]">
+                        {activeDriverFeatured.plateNumber}
+                      </span>
+                      <span className="text-amber-300 font-bold text-xs flex items-center gap-1 font-mono">
+                        <Star className="w-3.5 h-3.5 fill-amber-300 text-amber-300" />
+                        <span>{activeDriverFeatured.rating > 0 ? activeDriverFeatured.rating.toFixed(1) : '0'}</span>
+                      </span>
+                    </div>
+
+                    {/* Categoría y Tiempo */}
+                    <div className="text-xs text-slate-300 font-semibold">
+                      Standard · ~{dynamicEtaMin} min
+                    </div>
+
+                    {/* Asientos, Confort Real y Viajes */}
+                    <div className="flex items-center gap-1.5 text-[10.5px] text-slate-300 flex-wrap">
+                      <span className="flex items-center gap-1 font-semibold text-emerald-300">
+                        <span>{consoleVehicleType === 'auto' ? '👤' : '🪖'}</span>
+                        <span>
+                          {consoleVehicleType === 'auto'
+                            ? `${activeDriverFeatured.asientos} asientos`
+                            : (activeDriverFeatured.cascoExtra ? 'Casco extra' : 'Sin casco extra')}
+                        </span>
+                      </span>
+                      {consoleVehicleType === 'auto' && (
+                        <span className="text-[10px] text-cyan-300 font-medium">
+                          · {activeDriverFeatured.aireAcondicionado ? '❄️ Con Aire' : 'Sin aire'}
+                        </span>
+                      )}
+                      <span className="text-[10px] text-slate-300 font-medium">
+                        · {activeDriverFeatured.baul ? '🧳 Con baúl' : 'Sin baúl'}
+                      </span>
+                      {consoleVehicleType === 'auto' && activeDriverFeatured.aceptaMascotas && (
+                        <span className="text-[10px] text-purple-300 font-medium">
+                          · 🐾 Mascotas
+                        </span>
+                      )}
+                      <span className="flex items-center gap-1 text-slate-400 text-[10px]">
+                        · <span>{activeDriverFeatured.completedRides} viajes</span>
+                      </span>
+                    </div>
+
+                    {/* Índice de Seguridad Real Calculado */}
+                    <div className="pt-1 border-t border-white/5 space-y-1">
+                      <div className="text-[10px] text-slate-400 leading-tight flex items-center justify-between">
+                        <span>{activeDriverFeatured.safetyIndex}% de índice de seguridad</span>
+                        <span className="text-emerald-400 text-[9px] font-bold">Verificado</span>
+                      </div>
+                      <div className="w-full bg-white/10 h-1.5 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full transition-all"
+                          style={{ width: `${Math.min(100, Math.max(10, activeDriverFeatured.safetyIndex))}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="col-span-7 rounded-2xl bg-[#121726] border border-white/5 p-3 flex flex-col justify-between space-y-2">
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg">{consoleVehicleType === 'moto' ? '🏍️' : '🚕'}</span>
+                        <h4 className="font-bold text-white text-xs leading-tight">
+                          Sin {consoleVehicleType === 'moto' ? 'Motos' : 'Autos'} activos
+                        </h4>
+                      </div>
+                      <p className="text-[10px] text-slate-400 leading-relaxed">
+                        No hay prestadores de {consoleVehicleType === 'moto' ? 'Moto Taxi' : 'Auto Taxi'} con turno activo en este momento.
                       </p>
                     </div>
-                  </div>
 
-                  {/* Patente y Calificación */}
-                  <div className="flex items-center justify-between gap-1">
-                    <span className="px-2 py-0.5 rounded-md bg-white text-slate-950 font-mono font-black text-[10.5px] border border-slate-300 shadow-sm tracking-wider">
-                      {activeDriverFeatured?.plateNumber || 'AB6299ZG'}
-                    </span>
-                    <span className="text-amber-300 font-bold text-xs flex items-center gap-1">
-                      <Star className="w-3.5 h-3.5 fill-amber-300 text-amber-300" />
-                      <span>{activeDriverFeatured?.rating ? activeDriverFeatured.rating.toFixed(1) : '4.9'}</span>
-                    </span>
-                  </div>
-
-                  {/* Categoría y Tiempo */}
-                  <div className="text-xs text-slate-300 font-semibold">
-                    Standard · {dynamicEtaMin} min
-                  </div>
-
-                  {/* Asientos, Confort y Viajes */}
-                  <div className="flex items-center gap-2.5 text-[11px] text-slate-300 flex-wrap">
-                    <span className="flex items-center gap-1 font-semibold text-emerald-300">
-                      <span>{consoleVehicleType === 'auto' ? '👤' : '🪖'}</span>
-                      <span>
-                        {consoleVehicleType === 'auto'
-                          ? `${activeDriverFeatured?.asientos || 4} asientos`
-                          : (activeDriverFeatured?.cascoExtra !== false ? 'Casco extra' : '1 pasajero')}
-                      </span>
-                    </span>
-                    {consoleVehicleType === 'auto' && activeDriverFeatured?.aireAcondicionado !== false && (
-                      <span className="text-[10px] text-cyan-300 font-medium">· ❄️ Aire</span>
-                    )}
-                    {activeDriverFeatured?.baul !== false && (
-                      <span className="text-[10px] text-slate-300 font-medium">· 🧳 Baúl</span>
-                    )}
-                    <span className="flex items-center gap-1 text-slate-400 text-[10.5px]">
-                      <span>· ✈</span>
-                      <span>{activeDriverFeatured?.completedRides || 482} viajes</span>
-                    </span>
-                  </div>
-
-                  {/* Índice de Seguridad */}
-                  <div className="pt-1 border-t border-white/5 space-y-1">
-                    <div className="text-[10px] text-slate-400 leading-tight">
-                      98% de índice de seguridad del usuario
-                    </div>
-                    <div className="flex items-center gap-1 text-emerald-400 text-xs font-bold">
-                      <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block shadow-[0_0_6px_rgba(52,211,153,0.8)]" />
-                      <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block shadow-[0_0_6px_rgba(52,211,153,0.8)]" />
-                      <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block shadow-[0_0_6px_rgba(52,211,153,0.8)]" />
-                      <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block shadow-[0_0_6px_rgba(52,211,153,0.8)]" />
+                    <div className="space-y-1.5 pt-1 border-t border-white/5">
+                      <button
+                        type="button"
+                        onClick={() => onOpenPublishModal('transfer')}
+                        className="w-full py-1.5 px-2 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-400/30 text-[10.5px] font-bold transition-all text-center cursor-pointer"
+                      >
+                        Prestar Servicio con mi {consoleVehicleType === 'moto' ? 'Moto' : 'Auto'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsRequestRideOpen(true)}
+                        className="w-full py-1.5 px-2 rounded-xl bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 border border-blue-400/30 text-[10.5px] font-bold transition-all text-center cursor-pointer"
+                      >
+                        Pedir Viaje a la Red
+                      </button>
                     </div>
                   </div>
-                </div>
+                )}
               </div>
 
               {/* Botón Principal Cápsula: Chatear con el conductor */}
@@ -1316,7 +1373,11 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                   <MessageCircle className="w-4 h-4 fill-slate-950 text-slate-950" />
                 </div>
                 <div className="text-xs font-bold text-white tracking-wide group-hover:text-emerald-300 transition-colors flex items-center gap-1">
-                  <span>Chatear con el conductor</span>
+                  <span>
+                    {activeDriverFeatured
+                      ? `Chatear con ${activeDriverFeatured.driverName}`
+                      : 'Consultar choferes en la Administración UPPA'}
+                  </span>
                   <span className="text-emerald-400 font-black">› › ›</span>
                 </div>
                 <div className="w-9" />
@@ -1452,6 +1513,18 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
               visibleTaxis.map((taxi) => {
             const isMoto = taxi.vehicleType === 'moto';
             const isOcupado = getTaxiDisponibilidad(taxi) === 'ocupado';
+            const safetyIndex = typeof taxi.indiceSeguridad === 'number'
+              ? taxi.indiceSeguridad
+              : calculateDriverSafetyIndex({
+                  vehicleType: taxi.vehicleType,
+                  patente: taxi.patente || taxi.plate,
+                  asientos: taxi.asientos,
+                  aireAcondicionado: taxi.aireAcondicionado,
+                  baul: taxi.baul,
+                  aceptaMascotas: taxi.aceptaMascotas,
+                  cascoExtra: taxi.cascoExtra,
+                  whatsapp: taxi.whatsapp,
+                }).percentage;
 
             return (
               <div
@@ -1494,10 +1567,25 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                       <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-200 border border-blue-400/30 font-bold uppercase tracking-wide">
                         {isMoto ? '🏍️ Moto Taxi' : '🚕 Auto Taxi'}
                       </span>
-                      <div className="flex items-center gap-0.5 text-xs text-amber-300 font-mono font-semibold">
-                        <Star className="w-3 h-3 fill-amber-300" />
-                        <span>{taxi.rating.toFixed(1)}</span>
+                      <div className="flex items-center gap-0.5 text-xs text-amber-300 font-mono font-semibold" title="Calificación real (0 si no posee)">
+                        <Star className="w-3 h-3 fill-amber-300 text-amber-300" />
+                        <span>{typeof taxi.rating === 'number' && taxi.rating > 0 ? taxi.rating.toFixed(1) : '0'}</span>
                       </div>
+
+                      {(taxi.patente || taxi.plate) && (
+                        <span className="px-2 py-0.5 rounded-md bg-white text-slate-950 font-mono font-black text-[10px] border border-slate-300 shadow-sm uppercase tracking-wider">
+                          {taxi.patente || taxi.plate}
+                        </span>
+                      )}
+
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold bg-emerald-500/15 border border-emerald-400/30 text-emerald-300 font-mono">
+                        <ShieldCheck className="w-3 h-3 text-emerald-400" />
+                        <span>{safetyIndex}% seguridad</span>
+                      </span>
+
+                      <span className="text-[10px] text-slate-400 font-medium">
+                        · {taxi.completedRides || 0} viajes
+                      </span>
 
                       {/* Indicador de Estado Ocupado / Desocupado con efecto titilando cuando está ocupado */}
                       {isOcupado ? (

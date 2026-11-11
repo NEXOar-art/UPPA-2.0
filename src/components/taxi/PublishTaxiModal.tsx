@@ -10,6 +10,7 @@ import {
 import {
   solicitarHabilitacionChofer,
 } from '../../services/realtimeFirebaseService';
+import { calculateDriverSafetyIndex } from '../../utils/driverSafety';
 import {
   X,
   Copy,
@@ -66,6 +67,7 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
   const [whatsapp, setWhatsapp] = useState('');
   const [vehicleType, setVehicleType] = useState<'auto' | 'moto'>('auto');
   const [vehicleModel, setVehicleModel] = useState('');
+  const [patente, setPatente] = useState('');
   const [zone, setZone] = useState('');
   const [proofFileName, setProofFileName] = useState<string>('');
   const [copiedAlias, setCopiedAlias] = useState(false);
@@ -91,6 +93,7 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
       setDriverName('');
       setWhatsapp('');
       setVehicleModel('');
+      setPatente('');
       setZone('');
       setAsientos(4);
       setAireAcondicionado(true);
@@ -104,6 +107,18 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
 
   const currentTier = PRESET_TIERS.find((t) => t.hours === selectedHours) || PRESET_TIERS[2];
   const totalAmount = currentTier.price;
+
+  // Cálculo real del índice de seguridad del vehículo según ítems completados
+  const currentSafetyIndex = calculateDriverSafetyIndex({
+    vehicleType,
+    patente,
+    asientos,
+    aireAcondicionado,
+    baul,
+    aceptaMascotas,
+    cascoExtra,
+    whatsapp,
+  }).percentage;
 
   const handleCopyAlias = () => {
     navigator.clipboard.writeText('luciaveronicag');
@@ -138,11 +153,16 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
       return;
     }
     if (!vehicleModel.trim()) {
-      setErrorMsg('Detallá tu vehículo (ej: Chevrolet Corsa Blanco o Moto Honda Titan).');
+      setErrorMsg('Detallá tu vehículo (ej: Chevrolet Corsa Gris o Moto Honda Titan).');
+      return;
+    }
+    if (!patente.trim()) {
+      setErrorMsg('Por favor ingresá la Patente / Matrícula de tu vehículo.');
       return;
     }
 
     const cleanWhatsapp = whatsapp.replace(/\D/g, '');
+    const cleanPatente = patente.trim().toUpperCase();
 
     // 1. Generate unique Activation Code
     const generatedCodeObj = generateActivationCode({
@@ -160,6 +180,7 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
         driverName: driverName.trim(),
         vehicleType,
         vehicleModel: vehicleModel.trim(),
+        patente: cleanPatente,
         whatsapp: cleanWhatsapp.startsWith('54') ? cleanWhatsapp : `549${cleanWhatsapp}`,
         zone: zone.trim() || 'Zárate ↔ Campana',
         horas: selectedHours,
@@ -169,6 +190,7 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
         baul,
         aceptaMascotas: vehicleType === 'auto' ? aceptaMascotas : false,
         cascoExtra: vehicleType === 'moto' ? cascoExtra : false,
+        indiceSeguridad: currentSafetyIndex,
       });
     } catch (err) {
       console.warn('Sync driver request warning:', err);
@@ -181,6 +203,7 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
         driverName: driverName.trim(),
         vehicleType,
         vehicleModel: vehicleModel.trim(),
+        patente: cleanPatente,
         whatsapp: cleanWhatsapp.startsWith('54') ? cleanWhatsapp : `549${cleanWhatsapp}`,
         zone: zone.trim() || 'Zárate ↔ Campana',
         lat: -34.175 + (Math.random() - 0.5) * 0.03,
@@ -192,6 +215,7 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
         baul,
         aceptaMascotas: vehicleType === 'auto' ? aceptaMascotas : false,
         cascoExtra: vehicleType === 'moto' ? cascoExtra : false,
+        indiceSeguridad: currentSafetyIndex,
       },
       {
         userId: currentUserId,
@@ -214,6 +238,8 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
       `Hola Lucia Veronica Gimenez! Te envío los datos y el comprobante de transferencia para la Habilitación de Chofer en UPPA.\n\n` +
       `• Chofer: ${driverName.trim()}\n` +
       `• Vehículo: ${vehicleType === 'moto' ? 'Moto Taxi' : 'Auto Taxi'} (${vehicleModel.trim()})\n` +
+      `• Patente / Matrícula: ${cleanPatente}\n` +
+      `• Índice de Seguridad: ${currentSafetyIndex}%\n` +
       `• Confort/Capacidad: ${
         vehicleType === 'moto'
           ? `${cascoExtra ? 'Cuenta con casco extra para el pasajero' : 'Sin casco extra'}${baul ? ' · Con baúl' : ''}`
@@ -314,6 +340,16 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
                   <span className="font-semibold text-emerald-300">
                     {vehicleType === 'moto' ? '🏍️ Moto Taxi' : '🚕 Auto Taxi'} ({vehicleModel})
                   </span>
+                </div>
+                <div className="flex justify-between text-slate-300">
+                  <span className="text-slate-400">Patente / Matrícula:</span>
+                  <span className="font-mono font-bold text-white uppercase bg-white/10 px-1.5 py-0.5 rounded border border-white/10">
+                    {patente.toUpperCase()}
+                  </span>
+                </div>
+                <div className="flex justify-between text-slate-300">
+                  <span className="text-slate-400">Índice de Seguridad:</span>
+                  <span className="font-bold text-emerald-400 font-mono">{currentSafetyIndex}%</span>
                 </div>
                 <div className="flex justify-between text-slate-300">
                   <span className="text-slate-400">Tiempo Solicitado:</span>
@@ -441,7 +477,7 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
               {/* Driver & Vehicle Inputs */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
                 <div>
-                  <label className="block text-[11px] font-semibold text-slate-300 mb-1">Nombre / Apodo</label>
+                  <label className="block text-[11px] font-semibold text-slate-300 mb-1">Nombre / Apodo *</label>
                   <input
                     type="text"
                     required
@@ -453,7 +489,7 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-semibold text-slate-300 mb-1">WhatsApp de Contacto</label>
+                  <label className="block text-[11px] font-semibold text-slate-300 mb-1">WhatsApp de Contacto *</label>
                   <input
                     type="tel"
                     required
@@ -465,18 +501,32 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-semibold text-slate-300 mb-1">Modelo de Vehículo</label>
+                  <label className="block text-[11px] font-semibold text-slate-300 mb-1">Modelo de Vehículo *</label>
                   <input
                     type="text"
                     required
                     value={vehicleModel}
                     onChange={(e) => setVehicleModel(e.target.value)}
-                    placeholder="Ej: Chevrolet Corsa Gris o Honda 150"
+                    placeholder={vehicleType === 'moto' ? 'Ej: Honda Titan 150 Roja' : 'Ej: Chevrolet Corsa Gris 2012'}
                     className="w-full bg-white/[0.04] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-400"
                   />
                 </div>
 
                 <div>
+                  <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                    Patente / Matrícula * <span className="text-emerald-400">(Aporta al índice de seguridad)</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={patente}
+                    onChange={(e) => setPatente(e.target.value.toUpperCase())}
+                    placeholder="Ej: AB 123 CD o 123 ABC"
+                    className="w-full bg-white/[0.04] border border-emerald-500/30 rounded-xl px-3 py-2 text-xs text-white uppercase font-mono font-bold tracking-wider focus:outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400"
+                  />
+                </div>
+
+                <div className="sm:col-span-2">
                   <label className="block text-[11px] font-semibold text-slate-300 mb-1">Zona Habitual</label>
                   <input
                     type="text"
@@ -496,6 +546,20 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
                     <span>Confort y Capacidad del Servicio</span>
                   </label>
                   <span className="text-[10px] text-emerald-400 font-medium">Visible para pasajeros</span>
+                </div>
+
+                {/* Banner de Índice de Seguridad del Vehículo calculado en vivo */}
+                <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-400/30 flex items-center justify-between gap-2 text-xs">
+                  <div className="flex items-center gap-1.5 font-bold text-emerald-300">
+                    <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <span>
+                      Índice de Seguridad del Vehículo:{' '}
+                      <span className="font-mono text-white text-sm font-black">{currentSafetyIndex}%</span>
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-slate-300 font-medium">
+                    (Calculado por ítems completados)
+                  </span>
                 </div>
 
                 {vehicleType === 'auto' ? (
