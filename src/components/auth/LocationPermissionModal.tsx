@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { UserLocation, reverseGeocode } from '../../utils/geolocation';
-import { MapPin, Navigation, ShieldCheck, CheckCircle2, AlertCircle, RefreshCw, Smartphone } from 'lucide-react';
+import { Navigation, CheckCircle2, AlertCircle, RefreshCw, Smartphone } from 'lucide-react';
 import { UserRole } from '../../types';
 
 interface LocationPermissionModalProps {
@@ -16,7 +16,6 @@ export const LocationPermissionModal: React.FC<LocationPermissionModalProps> = (
   userRole,
   userName,
   onLocationGranted,
-  onDismiss,
 }) => {
   const [isDetecting, setIsDetecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -28,7 +27,7 @@ export const LocationPermissionModal: React.FC<LocationPermissionModalProps> = (
     setError(null);
 
     if (!('geolocation' in navigator)) {
-      applyFallbackLocation('El navegador no soporta GPS nativo. Se asignó ubicación de prueba.');
+      applyFallbackLocation();
       return;
     }
 
@@ -51,9 +50,8 @@ export const LocationPermissionModal: React.FC<LocationPermissionModalProps> = (
         setIsDetecting(false);
         onLocationGranted(location);
       },
-      (geoError) => {
-        // Provide friendly fallback with Campana / Malvinas / Zárate coordinates so user is not blocked
-        applyFallbackLocation('No se pudo acceder al sensor físico. Se activó ubicación simulada en el corredor.');
+      () => {
+        applyFallbackLocation();
       },
       {
         enableHighAccuracy: true,
@@ -63,8 +61,7 @@ export const LocationPermissionModal: React.FC<LocationPermissionModalProps> = (
     );
   };
 
-  const applyFallbackLocation = async (msg: string) => {
-    // Default to Barrio Malvinas / Campana Centro for testing
+  const applyFallbackLocation = async () => {
     const defaultCoords =
       userRole === 'driver'
         ? { lat: -34.1950, lng: -58.9720, address: 'Barrio Malvinas, Campana (Punto de Partida)' }
@@ -86,49 +83,52 @@ export const LocationPermissionModal: React.FC<LocationPermissionModalProps> = (
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="w-full max-w-md bg-[#0d1019] border border-cyan-500/40 rounded-3xl shadow-[0_0_50px_rgba(6,182,212,0.15)] p-6 text-slate-100 flex flex-col gap-4">
-        {/* Top Icon Badge */}
-        <div className="w-14 h-14 rounded-2xl bg-cyan-950/80 border border-cyan-400/50 flex items-center justify-center text-cyan-400 mx-auto shadow-lg shadow-cyan-950/60">
-          <Navigation className="w-7 h-7 animate-pulse text-cyan-400" />
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="w-full max-w-md bg-[#202329] border-2 border-white/20 rounded-3xl shadow-[0_8px_0_rgba(0,0,0,0.65)] p-6 text-white flex flex-col gap-4 relative overflow-hidden">
+        <div className="h-1.5 bg-[#FFF19A] absolute top-0 left-0 right-0" />
+
+        <div className="w-14 h-14 rounded-2xl bg-[#101114] border-2 border-[#FFF19A]/50 flex items-center justify-center text-[#FFF19A] mx-auto mt-1">
+          <Navigation className="w-7 h-7 animate-pulse text-[#FFF19A]" />
         </div>
 
         <div className="text-center space-y-1">
-          <h2 className="text-lg font-bold text-white font-display">
+          <h2 className="text-lg font-black text-white font-display">
             Ubicación en Tiempo Real Requerida
           </h2>
-          <p className="text-xs text-slate-300">
-            ¡Hola, <strong className="text-cyan-400">{userName}</strong>! Para ingresar información en UPPA y ver los micros o taxis más cercanos, es necesario acceder al GPS de tu móvil.
+          <p className="text-xs text-[#9299A5]">
+            ¡Hola, <strong className="text-[#FFF19A]">{userName}</strong>! Para ver los micros, taxis y reportar alertas cercanas en UPPA, es necesario acceder al GPS de tu móvil.
           </p>
         </div>
 
         {userRole === 'driver' && (
-          <div className="p-3 rounded-2xl bg-emerald-950/50 border border-emerald-500/40 text-emerald-300 text-xs flex items-start gap-2.5">
+          <div className="p-3 rounded-xl bg-[#101114] border border-[#B7F36B]/45 text-[#B7F36B] text-xs flex items-start gap-2.5">
             <Smartphone className="w-4 h-4 shrink-0 mt-0.5" />
             <div>
-              <strong className="block text-emerald-200">Modo Conductor Conectado:</strong>
-              Tu ubicación GPS se transmitirá en vivo al mapa de UPPA para que los pasajeros vean tu proximidad en tiempo real.
+              <strong className="block text-white">Modo Conductor Conectado:</strong>
+              <span className="text-[#9299A5]">
+                Tu ubicación GPS se transmitirá en vivo al mapa de UPPA para que los pasajeros vean tu proximidad en tiempo real.
+              </span>
             </div>
           </div>
         )}
 
-        <div className="space-y-2 text-xs text-slate-400 bg-[#121624] p-3.5 rounded-2xl border border-slate-800">
+        <div className="space-y-2 text-xs text-[#9299A5] bg-[#101114] p-3.5 rounded-2xl border border-white/10">
           <div className="flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-cyan-400 shrink-0" />
+            <CheckCircle2 className="w-4 h-4 text-[#B7F36B] shrink-0" />
             <span>Validación anti-spam de reportes de tránsito y demoras</span>
           </div>
           <div className="flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-cyan-400 shrink-0" />
+            <CheckCircle2 className="w-4 h-4 text-[#B7F36B] shrink-0" />
             <span>Distancia exacta en km hacia las paradas y coches en ruta</span>
           </div>
           <div className="flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-cyan-400 shrink-0" />
+            <CheckCircle2 className="w-4 h-4 text-[#B7F36B] shrink-0" />
             <span>Cálculo automático del barrio (Malvinas / Zárate / Campana)</span>
           </div>
         </div>
 
         {error && (
-          <div className="p-2.5 rounded-xl bg-rose-950/60 border border-rose-800 text-rose-300 text-xs flex items-center gap-2">
+          <div className="p-2.5 rounded-xl bg-rose-950/60 border border-rose-400/50 text-rose-200 text-xs flex items-center gap-2">
             <AlertCircle className="w-4 h-4 shrink-0" />
             <span>{error}</span>
           </div>
@@ -136,13 +136,15 @@ export const LocationPermissionModal: React.FC<LocationPermissionModalProps> = (
 
         <div className="pt-2 flex flex-col gap-2">
           <button
+            type="button"
             onClick={handleRequestGPS}
             disabled={isDetecting}
-            className="w-full h-12 bg-cyan-500 hover:bg-cyan-400 disabled:opacity-50 text-slate-950 font-bold text-sm rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-cyan-500/25 active:scale-98 transition-all"
+            title="Solicitar permiso GPS del navegador para ubicar tu posición en tiempo real"
+            className="w-full min-h-[48px] uppa-cta-yellow disabled:opacity-50 font-black text-sm rounded-xl flex items-center justify-center gap-2 cursor-pointer"
           >
             {isDetecting ? (
               <>
-                <RefreshCw className="w-4 h-4 animate-spin text-slate-950" />
+                <RefreshCw className="w-4 h-4 animate-spin" />
                 <span>Sincronizando satélites GPS...</span>
               </>
             ) : (
@@ -155,10 +157,11 @@ export const LocationPermissionModal: React.FC<LocationPermissionModalProps> = (
 
           <button
             type="button"
-            onClick={() => applyFallbackLocation('Activando modo simulado para desarrollo')}
-            className="text-[11px] text-slate-500 hover:text-slate-300 py-1 transition-colors"
+            onClick={() => applyFallbackLocation()}
+            title="Continuar con una ubicación de referencia en Barrio Malvinas sin sensor GPS"
+            className="text-[11px] text-[#9299A5] hover:text-white py-2 transition-colors cursor-pointer"
           >
-            Usar ubicación simulada de prueba (Barrio Malvinas)
+            Usar ubicación de referencia (Barrio Malvinas)
           </button>
         </div>
       </div>

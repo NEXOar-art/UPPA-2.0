@@ -94,6 +94,72 @@ import {
   Maximize2,
 } from 'lucide-react';
 
+function GlobalHoverTooltip() {
+  const [tooltip, setTooltip] = useState<{ text: string; x: number; y: number; placeBelow: boolean } | null>(null);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia('(hover: hover)').matches) return;
+
+    let currentEl: HTMLElement | null = null;
+
+    const showForElement = (target: EventTarget | null) => {
+      if (!(target instanceof Element)) return;
+      const el = target.closest('button[title], a[title], [role="button"][title]') as HTMLElement | null;
+      if (!el) {
+        if (currentEl) {
+          currentEl = null;
+          setTooltip(null);
+        }
+        return;
+      }
+      const text = el.getAttribute('title');
+      if (!text || !text.trim()) return;
+      currentEl = el;
+      const rect = el.getBoundingClientRect();
+      const placeBelow = rect.top < 56;
+      const clampedX = Math.max(110, Math.min(window.innerWidth - 110, rect.left + rect.width / 2));
+      const y = placeBelow ? rect.bottom + 8 : rect.top - 8;
+      setTooltip({ text: text.trim(), x: clampedX, y, placeBelow });
+    };
+
+    const hide = () => {
+      currentEl = null;
+      setTooltip(null);
+    };
+
+    document.addEventListener('mouseover', (e) => showForElement(e.target), { passive: true });
+    document.addEventListener('focusin', (e) => showForElement(e.target), { passive: true });
+    document.addEventListener('mouseout', (e) => {
+      if (!currentEl) return;
+      const related = e.relatedTarget as Element | null;
+      if (!related || !currentEl.contains(related)) hide();
+    }, { passive: true });
+    document.addEventListener('pointerdown', hide, { passive: true });
+    window.addEventListener('scroll', hide, { passive: true, capture: true });
+
+    return () => {
+      document.removeEventListener('pointerdown', hide);
+      window.removeEventListener('scroll', hide, true);
+    };
+  }, []);
+
+  if (!tooltip) return null;
+
+  return (
+    <div
+      role="tooltip"
+      className="fixed z-[9999] pointer-events-none max-w-[230px] px-2.5 py-1.5 rounded-lg bg-[#202329] border border-[#FFF19A]/70 text-white text-[10.5px] font-semibold leading-snug text-center shadow-[2px_2px_0px_#101114]"
+      style={{
+        left: `${tooltip.x}px`,
+        top: `${tooltip.y}px`,
+        transform: tooltip.placeBelow ? 'translate(-50%, 0)' : 'translate(-50%, -100%)',
+      }}
+    >
+      {tooltip.text}
+    </div>
+  );
+}
+
 export default function App() {
   const {
     user: authUser,
@@ -231,20 +297,34 @@ export default function App() {
     return () => unsub();
   }, []);
 
-  // Habilitación específica del usuario actual (si existe en el registro del Administrador)
+  // Habilitación específica del usuario actual (validación estricta por UID cuando existe)
   const userHabilitacionRecord = useMemo(() => {
     return (
       habilitacionesList.find((h) => {
-        const matchId =
+        const uidMatch =
           (currentUser.id && h.driverId === currentUser.id) ||
           (currentUser.uid && h.driverId === currentUser.uid);
+        if (uidMatch) return true;
+
+        const hasDistinctRealUid =
+          Boolean(h.driverId) &&
+          !h.driverId.startsWith('drv-') &&
+          !h.driverId.startsWith('usr-driver-') &&
+          !h.driverId.startsWith('usr-');
+        if (hasDistinctRealUid && (currentUser.uid || currentUser.id)) {
+          return false;
+        }
+
         const matchName =
           currentUser.name &&
           h.driverName &&
           h.driverName.trim().toLowerCase() === currentUser.name.trim().toLowerCase();
         const cleanPhone = currentUser.phone ? currentUser.phone.replace(/\D/g, '') : '';
-        const matchPhone = cleanPhone && h.whatsapp && h.whatsapp.replace(/\D/g, '').includes(cleanPhone);
-        return Boolean(matchId || matchName || matchPhone);
+        const matchPhone =
+          cleanPhone.length >= 6 &&
+          h.whatsapp &&
+          h.whatsapp.replace(/\D/g, '').includes(cleanPhone);
+        return Boolean(matchName || matchPhone);
       }) || null
     );
   }, [habilitacionesList, currentUser]);
@@ -575,18 +655,25 @@ export default function App() {
           driverName: h.driverName,
           vehicleType: h.vehicleType,
           vehicleModel: h.vehicleModel,
+          patente: h.patente || '',
           whatsapp: h.whatsapp,
           zone: h.zone || 'Zárate ↔ Campana',
-          lat: -34.195 + (i * 0.007) - 0.003,
-          lng: -58.945 + (i * 0.007) - 0.003,
+          lat: -34.195 + ((i % 7) * 0.006) - 0.015,
+          lng: -58.945 + ((i % 5) * 0.006) - 0.012,
           hoursPaid: h.horas,
           startsAt: h.startsAt || now,
           endsAt: h.endsAt || (now + h.horas * 3600 * 1000),
           status: 'active',
-          rating: 5.0,
-          completedRides: 10,
+          rating: typeof h.rating === 'number' ? h.rating : 0,
+          completedRides: (h as any).completedRides || (h as any).viajesRealizados || 0,
+          indiceSeguridad: h.indiceSeguridad,
           activationCode: h.activationCode,
           isOnline: true,
+          asientos: h.asientos,
+          aireAcondicionado: h.aireAcondicionado,
+          baul: h.baul,
+          aceptaMascotas: h.aceptaMascotas,
+          cascoExtra: h.cascoExtra,
         }));
         setTaxis(habTaxis);
       } else {
@@ -749,15 +836,15 @@ export default function App() {
             startsAt: driverSession?.startsAt || Date.now(),
             endsAt: activeEndsAt,
             status: 'active',
-            rating: 5.0,
-            completedRides: 5,
+            rating: typeof userHabilitacionRecord?.rating === 'number' ? userHabilitacionRecord.rating : 0,
+            completedRides: (userHabilitacionRecord as any)?.completedRides || 0,
             activationCode: driverSession?.activationCode,
           };
           return [newListing, ...prev];
         }
       });
     }
-  }, [userLocation, currentUser, driverSession, isDriverOnline]);
+  }, [userLocation, currentUser, driverSession, isDriverOnline, userHabilitacionRecord, isPrestandoServicioTaxi]);
 
   const handleLocationGranted = (loc: UserLocation) => {
     setUserLocation(loc);
@@ -882,7 +969,7 @@ export default function App() {
     const seen = new Set<string>();
 
     // 1. Prestadores habilitados por el Administrador en 'habilitaciones'
-    habilitacionesList.forEach((hab) => {
+    habilitacionesList.forEach((hab, idx) => {
       const isActivo = hab.estado === 'activo';
       const isApprovedByAdmin = Boolean(hab.activadoConClaveAdmin || hab.habilitadoPor);
       const isWithinTime = (hab.endsAt || 0) > now;
@@ -893,6 +980,13 @@ export default function App() {
         if (hab.whatsapp) seen.add(hab.whatsapp.replace(/\D/g, ''));
         if (hab.activationCode) seen.add(hab.activationCode.toUpperCase());
 
+        const isViewerThisDriver = Boolean(
+          (currentUser.id && hab.driverId === currentUser.id) ||
+          (currentUser.uid && hab.driverId === currentUser.uid)
+        );
+        const detLat = -34.175 + ((idx % 7) - 3) * 0.0055;
+        const detLng = -58.965 + ((idx % 5) - 2) * 0.0055;
+
         result.push({
           id: hab.id,
           userId: hab.driverId || hab.id,
@@ -902,8 +996,8 @@ export default function App() {
           patente: hab.patente || '',
           whatsapp: hab.whatsapp,
           zone: hab.zone || 'Zárate ↔ Campana',
-          lat: userLocation ? userLocation.lat : -34.175 + (Math.random() - 0.5) * 0.02,
-          lng: userLocation ? userLocation.lng : -58.965 + (Math.random() - 0.5) * 0.02,
+          lat: isViewerThisDriver && userLocation ? userLocation.lat : detLat,
+          lng: isViewerThisDriver && userLocation ? userLocation.lng : detLng,
           hoursPaid: hab.horas || 12,
           startsAt: hab.startsAt || now,
           endsAt: hab.endsAt || now + 12 * 3600 * 1000,
@@ -1055,12 +1149,12 @@ export default function App() {
   // Si Firebase Auth está inicializando la verificación de sesión
   if (isAuthLoading) {
     return (
-      <div className="min-h-screen w-full bg-[#07090e] flex flex-col items-center justify-center text-slate-100 font-sans">
-        <div className="w-14 h-14 rounded-3xl bg-gradient-to-br from-sky-400 to-cyan-500 flex items-center justify-center font-bold text-slate-950 font-display text-2xl shadow-xl shadow-sky-500/25 animate-pulse">
+      <div className="min-h-screen w-full bg-[#101114] flex flex-col items-center justify-center text-white font-sans">
+        <div className="w-14 h-14 rounded-2xl bg-[#FFF19A] border-2 border-[#101114] shadow-[4px_4px_0px_#202329] flex items-center justify-center font-black text-[#101114] font-display text-2xl">
           U
         </div>
-        <p className="mt-4 text-xs font-semibold text-sky-300">Conectando con Firebase Authentication...</p>
-        <span className="text-[11px] text-slate-500 font-mono mt-1">UPPA · Zárate ↔ Campana</span>
+        <p className="mt-4 text-xs font-bold text-[#FFF19A]">Conectando con Firebase Authentication...</p>
+        <span className="text-[11px] text-[#9299A5] font-mono mt-1">UPPA · Zárate ↔ Campana</span>
       </div>
     );
   }
@@ -1068,34 +1162,39 @@ export default function App() {
   // Autenticación Requerida al Inicio para acceder a todas las funcionalidades
   if (!isLoggedIn) {
     return (
-      <LoginPage
-        onLogin={(user) => {
-          try {
-            localStorage.setItem('uppa_session_user', JSON.stringify(user));
-          } catch {}
-          setCurrentUser(user);
-          setIsLoggedIn(true);
-          setIsLocationModalOpen(true);
-          showToast(`¡Bienvenido a UPPA, ${user.name}!`);
-        }}
-        onExploreGuest={() => {
-          showToast('La autenticación es obligatoria para acceder a las funcionalidades');
-        }}
-      />
+      <>
+        <GlobalHoverTooltip />
+        <LoginPage
+          onLogin={(user) => {
+            try {
+              localStorage.setItem('uppa_session_user', JSON.stringify(user));
+            } catch {}
+            setCurrentUser(user);
+            setIsLoggedIn(true);
+            setIsLocationModalOpen(true);
+            showToast(`¡Bienvenido a UPPA, ${user.name}!`);
+          }}
+          onExploreGuest={() => {
+            showToast('La autenticación es obligatoria para acceder a las funcionalidades');
+          }}
+        />
+      </>
     );
   }
 
   return (
-    <div className="flex flex-col h-screen w-screen bg-[#07090e] text-slate-100 overflow-hidden font-sans">
+    <div className="flex flex-col h-screen w-screen bg-[#101114] text-white overflow-hidden font-sans">
+      <GlobalHoverTooltip />
+
       {/* Toast Notification */}
       {toastMessage && (
-        <div className="fixed top-14 left-1/2 -translate-x-1/2 z-50 glass-panel px-4 py-2 rounded-2xl shadow-2xl text-xs flex items-center gap-2 border-sky-400/40 text-sky-200 animate-in fade-in duration-200">
-          <Sparkles className="w-3.5 h-3.5 text-sky-300" />
-          <span>{toastMessage}</span>
+        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 bg-[#202329] border-2 border-[#FFF19A] px-4 py-2.5 rounded-xl shadow-[3px_3px_0px_#101114] text-xs font-bold flex items-center gap-2 text-white animate-in fade-in duration-200 max-w-[92vw]">
+          <Sparkles className="w-4 h-4 text-[#FFF19A] shrink-0" />
+          <span className="truncate">{toastMessage}</span>
         </div>
       )}
 
-      {/* Eventos Push en Pantalla (Deduplicación & Tiempo de Exposición de 15 Minutos) */}
+      {/* Eventos Push en Pantalla */}
       {screenPushEvents.length > 0 && (
         <aside aria-label="Eventos en tiempo real" className="fixed top-16 right-3 sm:right-6 z-40 max-w-sm w-[calc(100vw-1.5rem)] sm:w-88 space-y-2 pointer-events-none">
           {screenPushEvents.slice(0, 4).map((ev) => {
@@ -1106,12 +1205,12 @@ export default function App() {
 
             const badgeBg =
               ev.type === 'reporte'
-                ? 'bg-rose-500/20 border-rose-500/40 text-rose-300'
+                ? 'bg-rose-500/20 border-rose-400/50 text-rose-200'
                 : ev.type === 'transporte'
-                ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300'
+                ? 'bg-[#B7F36B]/15 border-[#B7F36B]/60 text-[#B7F36B]'
                 : ev.type === 'admin'
-                ? 'bg-purple-500/20 border-purple-500/40 text-purple-300'
-                : 'bg-sky-500/20 border-sky-500/40 text-sky-300';
+                ? 'bg-[#FFF19A]/15 border-[#FFF19A]/60 text-[#FFF19A]'
+                : 'bg-[#101114] border-white/20 text-white';
 
             const icon =
               ev.type === 'reporte'
@@ -1125,33 +1224,33 @@ export default function App() {
             return (
               <div
                 key={ev.id}
-                className="p-3.5 rounded-2xl bg-[#0a0e19]/95 border border-white/10 shadow-2xl backdrop-blur-xl pointer-events-auto space-y-2 animate-in slide-in-from-top-2 duration-300"
+                className="p-3.5 rounded-2xl bg-[#202329] border-2 border-white/15 shadow-[4px_4px_0px_#101114] pointer-events-auto space-y-2 animate-in slide-in-from-top-2 duration-300"
               >
                 <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
                     <span className="text-base">{icon}</span>
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase border ${badgeBg}`}>
+                    <span className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase border ${badgeBg}`}>
                       {ev.type}
                     </span>
-                    <h4 className="text-xs font-bold text-white line-clamp-1">{ev.title}</h4>
+                    <h4 className="text-xs font-extrabold text-white line-clamp-1">{ev.title}</h4>
                   </div>
                   <button
                     onClick={() => setScreenPushEvents((prev) => prev.filter((p) => p.id !== ev.id))}
-                    className="text-slate-400 hover:text-white p-0.5 rounded-full cursor-pointer"
-                    title="Cerrar evento"
+                    className="text-[#9299A5] hover:text-white p-1.5 rounded-lg bg-[#101114] border border-white/10 cursor-pointer shrink-0"
+                    title="Cerrar notificación en pantalla"
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>
                 </div>
 
-                <p className="text-[11px] text-slate-300 leading-snug">{ev.body}</p>
+                <p className="text-[11px] text-[#9299A5] leading-snug">{ev.body}</p>
 
-                <div className="flex items-center justify-between text-[10px] text-slate-400 pt-1.5 border-t border-white/5 font-mono">
-                  <span className="flex items-center gap-1 text-cyan-300 font-semibold">
-                    <Clock className="w-3 h-3 text-cyan-400" />
-                    <span>Exposición: {formattedTime} min</span>
+                <div className="flex items-center justify-between text-[10px] text-[#9299A5] pt-1.5 border-t border-white/10 font-mono">
+                  <span className="flex items-center gap-1 text-[#FFF19A] font-bold">
+                    <Clock className="w-3 h-3 text-[#FFF19A]" />
+                    <span>Exposición: {formattedTime}</span>
                   </span>
-                  <span className="text-[9px] text-slate-500">15 min en pantalla</span>
+                  <span className="text-[9px] text-[#9299A5]">Aviso en vivo</span>
                 </div>
               </div>
             );
@@ -1161,65 +1260,71 @@ export default function App() {
 
       {/* Alerta / Recordatorio de email pendiente de autenticar */}
       {isLoggedIn && !isEmailVerified && authUser?.email && !authUser.email.includes('guest') && (
-        <div className="bg-gradient-to-r from-amber-500/20 via-orange-500/20 to-amber-500/20 border-b border-amber-500/30 px-3 py-1.5 flex items-center justify-between text-xs text-amber-200 z-40 backdrop-blur-md">
+        <div className="bg-[#202329] border-b border-[#FFF19A]/40 px-3 py-1.5 flex items-center justify-between text-xs text-white z-40">
           <div className="flex items-center gap-2 truncate">
-            <Mail className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-            <span className="truncate">
-              Correo <strong>{authUser.email}</strong> pendiente de autenticación en Firebase.
+            <Mail className="w-3.5 h-3.5 text-[#FFF19A] shrink-0" />
+            <span className="truncate text-[#9299A5]">
+              Correo <strong className="text-white">{authUser.email}</strong> pendiente de autenticación.
             </span>
           </div>
           <button
             onClick={() => setIsAuthModalOpen(true)}
-            className="text-[11px] font-bold text-amber-300 hover:text-white underline cursor-pointer shrink-0 ml-2"
+            title="Abrir ventana para verificar o reenviar el correo de autenticación"
+            className="text-[11px] font-black text-[#FFF19A] hover:underline cursor-pointer shrink-0 ml-2 px-2 py-1 rounded-md"
           >
-            Verificar o Reenviar Mail
+            Verificar Mail
           </button>
         </div>
       )}
 
-      {/* Floating Glass Top Bar (Tesla / Uber Style) */}
-      <header className="h-14 px-4 bg-[#0a0d14]/75 backdrop-blur-2xl border-b border-white/5 flex items-center justify-between shrink-0 z-30">
+      {/* Top Navigation Header — Luxury Dark Minimalist Automotive */}
+      <header className="h-14 px-3 sm:px-4 bg-[#101114] border-b border-white/15 flex items-center justify-between shrink-0 z-30">
         {/* Brand: Solo el texto UPPA sin icono */}
         <div className="flex items-center gap-2">
-          <button onClick={() => setActiveTab('map')} className="flex items-center">
-            <span className="text-lg font-black tracking-wider text-white font-display">
+          <button
+            onClick={() => setActiveTab('map')}
+            title="Ir a la vista principal del Mapa en vivo"
+            className="flex items-center min-h-[44px] px-1 cursor-pointer active:scale-95 transition-transform"
+          >
+            <span className="text-xl font-black tracking-widest text-white font-display">
               UPPA
             </span>
           </button>
         </div>
 
         {/* Route status indicator */}
-        <div className="hidden sm:flex items-center gap-2 px-3 py-1 rounded-xl bg-white/[0.04] border border-white/10 text-xs">
-          <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
-          <span className="font-bold text-slate-200">Línea 228</span>
-          <span className="text-[10px] text-cyan-400 font-semibold font-mono">Malvinas ↔ Zárate</span>
+        <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#202329] border border-white/15 text-xs">
+          <span className="w-2 h-2 rounded-full bg-[#B7F36B]" />
+          <span className="font-extrabold text-white">Línea 228</span>
+          <span className="text-[10px] text-[#9299A5] font-semibold font-mono">En Vivo</span>
         </div>
 
         {/* Right Actions */}
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-2">
           {/* Menú de 3 puntos: Prestar Servicio / Pedir Transporte Alternativo */}
           <div className="relative" ref={headerMenuRef}>
             <button
               onClick={() => setIsHeaderMenuOpen((prev) => !prev)}
-              className="h-8 w-8 rounded-xl glass-button flex items-center justify-center text-slate-300 hover:text-white active:scale-95 transition-all cursor-pointer"
-              title="Más opciones: Prestar Servicio / Pedir Transporte"
+              className="h-11 w-11 rounded-xl bg-[#202329] border border-white/15 hover:border-[#FFF19A]/60 flex items-center justify-center text-white active:scale-95 transition-all cursor-pointer"
+              title="Más opciones: Prestar Servicio o Pedir Transporte Alternativo"
             >
               <MoreVertical className="w-4 h-4" />
             </button>
 
             {isHeaderMenuOpen && (
-              <div className="absolute right-0 top-full mt-2 w-64 rounded-2xl bg-[#0a0e19]/95 backdrop-blur-2xl border border-white/10 shadow-2xl p-1.5 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
+              <div className="absolute right-0 top-full mt-2 w-68 rounded-2xl bg-[#202329] border-2 border-white/15 shadow-[4px_4px_0px_#101114] p-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150 space-y-1">
                 <button
                   onClick={() => {
                     setPublishTaxiInitialTab('transfer');
                     setIsPublishTaxiOpen(true);
                     setIsHeaderMenuOpen(false);
                   }}
-                  className="w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold text-emerald-300 hover:bg-emerald-500/15 flex items-center gap-2.5 transition-all cursor-pointer"
+                  title="Registrarme como chofer de auto o moto en UPPA"
+                  className="w-full min-h-[44px] text-left px-3 py-2.5 rounded-xl text-xs font-black text-[#101114] bg-[#B7F36B] hover:brightness-95 border border-[#101114] flex items-center gap-2.5 transition-all cursor-pointer"
                 >
                   <div className="flex items-center gap-0.5">
-                    <Bike className="w-4 h-4 text-emerald-400" />
-                    <Car className="w-4 h-4 text-cyan-400" />
+                    <Bike className="w-4 h-4 text-[#101114]" />
+                    <Car className="w-4 h-4 text-[#101114]" />
                   </div>
                   <span>Prestar Servicio</span>
                 </button>
@@ -1229,9 +1334,10 @@ export default function App() {
                     setIsPedirTransporteOpen(true);
                     setIsHeaderMenuOpen(false);
                   }}
-                  className="w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold text-amber-300 hover:bg-amber-500/15 flex items-center gap-2.5 transition-all cursor-pointer"
+                  title="Solicitar un auto o moto para que te pase a buscar"
+                  className="w-full min-h-[44px] text-left px-3 py-2.5 rounded-xl text-xs font-black text-[#101114] bg-[#FFF19A] hover:brightness-95 border border-[#101114] flex items-center gap-2.5 transition-all cursor-pointer"
                 >
-                  <Zap className="w-4 h-4 fill-amber-400 text-amber-400" />
+                  <Zap className="w-4 h-4 fill-[#101114] text-[#101114]" />
                   <span>Pedir Transporte Alternativo</span>
                 </button>
               </div>
@@ -1242,36 +1348,32 @@ export default function App() {
             <div className="relative" ref={profileDropdownRef}>
               <button
                 onClick={() => setIsProfileDropdownOpen((prev) => !prev)}
-                className={`relative px-2.5 py-1.5 rounded-xl text-xs cursor-pointer flex items-center gap-1.5 transition-all ${
+                className={`relative min-h-[44px] px-3 py-1.5 rounded-xl text-xs cursor-pointer flex items-center gap-2 transition-all border ${
                   isDriverUser && isDriverHabilitado
                     ? driverDisponibilidad === 'ocupado'
-                      ? 'bg-amber-950/85 border border-amber-400 text-amber-200 shadow-xl shadow-amber-500/35 ring-2 ring-amber-400/80 animate-pulse'
-                      : 'bg-emerald-950/70 border border-emerald-400 text-emerald-200 shadow-lg shadow-emerald-500/25 ring-2 ring-emerald-400/60'
-                    : isDriverUser && !isDriverHabilitado
-                    ? 'glass-button border border-slate-700/60 text-slate-300 hover:text-white'
-                    : 'glass-button text-slate-300 hover:text-white'
+                      ? 'bg-[#202329] border-[#FFF19A] text-[#FFF19A]'
+                      : 'bg-[#202329] border-[#B7F36B] text-[#B7F36B]'
+                    : 'bg-[#202329] border-white/15 hover:border-white/30 text-white'
                 }`}
                 title={
                   isDriverUser
                     ? isDriverHabilitado
                       ? driverDisponibilidad === 'ocupado'
-                        ? `Mi Perfil: ${currentUser.name} (ACTIVO - EN VIAJE - Clic para desplegable y colocar Desocupado)`
+                        ? `Mi Perfil: ${currentUser.name} (EN VIAJE - Abrir menú para cambiar a Desocupado)`
                         : `Mi Perfil: ${currentUser.name} (Chofer Habilitado - Disponible)`
-                      : `Mi Perfil: ${currentUser.name} (Chofer Pendiente de Habilitación del Administrador)`
-                    : `Mi Perfil: ${currentUser.name}`
+                      : `Mi Perfil: ${currentUser.name} (Chofer Pendiente de Habilitación)`
+                    : `Mi Perfil y opciones de cuenta: ${currentUser.name}`
                 }
               >
-                {/* Indicador titilando: SOLO para el prestador de servicio habilitado y NUNCA para el pasajero */}
+                {/* Indicador: SOLO para prestador de servicio habilitado */}
                 {isDriverUser && isDriverHabilitado ? (
                   driverDisponibilidad === 'ocupado' ? (
-                    <span className="relative flex h-3 w-3 mr-0.5">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-90" />
-                      <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500 ring-2 ring-[#07090e]" />
+                    <span className="relative flex h-2.5 w-2.5">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#FFF19A] opacity-80" />
+                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#FFF19A]" />
                     </span>
                   ) : (
-                    <span className="relative flex h-2.5 w-2.5 mr-0.5">
-                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
-                    </span>
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#B7F36B]" />
                   )
                 ) : (
                   <span className="text-sm">
@@ -1283,38 +1385,38 @@ export default function App() {
                   </span>
                 )}
 
-                <span className="text-xs font-bold text-white max-w-[110px] truncate hidden md:inline">
+                <span className="text-xs font-extrabold text-white max-w-[110px] truncate hidden md:inline">
                   {currentUser.name}
                 </span>
 
                 {/* Badge en el botón del perfil (Solo para el prestador) */}
                 {isDriverUser && isDriverHabilitado && (
                   driverDisponibilidad === 'ocupado' ? (
-                    <span className="text-[10px] font-black uppercase tracking-wider text-amber-300 hidden sm:inline px-1.5 py-0.5 rounded bg-amber-500/25 border border-amber-400/60 animate-pulse">
-                      ⚡ ACTIVO
+                    <span className="text-[10px] font-black uppercase tracking-wider text-[#101114] hidden sm:inline px-2 py-0.5 rounded-md bg-[#FFF19A]">
+                      ACTIVO
                     </span>
                   ) : (
-                    <span className="text-[10px] font-black uppercase tracking-wider text-emerald-300 hidden sm:inline px-1.5 py-0.5 rounded bg-emerald-500/25 border border-emerald-400/50">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-[#101114] hidden sm:inline px-2 py-0.5 rounded-md bg-[#B7F36B]">
                       DESOCUPADO
                     </span>
                   )
                 )}
 
                 {isDriverUser && !isDriverHabilitado && (
-                  <span className="text-[10px] font-bold text-amber-300 hidden sm:inline px-1.5 py-0.5 rounded bg-amber-500/15 border border-amber-400/30">
+                  <span className="text-[10px] font-bold text-[#FFF19A] hidden sm:inline px-1.5 py-0.5 rounded bg-[#101114] border border-[#FFF19A]/40">
                     Pendiente
                   </span>
                 )}
 
-                <ChevronDown className="w-3 h-3 text-slate-400 shrink-0" />
+                <ChevronDown className="w-3.5 h-3.5 text-[#9299A5] shrink-0" />
               </button>
 
               {/* Menú Desplegable del Perfil */}
               {isProfileDropdownOpen && (
-                <div className="absolute right-0 top-full mt-2 w-72 sm:w-80 rounded-2xl bg-[#0c101d]/98 backdrop-blur-2xl border border-white/10 shadow-2xl p-3 z-50 animate-in fade-in slide-in-from-top-2 duration-150 space-y-3">
+                <div className="absolute right-0 top-full mt-2 w-72 sm:w-80 rounded-2xl bg-[#202329] border-2 border-white/15 shadow-[4px_4px_0px_#101114] p-3.5 z-50 animate-in fade-in slide-in-from-top-2 duration-150 space-y-3">
                   {/* Encabezado con datos del usuario */}
-                  <div className="flex items-center gap-3 pb-2.5 border-b border-white/10">
-                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-sky-500/20 to-blue-600/20 border border-sky-400/30 flex items-center justify-center text-lg shadow-sm shrink-0">
+                  <div className="flex items-center gap-3 pb-3 border-b border-white/10">
+                    <div className="w-10 h-10 rounded-xl bg-[#101114] border border-white/15 flex items-center justify-center text-lg shrink-0">
                       {currentUser.role === 'admin'
                         ? '🛡️'
                         : isDriverUser
@@ -1324,31 +1426,31 @@ export default function App() {
                         : '👤'}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-xs font-bold text-white truncate">
+                      <p className="text-xs font-extrabold text-white truncate">
                         {currentUser.name || 'Mi Perfil'}
                       </p>
-                      <p className="text-[11px] text-slate-400 truncate font-mono">
+                      <p className="text-[11px] text-[#9299A5] truncate font-mono">
                         {currentUser.email || 'Sin correo registrado'}
                       </p>
                       <div className="mt-1 flex items-center gap-1.5 flex-wrap">
                         <span
-                          className={`text-[9.5px] font-black uppercase tracking-wider px-2 py-0.5 rounded border ${
+                          className={`text-[9.5px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md border ${
                             isDriverUser
                               ? isDriverHabilitado
                                 ? driverDisponibilidad === 'ocupado'
-                                  ? 'bg-amber-500/25 text-amber-300 border-amber-400/60 animate-pulse'
-                                  : 'bg-emerald-500/20 text-emerald-300 border-emerald-400/50'
-                                : 'bg-amber-500/15 text-amber-300 border-amber-400/30'
-                              : 'bg-sky-500/20 text-sky-300 border-sky-400/30'
+                                  ? 'bg-[#FFF19A] text-[#101114] border-[#101114]'
+                                  : 'bg-[#B7F36B] text-[#101114] border-[#101114]'
+                                : 'bg-[#101114] text-[#FFF19A] border-[#FFF19A]/40'
+                              : 'bg-[#101114] text-white border-white/15'
                           }`}
                         >
                           {isDriverUser
                             ? isDriverHabilitado
                               ? driverDisponibilidad === 'ocupado'
-                                ? '⚡ ACTIVO (En Viaje)'
-                                : '🟢 Habilitado (Disponible)'
-                              : '⏳ Chofer Pendiente'
-                            : '👤 Pasajero'}
+                                ? 'ACTIVO (En Viaje)'
+                                : 'Habilitado (Disponible)'
+                              : 'Chofer Pendiente'
+                            : 'Pasajero'}
                         </span>
                       </div>
                     </div>
@@ -1356,38 +1458,37 @@ export default function App() {
 
                   {/* Sección para Prestador Pendiente de Habilitación con Desplegable */}
                   {isDriverUser && !isDriverHabilitado && (
-                    <div className="p-3 rounded-xl bg-amber-950/40 border border-amber-500/40 space-y-2 text-left">
+                    <div className="p-3 rounded-xl bg-[#101114] border border-[#FFF19A]/40 space-y-2 text-left">
                       <div className="flex items-center justify-between gap-1.5">
-                        <span className="text-[11px] font-black text-amber-300 uppercase tracking-wide flex items-center gap-1.5 min-w-0 truncate">
-                          <KeyRound className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                        <span className="text-[11px] font-black text-[#FFF19A] uppercase tracking-wide flex items-center gap-1.5 min-w-0 truncate">
+                          <KeyRound className="w-3.5 h-3.5 text-[#FFF19A] shrink-0" />
                           <span>Habilitación de Chofer</span>
                         </span>
-                        <span className="text-[9px] font-bold text-amber-300 bg-amber-500/20 px-1.5 py-0.5 rounded border border-amber-400/40 shrink-0">
+                        <span className="text-[9px] font-bold text-[#101114] bg-[#FFF19A] px-1.5 py-0.5 rounded shrink-0">
                           Pendiente
                         </span>
                       </div>
 
-                      {/* Botón Desplegable para ver/ocultar toda la información */}
                       <button
                         type="button"
                         onClick={() => setIsHabilitacionCardExpanded((prev) => !prev)}
-                        className="w-full py-1.5 px-2.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-400/35 text-amber-200 text-xs font-bold flex items-center justify-between transition-colors cursor-pointer"
+                        title={isHabilitacionCardExpanded ? 'Contraer información de habilitación' : 'Expandir información de habilitación del administrador'}
+                        className="w-full min-h-[44px] py-2 px-3 rounded-xl bg-[#202329] hover:border-[#FFF19A] border border-white/15 text-white text-xs font-bold flex items-center justify-between transition-colors cursor-pointer"
                       >
                         <span>{isHabilitacionCardExpanded ? 'Ocultar información' : 'Ver información de habilitación'}</span>
                         {isHabilitacionCardExpanded ? (
-                          <ChevronUp className="w-3.5 h-3.5 text-amber-300" />
+                          <ChevronUp className="w-4 h-4 text-[#FFF19A]" />
                         ) : (
-                          <ChevronDown className="w-3.5 h-3.5 text-amber-300" />
+                          <ChevronDown className="w-4 h-4 text-[#FFF19A]" />
                         )}
                       </button>
 
-                      {/* Desplegable con toda la información */}
                       {isHabilitacionCardExpanded && (
-                        <div className="pt-1.5 space-y-2 border-t border-amber-500/20 animate-in fade-in duration-200">
+                        <div className="pt-2 space-y-2 border-t border-white/10 animate-in fade-in duration-200">
                           <div className="text-[11px] font-bold text-white">
                             Habilitación por Administrador
                           </div>
-                          <p className="text-[10px] text-slate-300 leading-relaxed">
+                          <p className="text-[10.5px] text-[#9299A5] leading-relaxed">
                             Para figurar como Habilitado en la plataforma, el Administrador debe validar tu comprobante de transferencia y activar tu unidad. En ese momento comenzará tu temporizador en vivo.
                           </p>
                           <a
@@ -1396,10 +1497,11 @@ export default function App() {
                             )}`}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="w-full py-2 px-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs flex items-center justify-center gap-1.5 transition-all shadow-md"
+                            title="Enviar mensaje por WhatsApp al Administrador UPPA"
+                            className="w-full min-h-[44px] py-2 px-3 rounded-xl bg-[#B7F36B] hover:brightness-95 text-[#101114] border border-[#101114] font-black text-xs flex items-center justify-center gap-1.5 transition-all"
                           >
-                            <MessageSquare className="w-3.5 h-3.5" />
-                            <span>Contactar Administrador (WhatsApp 3489690058)</span>
+                            <MessageSquare className="w-4 h-4" />
+                            <span>Contactar Administrador (3489690058)</span>
                           </a>
                         </div>
                       )}
@@ -1408,27 +1510,24 @@ export default function App() {
 
                   {/* Sección Exclusiva para Prestadores de Servicio Habilitados */}
                   {isDriverUser && isDriverHabilitado && (
-                    <div className="p-3 rounded-xl bg-white/[0.03] border border-white/5 space-y-2.5">
+                    <div className="p-3 rounded-xl bg-[#101114] border border-white/10 space-y-2.5">
                       <div className="flex items-center justify-between">
-                        <span className="text-[11px] font-bold text-slate-200">
+                        <span className="text-[11px] font-bold text-white">
                           Disponibilidad de Servicio
                         </span>
                         {driverDisponibilidad === 'ocupado' ? (
-                          <span className="text-[10px] font-black text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded border border-amber-400/50 animate-pulse flex items-center gap-1">
-                            <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-                            <span>OCUPADO</span>
+                          <span className="text-[10px] font-black text-[#101114] bg-[#FFF19A] px-2 py-0.5 rounded flex items-center gap-1">
+                            OCUPADO
                           </span>
                         ) : (
-                          <span className="text-[10px] font-black text-emerald-300 bg-emerald-500/20 px-2 py-0.5 rounded border border-emerald-400/40 flex items-center gap-1">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                            <span>DESOCUPADO</span>
+                          <span className="text-[10px] font-black text-[#101114] bg-[#B7F36B] px-2 py-0.5 rounded flex items-center gap-1">
+                            DESOCUPADO
                           </span>
                         )}
                       </div>
 
-                      {/* Desplegable de Estado */}
                       <div>
-                        <label className="text-[10.5px] text-slate-400 block mb-1">
+                        <label className="text-[10.5px] text-[#9299A5] block mb-1">
                           Desplegable de estado:
                         </label>
                         <select
@@ -1436,14 +1535,13 @@ export default function App() {
                           onChange={(e) => {
                             handleSetDriverDisponibilidad(e.target.value as 'desocupado' | 'ocupado');
                           }}
-                          className="w-full bg-[#131828] border border-slate-700 hover:border-slate-600 rounded-xl px-2.5 py-1.5 text-xs text-white font-bold focus:outline-none focus:border-cyan-400 transition-colors cursor-pointer"
+                          className="w-full min-h-[44px] bg-[#202329] border border-white/15 hover:border-[#FFF19A] rounded-xl px-3 py-2 text-xs text-white font-bold focus:outline-none focus:border-[#FFF19A] transition-colors cursor-pointer"
                         >
-                          <option value="desocupado">🟢 DESOCUPADO (Disponible para la comunidad)</option>
-                          <option value="ocupado">🟡 OCUPADO (En viaje activo con pasajero)</option>
+                          <option value="desocupado">DESOCUPADO (Disponible para la comunidad)</option>
+                          <option value="ocupado">OCUPADO (En viaje activo con pasajero)</option>
                         </select>
                       </div>
 
-                      {/* Botón directo de acción para colocar Desocupado / Ocupado */}
                       {driverDisponibilidad === 'ocupado' ? (
                         <button
                           type="button"
@@ -1451,9 +1549,10 @@ export default function App() {
                             handleSetDriverDisponibilidad('desocupado');
                             setIsProfileDropdownOpen(false);
                           }}
-                          className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/25 active:scale-95 transition-all cursor-pointer ring-2 ring-emerald-300"
+                          title="Finalizar viaje activo y mostrarse disponible nuevamente"
+                          className="w-full min-h-[44px] py-2.5 px-3 rounded-xl bg-[#B7F36B] hover:brightness-95 text-[#101114] border-2 border-[#101114] font-black text-xs flex items-center justify-center gap-2 active:scale-95 transition-all cursor-pointer"
                         >
-                          <CheckCircle2 className="w-4 h-4 text-slate-950 stroke-[3]" />
+                          <CheckCircle2 className="w-4 h-4 text-[#101114] stroke-[2.5]" />
                           <span>Colocar DESOCUPADO (Disponible)</span>
                         </button>
                       ) : (
@@ -1463,21 +1562,35 @@ export default function App() {
                             handleSetDriverDisponibilidad('ocupado');
                             setIsProfileDropdownOpen(false);
                           }}
-                          className="w-full py-2 px-3 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-400/50 font-bold text-xs flex items-center justify-center gap-1.5 active:scale-95 transition-all cursor-pointer"
+                          title="Cambiar estado a ocupado durante un viaje"
+                          className="w-full min-h-[44px] py-2 px-3 rounded-xl bg-[#FFF19A] hover:brightness-95 text-[#101114] border-2 border-[#101114] font-black text-xs flex items-center justify-center gap-1.5 active:scale-95 transition-all cursor-pointer"
                         >
-                          <Zap className="w-3.5 h-3.5 text-amber-400" />
+                          <Zap className="w-4 h-4 text-[#101114]" />
                           <span>Colocar OCUPADO (En viaje)</span>
                         </button>
                       )}
 
-                      <p className="text-[10px] text-slate-400 leading-tight">
-                        Al colocar <strong>Desocupado</strong>, toda la comunidad en <em>Taxis & Motos</em> sabrá de inmediato que estás disponible.
+                      <p className="text-[10px] text-[#9299A5] leading-tight">
+                        Al colocar <strong className="text-white">Desocupado</strong>, toda la comunidad en <em>Taxis & Motos</em> sabrá de inmediato que estás disponible.
                       </p>
                     </div>
                   )}
 
                   {/* Acciones generales del menú */}
-                  <div className="pt-1 space-y-1 border-t border-white/5">
+                  <div className="pt-1 space-y-1.5 border-t border-white/10">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsProfileDropdownOpen(false);
+                        setIsAuthModalOpen(true);
+                      }}
+                      title="Ver o editar mi información personal y preferencias de perfil"
+                      className="w-full min-h-[44px] text-left px-3 py-2 rounded-xl text-xs font-bold text-white hover:bg-[#101114] border border-white/10 flex items-center gap-2 transition-all cursor-pointer"
+                    >
+                      <UserIcon className="w-4 h-4 text-[#FFF19A]" />
+                      <span>Mi Perfil y Datos</span>
+                    </button>
+
                     <button
                       type="button"
                       onClick={async () => {
@@ -1489,9 +1602,10 @@ export default function App() {
                         } catch {}
                         showToast('Sesión cerrada');
                       }}
-                      className="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold text-rose-300 hover:text-rose-200 hover:bg-rose-500/10 flex items-center gap-2 transition-all cursor-pointer"
+                      title="Cerrar sesión de forma segura en este dispositivo"
+                      className="w-full min-h-[44px] text-left px-3 py-2 rounded-xl text-xs font-bold text-rose-300 hover:text-rose-200 hover:bg-rose-500/10 border border-rose-500/20 flex items-center gap-2 transition-all cursor-pointer"
                     >
-                      <LogOut className="w-3.5 h-3.5 text-rose-400" />
+                      <LogOut className="w-4 h-4 text-rose-400" />
                       <span>Cerrar Sesión</span>
                     </button>
                   </div>
@@ -1501,10 +1615,10 @@ export default function App() {
           ) : (
             <button
               onClick={() => setIsAuthModalOpen(true)}
-              className="h-8 px-2.5 rounded-xl bg-gradient-to-r from-sky-500/25 to-cyan-500/25 hover:from-sky-500/35 hover:to-cyan-500/35 border border-sky-400/50 text-xs font-bold text-sky-200 hover:text-white flex items-center gap-1.5 transition-all shadow-sm shadow-sky-500/10 cursor-pointer active:scale-95"
+              className="min-h-[44px] px-3 rounded-xl bg-[#FFF19A] text-[#101114] border-2 border-[#101114] text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer active:scale-95"
               title="Crear un perfil en Firebase y autenticar por correo"
             >
-              <UserIcon className="w-3.5 h-3.5 text-cyan-400" />
+              <UserIcon className="w-4 h-4 text-[#101114]" />
               <span>Hacerse un Perfil</span>
             </button>
           )}
@@ -1644,27 +1758,28 @@ export default function App() {
         )}
       </main>
 
-      {/* Barra Flotante de Acceso Rápido al Chat Comunitario (Ubicada más arriba para evitar superposiciones) */}
+      {/* Barra Flotante de Acceso Rápido al Chat Comunitario */}
       {activeTab !== 'chat' && latestCommunityMessage && latestCommunityMessage.id !== dismissedChatMsgId && (
         <div className="fixed bottom-24 sm:bottom-28 right-3 sm:right-5 max-w-[calc(100vw-24px)] sm:max-w-sm z-30 animate-in slide-in-from-bottom-3 duration-300">
-          <div className="p-2 sm:p-2.5 rounded-2xl bg-[#090d16]/95 backdrop-blur-xl border border-purple-500/40 shadow-2xl flex items-center justify-between gap-2.5 text-xs">
+          <div className="p-2.5 rounded-2xl bg-[#202329] border-2 border-[#FFF19A]/45 shadow-[4px_4px_0px_#101114] flex items-center justify-between gap-2.5 text-xs">
             <button
               onClick={() => setActiveTab('chat')}
+              title="Abrir el chat comunitario en tiempo real"
               className="flex items-center gap-2.5 flex-1 min-w-0 text-left cursor-pointer group"
             >
-              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-purple-500/20 text-purple-300 flex items-center justify-center shrink-0 border border-purple-400/30">
-                <MessageSquare className="w-3.5 h-3.5" />
+              <div className="w-8 h-8 rounded-xl bg-[#101114] text-[#FFF19A] flex items-center justify-center shrink-0 border border-white/15">
+                <MessageSquare className="w-4 h-4" />
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1.5">
-                  <span className="font-extrabold text-white text-[11px] truncate group-hover:text-purple-300">
+                  <span className="font-extrabold text-white text-[11px] truncate group-hover:text-[#FFF19A]">
                     {latestCommunityMessage.nombreUsuario}
                   </span>
-                  <span className="px-1.5 py-0.2 rounded text-[8.5px] font-bold bg-purple-500/20 text-purple-300 border border-purple-400/30 shrink-0">
+                  <span className="px-1.5 py-0.5 rounded text-[8.5px] font-black bg-[#101114] text-[#B7F36B] border border-[#B7F36B]/40 shrink-0">
                     Comunidad
                   </span>
                 </div>
-                <p className="text-[11px] text-slate-300 truncate">
+                <p className="text-[11px] text-[#9299A5] truncate">
                   {latestCommunityMessage.texto}
                 </p>
               </div>
@@ -1672,15 +1787,16 @@ export default function App() {
 
             <button
               onClick={() => setActiveTab('chat')}
-              className="px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs shrink-0 cursor-pointer shadow-md shadow-purple-600/30 active:scale-95 transition-all flex items-center gap-1"
+              title="Ir directamente al chat comunitario"
+              className="min-h-[38px] px-3 py-1.5 rounded-xl bg-[#FFF19A] hover:brightness-95 text-[#101114] border border-[#101114] font-black text-xs shrink-0 cursor-pointer active:scale-95 transition-all flex items-center gap-1"
             >
               <span>Ver Chat</span>
             </button>
 
             <button
               onClick={() => setDismissedChatMsgId(latestCommunityMessage.id)}
-              className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors shrink-0 cursor-pointer"
-              title="Ocultar aviso de chat"
+              className="p-2 rounded-lg text-[#9299A5] hover:text-white hover:bg-[#101114] transition-colors shrink-0 cursor-pointer"
+              title="Ocultar aviso de chat flotante"
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -1691,23 +1807,24 @@ export default function App() {
       {/* Footer Advertising Banner */}
       <AdBanner ads={ads} onOpenContactModal={() => setIsContactAdOpen(true)} />
 
-      {/* Barra de Navegación Inferior Inspirada en Cabify con Iconos y Texto Debajo */}
-      <nav className="shrink-0 bg-[#080d18]/98 backdrop-blur-2xl border-t border-white/10 px-1.5 py-1.5 z-40 safe-area-pb shadow-2xl">
+      {/* Barra de Navegación Inferior — Android-First Tap Targets */}
+      <nav className="shrink-0 bg-[#101114] border-t-2 border-white/15 px-1.5 py-1.5 z-40 safe-area-pb">
         <div className="max-w-xl mx-auto grid grid-cols-6 gap-1">
-          {/* Tab 1: Mapa (Icono de colectivo + texto "Mapa" debajo) */}
+          {/* Tab 1: Mapa */}
           <button
             onClick={() => setActiveTab('map')}
-            className={`py-1 px-1 rounded-2xl flex flex-col items-center justify-center transition-all cursor-pointer ${
+            title="Ver mapa en vivo, recorridos y colectivos"
+            className={`min-h-[48px] py-1 px-1 rounded-xl flex flex-col items-center justify-center transition-all cursor-pointer ${
               activeTab === 'map'
-                ? 'text-sky-300 font-black'
-                : 'text-slate-400 hover:text-slate-200'
+                ? 'text-[#FFF19A] font-black'
+                : 'text-[#9299A5] hover:text-white'
             }`}
           >
             <div
-              className={`p-1.5 rounded-xl transition-all ${
+              className={`p-1.5 rounded-lg transition-all ${
                 activeTab === 'map'
-                  ? 'bg-sky-500/25 border border-sky-400/40 text-sky-300 shadow-md shadow-sky-500/20'
-                  : 'bg-transparent text-slate-400'
+                  ? 'bg-[#FFF19A] border border-[#101114] text-[#101114]'
+                  : 'bg-transparent text-[#9299A5]'
               }`}
             >
               <Bus className="w-4 h-4" />
@@ -1715,7 +1832,7 @@ export default function App() {
             <span className="text-[10px] tracking-tight mt-0.5 font-bold">Mapa</span>
           </button>
 
-          {/* Botón 2: Mi ubicacion */}
+          {/* Botón 2: Mi ubicación */}
           <button
             onClick={() => {
               setActiveTab('map');
@@ -1726,13 +1843,13 @@ export default function App() {
                 showToast('Centrando en tu ubicación GPS');
               }
             }}
-            className="py-1 px-1 rounded-2xl flex flex-col items-center justify-center transition-all cursor-pointer text-slate-400 hover:text-cyan-300 group"
-            title="Centrar en mi ubicación GPS"
+            className="min-h-[48px] py-1 px-1 rounded-xl flex flex-col items-center justify-center transition-all cursor-pointer text-[#9299A5] hover:text-white group"
+            title="Centrar el mapa en mi ubicación GPS actual"
           >
-            <div className="p-1.5 rounded-xl bg-transparent group-hover:bg-cyan-500/20 border border-transparent group-hover:border-cyan-400/30 text-cyan-400 transition-all shadow-sm">
-              <Navigation className="w-4 h-4 fill-cyan-400/20 text-cyan-400 group-hover:scale-110 transition-transform" />
+            <div className="p-1.5 rounded-lg bg-transparent group-hover:bg-[#202329] text-[#B7F36B] transition-all">
+              <Navigation className="w-4 h-4" />
             </div>
-            <span className="text-[9.5px] tracking-tight mt-0.5 font-bold whitespace-nowrap text-slate-300 group-hover:text-cyan-200">
+            <span className="text-[9.5px] tracking-tight mt-0.5 font-bold whitespace-nowrap text-[#9299A5] group-hover:text-white">
               Mi ubicacion
             </span>
           </button>
@@ -1744,32 +1861,33 @@ export default function App() {
               window.dispatchEvent(new CustomEvent('uppa-map-fit-route'));
               showToast('Enfocando traza completa Malvinas ↔ Zárate');
             }}
-            className="py-1 px-1 rounded-2xl flex flex-col items-center justify-center transition-all cursor-pointer text-slate-400 hover:text-indigo-300 group"
-            title="Enfocar recorrido completo"
+            className="min-h-[48px] py-1 px-1 rounded-xl flex flex-col items-center justify-center transition-all cursor-pointer text-[#9299A5] hover:text-white group"
+            title="Enfocar el recorrido completo en el mapa"
           >
-            <div className="p-1.5 rounded-xl bg-transparent group-hover:bg-indigo-500/20 border border-transparent group-hover:border-indigo-400/30 text-indigo-400 transition-all shadow-sm">
-              <Maximize2 className="w-4 h-4 group-hover:scale-110 transition-transform" />
+            <div className="p-1.5 rounded-lg bg-transparent group-hover:bg-[#202329] text-white transition-all">
+              <Maximize2 className="w-4 h-4" />
             </div>
-            <span className="text-[10px] tracking-tight mt-0.5 font-bold whitespace-nowrap text-slate-300 group-hover:text-indigo-200">
+            <span className="text-[10px] tracking-tight mt-0.5 font-bold whitespace-nowrap text-[#9299A5] group-hover:text-white">
               Enfocar
             </span>
           </button>
 
-          {/* Tab 4: Taxi & Motos con 3 puntitos al lado para desplegar "Ranking de Prestadores" */}
+          {/* Tab 4: Taxi & Motos con acceso al Ranking de Prestadores */}
           <div className="relative flex items-center justify-center">
             <button
               onClick={() => setActiveTab('taxi')}
-              className={`py-1 px-1 rounded-2xl flex flex-col items-center justify-center transition-all cursor-pointer flex-1 ${
+              title="Ir a Taxis & Motos para pedir o ver prestadores habilitados"
+              className={`min-h-[48px] py-1 px-1 rounded-xl flex flex-col items-center justify-center transition-all cursor-pointer flex-1 ${
                 activeTab === 'taxi'
-                  ? 'text-emerald-300 font-black'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'text-[#B7F36B] font-black'
+                  : 'text-[#9299A5] hover:text-white'
               }`}
             >
               <div
-                className={`p-1.5 rounded-xl transition-all flex items-center -space-x-1 ${
+                className={`p-1.5 rounded-lg transition-all flex items-center -space-x-1 ${
                   activeTab === 'taxi'
-                    ? 'bg-emerald-500/25 border border-emerald-400/40 text-emerald-300 shadow-md shadow-emerald-500/20'
-                    : 'bg-transparent text-slate-400'
+                    ? 'bg-[#B7F36B] border border-[#101114] text-[#101114]'
+                    : 'bg-transparent text-[#9299A5]'
                 }`}
               >
                 <Bike className="w-3.5 h-3.5" />
@@ -1780,12 +1898,11 @@ export default function App() {
               </span>
             </button>
 
-            {/* 3 Puntitos al lado que abren el Ranking de Prestadores */}
             <div className="absolute right-0 top-1">
               <RankingPrestadoresDropdown
                 placement="top"
                 onOpenTaxiTab={() => setActiveTab('taxi')}
-                triggerButtonClassName="w-5 h-5 rounded-md bg-emerald-500/20 hover:bg-emerald-500/35 border border-emerald-400/40 text-emerald-300 flex items-center justify-center transition-all cursor-pointer shadow-sm"
+                triggerButtonClassName="w-5 h-5 rounded-md bg-[#202329] hover:border-[#FFF19A] border border-white/20 text-[#FFF19A] flex items-center justify-center transition-all cursor-pointer"
               />
             </div>
           </div>
@@ -1793,22 +1910,23 @@ export default function App() {
           {/* Tab 5: Chat Comunitario */}
           <button
             onClick={() => setActiveTab('chat')}
-            className={`py-1 px-1 rounded-2xl flex flex-col items-center justify-center transition-all cursor-pointer relative ${
+            title="Abrir el chat comunitario de pasajeros y prestadores"
+            className={`min-h-[48px] py-1 px-1 rounded-xl flex flex-col items-center justify-center transition-all cursor-pointer relative ${
               activeTab === 'chat'
-                ? 'text-purple-300 font-black'
-                : 'text-slate-400 hover:text-slate-200'
+                ? 'text-[#FFF19A] font-black'
+                : 'text-[#9299A5] hover:text-white'
             }`}
           >
             <div
-              className={`p-1.5 rounded-xl transition-all relative ${
+              className={`p-1.5 rounded-lg transition-all relative ${
                 activeTab === 'chat'
-                  ? 'bg-purple-500/25 border border-purple-400/40 text-purple-300 shadow-md shadow-purple-500/20'
-                  : 'bg-transparent text-slate-400'
+                  ? 'bg-[#FFF19A] border border-[#101114] text-[#101114]'
+                  : 'bg-transparent text-[#9299A5]'
               }`}
             >
               <MessageSquare className="w-4 h-4" />
               {communityChatList.length > 0 && (
-                <span className="absolute -top-1 -right-1 px-1 py-0.2 rounded-full bg-purple-500 text-white font-black text-[8.5px] min-w-3.5 text-center animate-pulse">
+                <span className="absolute -top-1 -right-1 px-1 py-0.2 rounded-full bg-[#B7F36B] text-[#101114] font-black text-[8.5px] min-w-3.5 text-center border border-[#101114]">
                   {communityChatList.length}
                 </span>
               )}
@@ -1819,17 +1937,18 @@ export default function App() {
           {/* Tab 6: Admin */}
           <button
             onClick={() => setActiveTab('admin')}
-            className={`py-1 px-1 rounded-2xl flex flex-col items-center justify-center transition-all cursor-pointer ${
+            title="Abrir el panel de Administración UPPA"
+            className={`min-h-[48px] py-1 px-1 rounded-xl flex flex-col items-center justify-center transition-all cursor-pointer ${
               activeTab === 'admin'
-                ? 'text-violet-300 font-black'
-                : 'text-slate-400 hover:text-slate-200'
+                ? 'text-[#FFF19A] font-black'
+                : 'text-[#9299A5] hover:text-white'
             }`}
           >
             <div
-              className={`p-1.5 rounded-xl transition-all ${
+              className={`p-1.5 rounded-lg transition-all ${
                 activeTab === 'admin'
-                  ? 'bg-violet-500/25 border border-violet-400/40 text-violet-300 shadow-md shadow-violet-500/20'
-                  : 'bg-transparent text-slate-400'
+                  ? 'bg-[#FFF19A] border border-[#101114] text-[#101114]'
+                  : 'bg-transparent text-[#9299A5]'
               }`}
             >
               <Shield className="w-4 h-4" />
@@ -1926,10 +2045,11 @@ export default function App() {
       {/* Non-blocking Login / Register Modal for optional account access */}
       {isLoginModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200">
-          <div className="w-full max-w-4xl max-h-[95vh] overflow-y-auto bg-[#07090e] border border-sky-400/30 rounded-3xl relative shadow-2xl">
+          <div className="w-full max-w-4xl max-h-[95vh] overflow-y-auto bg-[#101114] border-2 border-[#FFF19A]/40 rounded-3xl relative shadow-[6px_6px_0px_#202329]">
             <button
               onClick={() => setIsLoginModalOpen(false)}
-              className="absolute top-4 right-4 z-20 w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors cursor-pointer"
+              title="Cerrar ventana de inicio de sesión"
+              className="absolute top-4 right-4 z-20 w-11 h-11 rounded-xl bg-[#202329] hover:border-[#FFF19A] border border-white/15 text-white flex items-center justify-center transition-colors cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>

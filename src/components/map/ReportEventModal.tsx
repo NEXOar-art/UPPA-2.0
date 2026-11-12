@@ -100,15 +100,14 @@ export const ReportEventModal: React.FC<ReportEventModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="w-full max-w-sm glass-panel rounded-3xl p-5 shadow-2xl relative">
-        {/* Header - Not labeled as problem or alert when bus location is selected */}
-        <div className="flex items-center justify-between pb-3 border-b border-white/5">
-          <h2 className="text-sm font-bold text-white flex items-center gap-2">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="w-full max-w-sm bg-[#202329] border-2 border-[#FFF19A]/45 rounded-2xl p-5 shadow-[6px_6px_0px_#101114] relative">
+        <div className="flex items-center justify-between pb-3 border-b border-white/10">
+          <h2 className="text-sm font-black text-white flex items-center gap-2">
             {isBusLocation ? (
               <>
-                <span className="text-cyan-400 text-base">📍</span>
-                <span className="bg-gradient-to-r from-cyan-300 to-emerald-300 bg-clip-text text-transparent font-black">
+                <span className="text-[#FFF19A] text-base">📍</span>
+                <span className="text-[#FFF19A] font-black">
                   Ubicación de colectivo ahora
                 </span>
               </>
@@ -119,12 +118,17 @@ export const ReportEventModal: React.FC<ReportEventModalProps> = ({
               </>
             )}
           </h2>
-          <button onClick={onClose} className="p-1 rounded-full text-slate-400 hover:text-white" aria-label="Cerrar modal">
+          <button
+            onClick={onClose}
+            title="Cerrar ventana para reportar evento"
+            className="w-9 h-9 rounded-xl bg-[#101114] border border-white/15 hover:border-[#FFF19A] text-[#9299A5] hover:text-white flex items-center justify-center cursor-pointer"
+            aria-label="Cerrar modal"
+          >
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="pt-3 space-y-3">
+        <form onSubmit={handleSubmit} className="pt-3.5 space-y-3">
           {/* Options Grid */}
           <div className="grid grid-cols-2 gap-2">
             {EVENT_OPTIONS.slice(0, 4).map((opt) => {
@@ -134,14 +138,15 @@ export const ReportEventModal: React.FC<ReportEventModalProps> = ({
                   key={opt.type}
                   type="button"
                   onClick={() => setSelectedType(opt.type)}
-                  className={`p-2.5 rounded-2xl border text-center transition-all flex flex-col items-center gap-1 ${
+                  title={`Seleccionar tipo de reporte: ${opt.label}`}
+                  className={`min-h-[60px] p-2.5 rounded-xl border-2 text-center transition-all flex flex-col items-center justify-center gap-1 cursor-pointer ${
                     isSelected
-                      ? `${opt.color} ring-1 ring-white/20 shadow-md scale-102`
-                      : 'bg-white/[0.03] border-white/5 text-slate-400 hover:text-slate-200'
+                      ? 'bg-[#FFF19A] border-[#101114] text-[#101114]'
+                      : 'bg-[#101114] border-white/10 text-[#9299A5] hover:text-white hover:border-white/25'
                   }`}
                 >
                   <span className="text-xl">{opt.icon}</span>
-                  <span className="text-[11px] font-semibold">{opt.label}</span>
+                  <span className="text-[11px] font-extrabold leading-tight">{opt.label}</span>
                 </button>
               );
             })}
@@ -149,23 +154,24 @@ export const ReportEventModal: React.FC<ReportEventModalProps> = ({
 
           {/* Direction Selector for Ubicación de Colectivo Ahora */}
           {isBusLocation && (
-            <div className="p-3 rounded-2xl bg-gradient-to-br from-cyan-950/50 via-slate-900 to-slate-900 border border-cyan-500/30 space-y-2.5 shadow-inner">
+            <div className="p-3 rounded-xl bg-[#101114] border border-[#FFF19A]/40 space-y-2.5">
               <div className="flex items-center justify-between text-[11px]">
-                <span className="font-bold text-cyan-300 flex items-center gap-1.5">
-                  <span>🧭</span> ¿Hacia dónde va el colectivo?
+                <span className="font-bold text-[#FFF19A]">
+                  ¿Hacia dónde va el colectivo?
                 </span>
-                <span className="text-[10px] text-cyan-300 bg-cyan-500/20 px-2 py-0.5 rounded-full font-mono font-bold">
-                  ⏱️ 1 minuto
+                <span className="text-[10px] text-[#101114] bg-[#B7F36B] px-2 py-0.5 rounded font-mono font-black">
+                  1 min
                 </span>
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
                   onClick={() => setBusDirection('hacia_zarate')}
-                  className={`py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 border ${
+                  title="Indicar que el colectivo va hacia Zárate"
+                  className={`min-h-[44px] py-2 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 border cursor-pointer ${
                     busDirection === 'hacia_zarate'
-                      ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 border-emerald-400 shadow-lg shadow-emerald-500/30 font-black scale-[1.02]'
-                      : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'
+                      ? 'bg-[#FFF19A] text-[#101114] border-[#101114]'
+                      : 'bg-[#202329] border-white/15 text-[#9299A5] hover:text-white'
                   }`}
                 >
                   <span>➡️</span>
@@ -174,28 +180,29 @@ export const ReportEventModal: React.FC<ReportEventModalProps> = ({
                 <button
                   type="button"
                   onClick={() => setBusDirection('hacia_malvinas')}
-                  className={`py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 border ${
+                  title="Indicar que el colectivo va hacia Barrio Malvinas"
+                  className={`min-h-[44px] py-2 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 border cursor-pointer ${
                     busDirection === 'hacia_malvinas'
-                      ? 'bg-gradient-to-r from-cyan-500 to-blue-500 text-slate-950 border-cyan-400 shadow-lg shadow-cyan-500/30 font-black scale-[1.02]'
-                      : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'
+                      ? 'bg-[#B7F36B] text-[#101114] border-[#101114]'
+                      : 'bg-[#202329] border-white/15 text-[#9299A5] hover:text-white'
                   }`}
                 >
                   <span>⬅️</span>
                   <span>Hacia Malvinas</span>
                 </button>
               </div>
-              <p className="text-[10px] text-cyan-200/70 leading-snug">
-                El ícono 📍 quedará visible en el mapa exactamente durante 1 minuto para dar precisión en tiempo real sin desinformar al avanzar.
+              <p className="text-[10px] text-[#9299A5] leading-snug">
+                El ícono 📍 quedará visible en el mapa durante 1 minuto y se avisará en el chat comunitario.
               </p>
             </div>
           )}
 
           {/* Other events dropdown */}
           <div className="pt-1">
-            <details className="text-xs text-slate-400 group">
-              <summary className="cursor-pointer hover:text-slate-200 flex items-center justify-between py-1">
+            <details className="text-xs text-[#9299A5] group">
+              <summary className="cursor-pointer hover:text-white flex items-center justify-between py-1 font-bold">
                 <span>Otros tipos de alertas...</span>
-                <span className="text-[10px] text-slate-500 group-open:rotate-180 transition-transform">▼</span>
+                <span className="text-[10px] text-[#9299A5] group-open:rotate-180 transition-transform">▼</span>
               </summary>
               <div className="grid grid-cols-2 gap-1.5 pt-2">
                 {EVENT_OPTIONS.slice(4).map((opt) => {
@@ -205,14 +212,15 @@ export const ReportEventModal: React.FC<ReportEventModalProps> = ({
                       key={opt.type}
                       type="button"
                       onClick={() => setSelectedType(opt.type)}
-                      className={`p-2 rounded-xl border text-center transition-all flex items-center gap-2 ${
+                      title={`Seleccionar alerta: ${opt.label}`}
+                      className={`min-h-[44px] p-2 rounded-xl border text-center transition-all flex items-center gap-2 cursor-pointer ${
                         isSelected
-                          ? `${opt.color} ring-1 ring-white/20 shadow-md`
-                          : 'bg-white/[0.03] border-white/5 text-slate-400 hover:text-slate-200'
+                          ? 'bg-[#FFF19A] border-[#101114] text-[#101114] font-black'
+                          : 'bg-[#101114] border-white/10 text-[#9299A5] hover:text-white'
                       }`}
                     >
                       <span className="text-base">{opt.icon}</span>
-                      <span className="text-[11px] font-semibold truncate">{opt.label}</span>
+                      <span className="text-[11px] font-bold truncate">{opt.label}</span>
                     </button>
                   );
                 })}
@@ -222,14 +230,14 @@ export const ReportEventModal: React.FC<ReportEventModalProps> = ({
 
           {/* Route selector */}
           <div>
-            <label className="text-[10px] text-slate-400 font-medium mb-1 block">Línea de transporte:</label>
+            <label className="text-[10.5px] text-[#9299A5] font-bold mb-1 block">Línea de transporte:</label>
             <select
               value={selectedRouteId}
               onChange={(e) => setSelectedRouteId(e.target.value)}
-              className="w-full bg-white/[0.04] border border-white/10 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none"
+              className="w-full min-h-[44px] bg-[#101114] border border-white/15 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#FFF19A]"
             >
               {routes.map((r) => (
-                <option key={r.id} value={r.id} className="bg-[#0f1422]">
+                <option key={r.id} value={r.id} className="bg-[#101114]">
                   {r.shortName}
                 </option>
               ))}
@@ -243,26 +251,27 @@ export const ReportEventModal: React.FC<ReportEventModalProps> = ({
               value={comment}
               onChange={(e) => setComment(e.target.value)}
               placeholder="Nota opcional (ej: pasando por arco de Campana)"
-              className="w-full bg-white/[0.04] border border-white/10 rounded-xl px-3 py-2 text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none"
+              className="w-full min-h-[44px] bg-[#101114] border border-white/15 rounded-xl px-3 py-2 text-xs text-white placeholder:text-[#9299A5] focus:outline-none focus:border-[#FFF19A]"
             />
           </div>
 
           <button
             type="submit"
-            className={`w-full h-11 font-bold text-xs rounded-2xl flex items-center justify-center gap-1.5 shadow-lg active:scale-95 transition-all ${
+            title={isBusLocation ? 'Publicar ubicación del colectivo en el mapa y chat' : 'Publicar reporte en el mapa y chat'}
+            className={`w-full min-h-[48px] font-black text-xs rounded-xl flex items-center justify-center gap-1.5 border-2 border-[#101114] active:scale-95 transition-all cursor-pointer ${
               isBusLocation
-                ? 'bg-gradient-to-r from-cyan-400 to-emerald-400 hover:from-cyan-300 hover:to-emerald-300 text-slate-950 shadow-cyan-500/25 font-black'
-                : 'bg-gradient-to-r from-sky-400 to-cyan-500 hover:from-sky-300 hover:to-cyan-400 text-slate-950 shadow-sky-500/20'
+                ? 'bg-[#B7F36B] hover:brightness-95 text-[#101114]'
+                : 'bg-[#FFF19A] hover:brightness-95 text-[#101114]'
             }`}
           >
             {isBusLocation ? (
               <>
-                <MapPin className="w-4 h-4 fill-current" />
-                <span>📍 Publicar Ubicación Ahora (1 min)</span>
+                <MapPin className="w-4 h-4" />
+                <span>Publicar Ubicación Ahora (1 min)</span>
               </>
             ) : (
               <>
-                <Send className="w-3.5 h-3.5" />
+                <Send className="w-4 h-4" />
                 <span>Publicar Reporte</span>
               </>
             )}

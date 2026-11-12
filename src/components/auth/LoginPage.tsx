@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { User, UserRole, mapFirestoreRolToAppRole } from '../../types';
+import { User, mapFirestoreRolToAppRole } from '../../types';
 import heroCorridorImg from '../../assets/images/uppa_zarate_corridor_1791318316432.jpg';
 import { useAuth } from '../../context/AuthContext';
 import { ResetPasswordModal } from './ResetPasswordModal';
@@ -7,7 +7,6 @@ import { GoogleAccountChooserModal } from './GoogleAccountChooserModal';
 import {
   Car,
   Shield,
-  ArrowRight,
   Radio,
   Lock,
   Mail,
@@ -30,11 +29,10 @@ interface LoginPageProps {
   onExploreGuest: () => void;
 }
 
-export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onExploreGuest }) => {
+export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
   const {
     registerWithEmail,
     loginWithEmail,
-    loginWithGoogle,
     authError,
     setAuthError,
     authNotice,
@@ -80,8 +78,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onExploreGuest })
 
     try {
       if (authMode === 'register') {
-        // 1. Firebase Authentication createUserWithEmailAndPassword
-        // 2. Registra perfil con nombre, email, contraseña y rol (pasajero, moto taxi o auto taxi)
         const isChofer = role === 'chofer_moto' || role === 'chofer_auto';
         const tipoVehiculo = role === 'chofer_moto' ? 'moto' : role === 'chofer_auto' ? 'auto' : null;
         const userProfile = await registerWithEmail(cleanEmail, cleanPassword, cleanName, role, {
@@ -114,7 +110,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onExploreGuest })
           });
         }, 500);
       } else {
-        // Inicio de sesión con email y contraseña mediante Firebase Auth
         setLocalNotice('Verificando credenciales con Firebase Auth...');
         const userProfile = await loginWithEmail(cleanEmail, cleanPassword);
 
@@ -130,6 +125,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onExploreGuest })
             email: userProfile.email,
             role: computedRole,
             rol: userProfile.rol,
+            esChofer: userProfile.esChofer,
+            tipoVehiculo: userProfile.tipoVehiculo,
             estado: userProfile.estado,
             fechaRegistro: userProfile.fechaRegistro,
             barrio: userProfile.barrio,
@@ -138,7 +135,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onExploreGuest })
           });
         }, 300);
       }
-    } catch (err: any) {
+    } catch {
       setIsSubmitting(false);
       setLocalNotice(null);
     }
@@ -155,6 +152,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onExploreGuest })
       email: userProfile.email,
       role: computedRole,
       rol: userProfile.rol,
+      esChofer: userProfile.esChofer,
+      tipoVehiculo: userProfile.tipoVehiculo,
       estado: userProfile.estado,
       fechaRegistro: userProfile.fechaRegistro,
       barrio: userProfile.barrio,
@@ -164,8 +163,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onExploreGuest })
   };
 
   return (
-    <div className="relative min-h-screen w-full bg-[#07090e] text-slate-100 flex flex-col justify-between overflow-x-hidden">
-      {/* Background Atmosphere */}
+    <div className="relative min-h-screen w-full bg-[#101114] text-white flex flex-col justify-between overflow-x-hidden">
+      {/* Subtle Background Atmosphere */}
       <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden">
         <img
           src={heroCorridorImg}
@@ -173,13 +172,13 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onExploreGuest })
           referrerPolicy="no-referrer"
           className="w-full h-full object-cover object-center opacity-15 filter blur-[2px] scale-105"
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-[#07090e] via-[#07090e]/85 to-[#07090e]/60" />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#101114] via-[#101114]/90 to-[#101114]/70" />
       </div>
 
-      {/* Top Floating Glass Header */}
+      {/* Top Header */}
       <header className="relative z-10 w-full px-6 py-4 flex items-center justify-between max-w-6xl mx-auto">
-        <div className="flex items-center gap-2.5">
-          <div className="w-10 h-10 rounded-2xl overflow-hidden border border-cyan-400/40 shadow-lg shadow-cyan-500/20 bg-[#070b14] shrink-0">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl overflow-hidden border-2 border-[#FFF19A]/60 bg-[#202329] shrink-0">
             <img
               src="/assets/aistudio/UPPALOGO_c4c84137.jpg"
               alt="UPPA"
@@ -187,95 +186,86 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onExploreGuest })
             />
           </div>
           <div>
-            <span className="text-lg font-extrabold tracking-tight text-white font-display">
-              UPPA
-            </span>
-            <span className="hidden sm:inline-block text-[10px] text-sky-300/80 ml-2 font-mono">
+            <span className="text-lg font-black tracking-tight text-white font-display">UPPA</span>
+            <span className="hidden sm:inline-block text-[10px] text-[#FFF19A] ml-2 font-mono font-bold">
               Zárate ↔ Campana
             </span>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
-          <div className="px-3 py-1.5 rounded-2xl bg-sky-500/10 border border-sky-400/30 text-xs font-bold text-sky-200 flex items-center gap-1.5 shadow-sm">
-            <Shield className="w-3.5 h-3.5 text-cyan-400" />
+          <div className="px-3 py-1.5 rounded-xl bg-[#202329] border border-white/15 text-xs font-bold text-[#FFF19A] flex items-center gap-1.5">
+            <Shield className="w-3.5 h-3.5 text-[#FFF19A]" />
             <span>Acceso Requerido</span>
           </div>
         </div>
       </header>
 
-      {/* Hero & Glassmorphic Login Console */}
+      {/* Main Auth Grid */}
       <main className="relative z-10 flex-1 flex items-center justify-center px-4 py-6 max-w-5xl mx-auto w-full">
         <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-center w-full">
-          {/* Left Hero Brief */}
+          {/* Left Brief */}
           <div className="md:col-span-6 space-y-4 text-left">
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-sky-400/10 border border-sky-400/25 text-sky-300 text-xs font-medium backdrop-blur-md">
-              <span className="w-2 h-2 rounded-full bg-sky-400 animate-pulse" />
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#202329] border border-[#B7F36B]/45 text-[#B7F36B] text-xs font-bold">
+              <span className="w-2 h-2 rounded-full bg-[#B7F36B] animate-pulse" />
               <span>Corredor Zárate ↔ B° Malvinas en Vivo</span>
             </div>
 
-            <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-white font-display leading-tight">
+            <h1 className="text-3xl sm:text-4xl font-black tracking-tight text-white font-display leading-tight">
               Movilidad comunitaria.{' '}
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-sky-300 via-teal-300 to-emerald-300">
-                Llegá a tiempo.
-              </span>
+              <span className="text-[#FFF19A]">Llegá a tiempo.</span>
             </h1>
 
-            {/* 3 Pastel Cards */}
             <div className="grid grid-cols-3 gap-2.5 pt-2">
-              <div className="p-3 rounded-2xl glass-card border-white/5 space-y-1 text-center">
-                <Bus className="w-5 h-5 text-sky-300 mx-auto" />
-                <div className="text-xs font-semibold text-slate-200">Líneas</div>
-                <div className="text-[10px] text-slate-400 font-mono">228 & Colectora</div>
+              <div className="p-3 rounded-2xl bg-[#202329] border-2 border-white/15 space-y-1 text-center shadow-[3px_3px_0px_#000000]">
+                <Bus className="w-5 h-5 text-[#FFF19A] mx-auto" />
+                <div className="text-xs font-black text-white">Líneas</div>
+                <div className="text-[10px] text-[#9299A5] font-mono">228 & Colectora</div>
               </div>
 
-              <div className="p-3 rounded-2xl glass-card border-white/5 space-y-1 text-center">
-                <Car className="w-5 h-5 text-emerald-300 mx-auto" />
-                <div className="text-xs font-semibold text-slate-200">Taxis GPS</div>
-                <div className="text-[10px] text-slate-400 font-mono">Autos & Motos</div>
+              <div className="p-3 rounded-2xl bg-[#202329] border-2 border-white/15 space-y-1 text-center shadow-[3px_3px_0px_#000000]">
+                <Car className="w-5 h-5 text-[#B7F36B] mx-auto" />
+                <div className="text-xs font-black text-white">Taxis GPS</div>
+                <div className="text-[10px] text-[#9299A5] font-mono">Autos & Motos</div>
               </div>
 
-              <div className="p-3 rounded-2xl glass-card border-white/5 space-y-1 text-center">
-                <Radio className="w-5 h-5 text-amber-300 mx-auto" />
-                <div className="text-xs font-semibold text-slate-200">Alertas</div>
-                <div className="text-[10px] text-slate-400 font-mono">Waze Comunitario</div>
+              <div className="p-3 rounded-2xl bg-[#202329] border-2 border-white/15 space-y-1 text-center shadow-[3px_3px_0px_#000000]">
+                <Radio className="w-5 h-5 text-[#FFF19A] mx-auto" />
+                <div className="text-xs font-black text-white">Alertas</div>
+                <div className="text-[10px] text-[#9299A5] font-mono">Waze Comunitario</div>
               </div>
             </div>
 
-            {/* Firebase Live Backend Status */}
-            <div className="p-3 rounded-2xl bg-white/[0.03] border border-white/5 flex items-center justify-between text-xs text-slate-400">
+            <div className="p-3 rounded-2xl bg-[#202329] border border-white/15 flex items-center justify-between text-xs text-[#9299A5]">
               <div className="flex items-center gap-2">
-                <Database className="w-4 h-4 text-emerald-400" />
-                <span className="text-slate-300 font-mono text-[11px]">
-                  BACKEND FIREBASE:
-                </span>
-                <span className="text-emerald-400 font-bold text-[11px]">AUTH & FIRESTORE</span>
+                <Database className="w-4 h-4 text-[#B7F36B]" />
+                <span className="text-white font-mono text-[11px]">BACKEND FIREBASE:</span>
+                <span className="text-[#B7F36B] font-black text-[11px]">AUTH & FIRESTORE</span>
               </div>
-              <div className="flex items-center gap-1 text-[11px] text-slate-400 font-mono">
-                <Shield className="w-3.5 h-3.5 text-purple-400" />
+              <div className="flex items-center gap-1 text-[11px] text-[#9299A5] font-mono">
+                <Shield className="w-3.5 h-3.5 text-[#FFF19A]" />
                 <span>users/{'{uid}'}</span>
               </div>
             </div>
           </div>
 
-          {/* Right Column: Glassmorphic Form (NOMBRE, E-MAIL, CONTRASEÑA) */}
+          {/* Right Auth Card */}
           <div className="md:col-span-6 w-full max-w-sm mx-auto">
-            <div className="glass-panel rounded-3xl p-6 relative overflow-hidden shadow-2xl border border-white/10">
-              {/* Top ambient glow bar */}
-              <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-sky-400 via-teal-300 to-emerald-400" />
+            <div className="bg-[#202329] rounded-3xl p-6 relative overflow-hidden shadow-[6px_6px_0px_#000000] border-2 border-white/20">
+              <div className="absolute top-0 left-0 right-0 h-1.5 bg-[#FFF19A]" />
 
-              {/* Mode Selector Pill: Crear Cuenta vs Iniciar Sesión */}
-              <div className="flex rounded-2xl bg-white/[0.04] p-1 mb-4 border border-white/5">
+              <div className="flex rounded-2xl bg-[#101114] p-1 mb-4 border border-white/15">
                 <button
                   type="button"
                   onClick={() => {
                     setAuthMode('register');
                     setAuthError(null);
                   }}
-                  className={`flex-1 py-1.5 text-xs font-bold rounded-xl transition-all ${
+                  title="Crear una cuenta nueva en UPPA"
+                  className={`flex-1 min-h-[40px] text-xs font-black rounded-xl transition-all cursor-pointer ${
                     authMode === 'register'
-                      ? 'bg-sky-400/20 text-sky-200 border border-sky-400/40 shadow-sm'
-                      : 'text-slate-400 hover:text-white'
+                      ? 'bg-[#FFF19A] text-[#101114]'
+                      : 'text-[#9299A5] hover:text-white'
                   }`}
                 >
                   Registro
@@ -286,20 +276,20 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onExploreGuest })
                     setAuthMode('login');
                     setAuthError(null);
                   }}
-                  className={`flex-1 py-1.5 text-xs font-bold rounded-xl transition-all ${
+                  title="Ingresar con una cuenta existente"
+                  className={`flex-1 min-h-[40px] text-xs font-black rounded-xl transition-all cursor-pointer ${
                     authMode === 'login'
-                      ? 'bg-sky-400/20 text-sky-200 border border-sky-400/40 shadow-sm'
-                      : 'text-slate-400 hover:text-white'
+                      ? 'bg-[#FFF19A] text-[#101114]'
+                      : 'text-[#9299A5] hover:text-white'
                   }`}
                 >
                   Iniciar Sesión
                 </button>
               </div>
 
-              {/* Error feedback */}
               {authError && (
-                <div className="mb-3 p-2.5 rounded-xl bg-rose-500/15 border border-rose-500/30 text-[11px] text-rose-300 flex items-start gap-2 animate-in fade-in">
-                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                <div className="mb-3 p-2.5 rounded-xl bg-rose-950/50 border border-rose-400/50 text-[11px] text-rose-200 flex items-start gap-2 animate-in fade-in">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-400" />
                   <div className="flex-1">
                     <span>
                       {authError.includes('configuration-not-found') || authError.includes('CONFIGURATION_NOT_FOUND')
@@ -310,25 +300,24 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onExploreGuest })
                 </div>
               )}
 
-              {/* Status / Resilient Notice */}
               {(localNotice || authNotice) && (
-                <div className="mb-3 p-2.5 rounded-xl bg-emerald-500/15 border border-emerald-400/30 text-[11px] text-emerald-300 text-center font-mono flex items-center justify-center gap-1.5 animate-in fade-in">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                <div className="mb-3 p-2.5 rounded-xl bg-[#101114] border border-[#B7F36B]/50 text-[11px] text-[#B7F36B] text-center font-mono flex items-center justify-center gap-1.5 animate-in fade-in">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-[#B7F36B] shrink-0" />
                   <span>{authNotice || localNotice}</span>
                 </div>
               )}
 
-              {/* Modo Resiliente Info Banner */}
               {isResilientMode && !authError && (
-                <div className="mb-3 px-3 py-1.5 rounded-xl bg-sky-500/10 border border-sky-400/20 text-[10.5px] text-sky-200 flex items-center justify-between">
+                <div className="mb-3 px-3 py-1.5 rounded-xl bg-[#101114] border border-white/15 text-[10.5px] text-white flex items-center justify-between">
                   <span className="flex items-center gap-1.5 font-mono">
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                    <span>Modo Resiliente Inteligente Activo</span>
+                    <span className="w-2 h-2 rounded-full bg-[#B7F36B] animate-pulse" />
+                    <span>Modo Resiliente Activo</span>
                   </span>
                   <button
                     type="button"
                     onClick={() => setShowFirebaseInfo(!showFirebaseInfo)}
-                    className="underline text-[10px] text-sky-300 hover:text-white cursor-pointer"
+                    title="Mostrar u ocultar información de configuración de Firebase"
+                    className="underline text-[10px] text-[#FFF19A] hover:text-white cursor-pointer"
                   >
                     {showFirebaseInfo ? 'Ocultar info' : 'Ver info'}
                   </button>
@@ -336,57 +325,55 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onExploreGuest })
               )}
 
               {showFirebaseInfo && (
-                <div className="mb-3 p-3 rounded-2xl bg-black/60 border border-white/10 text-[10.5px] text-slate-300 space-y-1.5 animate-in fade-in font-sans">
+                <div className="mb-3 p-3 rounded-2xl bg-[#101114] border border-white/15 text-[10.5px] text-[#9299A5] space-y-1.5 animate-in fade-in font-sans">
                   <p className="font-bold text-white flex items-center gap-1">
                     <span>⚙️ Configuración Firebase (uppa-22dc3)</span>
                   </p>
-                  <p className="text-slate-400 leading-relaxed text-[10px]">
+                  <p className="leading-relaxed text-[10px]">
                     Para activar la base en la nube oficial:
                   </p>
-                  <ol className="list-decimal pl-4 space-y-0.5 text-[9.5px] text-slate-300">
+                  <ol className="list-decimal pl-4 space-y-0.5 text-[9.5px] text-white/90">
                     <li>Entrá a <strong>console.firebase.google.com</strong></li>
                     <li>Seleccioná <strong>uppa-22dc3</strong></li>
                     <li>En <strong>Authentication &gt; Sign-in method</strong>, activá <strong>Correo/Contraseña</strong></li>
                     <li>En <strong>Firestore Database</strong>, hacé clic en Crear base de datos</li>
                   </ol>
-                  <p className="text-emerald-400 text-[9.5px] font-semibold pt-1">
-                    ✓ Mientras tanto, todas las funciones de UPPA están 100% operativas en modo resiliente.
+                  <p className="text-[#B7F36B] text-[9.5px] font-bold pt-1">
+                    ✓ Mientras tanto, todas las funciones de UPPA están 100% operativas.
                   </p>
                 </div>
               )}
 
-              {/* Form: NOMBRE, E-MAIL, CONTRASEÑA */}
               <form onSubmit={handleSubmit} className="space-y-3">
-                {/* 1. NOMBRE (en Registro) */}
                 {authMode === 'register' && (
                   <>
                     <div>
-                      <label className="block text-[11px] font-semibold text-slate-300 mb-1 uppercase tracking-wider">
+                      <label className="block text-[11px] font-bold text-white mb-1 uppercase tracking-wider">
                         Nombre Completo
                       </label>
                       <div className="relative">
-                        <UserIcon className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                        <UserIcon className="w-4 h-4 text-[#9299A5] absolute left-3 top-1/2 -translate-y-1/2" />
                         <input
                           type="text"
                           required
                           value={name}
                           onChange={(e) => setName(e.target.value)}
                           placeholder="Tu nombre completo"
-                          className="w-full bg-white/[0.04] border border-white/10 rounded-2xl pl-9 pr-3.5 py-2 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-sky-400/70"
+                          className="w-full min-h-[42px] bg-[#101114] border-2 border-white/15 rounded-xl pl-9 pr-3.5 py-2 text-xs text-white placeholder:text-[#9299A5] focus:outline-none focus:border-[#FFF19A]"
                         />
                       </div>
                     </div>
 
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-200 mb-1.5 uppercase tracking-wider flex items-center justify-between">
+                      <label className="block text-[11px] font-bold text-white mb-1.5 uppercase tracking-wider flex items-center justify-between">
                         <span>Función en la Comunidad</span>
-                        <span className="text-[10px] text-cyan-400 font-semibold font-mono">Selección obligatoria</span>
+                        <span className="text-[10px] text-[#FFF19A] font-semibold font-mono">Obligatoria</span>
                       </label>
                       <div className="grid grid-cols-3 gap-2">
                         {[
-                          { id: 'pasajero' as const, label: 'Pasajero', sub: 'Vecino / Usuario', icon: '🚶', color: 'border-cyan-400 bg-sky-500/25 text-white shadow-cyan-500/20' },
-                          { id: 'chofer_moto' as const, label: 'Moto Taxi', sub: 'Chofer Moto', icon: '🏍️', color: 'border-emerald-400 bg-emerald-500/25 text-white shadow-emerald-500/20' },
-                          { id: 'chofer_auto' as const, label: 'Auto Taxi', sub: 'Chofer Auto', icon: '🚕', color: 'border-amber-400 bg-amber-500/25 text-white shadow-amber-500/20' },
+                          { id: 'pasajero' as const, label: 'Pasajero', sub: 'Vecino / Usuario', icon: '🚶', activeCls: 'border-[#FFF19A] bg-[#FFF19A] text-[#101114]' },
+                          { id: 'chofer_moto' as const, label: 'Moto Taxi', sub: 'Chofer Moto', icon: '🏍️', activeCls: 'border-[#B7F36B] bg-[#B7F36B] text-[#101114]' },
+                          { id: 'chofer_auto' as const, label: 'Auto Taxi', sub: 'Chofer Auto', icon: '🚕', activeCls: 'border-[#FFF19A] bg-[#FFF19A] text-[#101114]' },
                         ].map((r) => {
                           const isSelected = role === r.id;
                           return (
@@ -394,15 +381,18 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onExploreGuest })
                               key={r.id}
                               type="button"
                               onClick={() => setRole(r.id)}
-                              className={`p-2.5 rounded-2xl border text-center transition-all cursor-pointer flex flex-col items-center gap-1 shadow-sm ${
+                              title={`Seleccionar función: ${r.label}`}
+                              className={`p-2.5 rounded-xl border-2 text-center transition-all cursor-pointer flex flex-col items-center gap-0.5 ${
                                 isSelected
-                                  ? `${r.color} ring-2 ring-white/20 scale-[1.02]`
-                                  : 'bg-white/[0.03] border-white/10 text-slate-400 hover:text-white hover:bg-white/[0.06]'
+                                  ? `${r.activeCls} font-black`
+                                  : 'bg-[#101114] border-white/15 text-[#9299A5] hover:text-white'
                               }`}
                             >
                               <span className="text-xl">{r.icon}</span>
                               <span className="text-xs font-black tracking-tight">{r.label}</span>
-                              <span className="text-[9.5px] text-slate-400 font-medium leading-tight">{r.sub}</span>
+                              <span className={`text-[9.5px] font-medium leading-tight ${isSelected ? 'text-[#101114]/80' : 'text-[#9299A5]'}`}>
+                                {r.sub}
+                              </span>
                             </button>
                           );
                         })}
@@ -411,33 +401,33 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onExploreGuest })
 
                     <div className="grid grid-cols-2 gap-2">
                       <div>
-                        <label className="block text-[11px] font-semibold text-slate-300 mb-1 uppercase tracking-wider">
+                        <label className="block text-[11px] font-bold text-white mb-1 uppercase tracking-wider">
                           Teléfono
                         </label>
                         <div className="relative">
-                          <Phone className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                          <Phone className="w-3.5 h-3.5 text-[#9299A5] absolute left-3 top-1/2 -translate-y-1/2" />
                           <input
                             type="tel"
                             value={phone}
                             onChange={(e) => setPhone(e.target.value)}
                             placeholder="+54 9 3487..."
-                            className="w-full bg-white/[0.04] border border-white/10 rounded-2xl pl-8 pr-2.5 py-2 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-sky-400/70 font-mono"
+                            className="w-full min-h-[40px] bg-[#101114] border-2 border-white/15 rounded-xl pl-8 pr-2.5 py-2 text-xs text-white placeholder:text-[#9299A5] focus:outline-none focus:border-[#FFF19A] font-mono"
                           />
                         </div>
                       </div>
 
                       <div>
-                        <label className="block text-[11px] font-semibold text-slate-300 mb-1 uppercase tracking-wider">
+                        <label className="block text-[11px] font-bold text-white mb-1 uppercase tracking-wider">
                           Barrio / Zona
                         </label>
                         <div className="relative">
-                          <MapPin className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                          <MapPin className="w-3.5 h-3.5 text-[#9299A5] absolute left-3 top-1/2 -translate-y-1/2" />
                           <input
                             type="text"
                             value={barrio}
                             onChange={(e) => setBarrio(e.target.value)}
                             placeholder="Campana Centro"
-                            className="w-full bg-white/[0.04] border border-white/10 rounded-2xl pl-8 pr-2.5 py-2 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-sky-400/70"
+                            className="w-full min-h-[40px] bg-[#101114] border-2 border-white/15 rounded-xl pl-8 pr-2.5 py-2 text-xs text-white placeholder:text-[#9299A5] focus:outline-none focus:border-[#FFF19A]"
                           />
                         </div>
                       </div>
@@ -445,89 +435,82 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onExploreGuest })
                   </>
                 )}
 
-                {/* 2. E-MAIL */}
                 <div>
-                  <label className="block text-[11px] font-semibold text-slate-300 mb-1 uppercase tracking-wider">
+                  <label className="block text-[11px] font-bold text-white mb-1 uppercase tracking-wider">
                     E-mail
                   </label>
                   <div className="relative">
-                    <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <Mail className="w-4 h-4 text-[#9299A5] absolute left-3 top-1/2 -translate-y-1/2" />
                     <input
                       type="email"
                       required
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="correo@ejemplo.com"
-                      className="w-full bg-white/[0.04] border border-white/10 rounded-2xl pl-9 pr-3.5 py-2 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-sky-400/70"
+                      className="w-full min-h-[42px] bg-[#101114] border-2 border-white/15 rounded-xl pl-9 pr-3.5 py-2 text-xs text-white placeholder:text-[#9299A5] focus:outline-none focus:border-[#FFF19A]"
                     />
                   </div>
                 </div>
 
-                {/* 3. CONTRASEÑA */}
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <label className="block text-[11px] font-semibold text-slate-300 uppercase tracking-wider">
+                    <label className="block text-[11px] font-bold text-white uppercase tracking-wider">
                       Contraseña
                     </label>
-
-                    {/* Recuperar Contraseña */}
                     <button
                       type="button"
                       onClick={() => setIsResetModalOpen(true)}
-                      className="text-[11px] text-sky-400 hover:text-sky-300 transition-colors cursor-pointer"
+                      title="Recuperar contraseña por correo electrónico"
+                      className="text-[11px] text-[#FFF19A] hover:underline transition-colors cursor-pointer font-bold"
                     >
                       ¿Olvidaste tu contraseña?
                     </button>
                   </div>
 
                   <div className="relative">
-                    <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <Lock className="w-4 h-4 text-[#9299A5] absolute left-3 top-1/2 -translate-y-1/2" />
                     <input
                       type={showPassword ? 'text' : 'password'}
                       required
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder="Mínimo 6 caracteres"
-                      className="w-full bg-white/[0.04] border border-white/10 rounded-2xl pl-9 pr-9 py-2 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-sky-400/70 font-mono"
+                      className="w-full min-h-[42px] bg-[#101114] border-2 border-white/15 rounded-xl pl-9 pr-10 py-2 text-xs text-white placeholder:text-[#9299A5] focus:outline-none focus:border-[#FFF19A] font-mono"
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
-                      title={showPassword ? 'Ocultar' : 'Mostrar'}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-[#9299A5] hover:text-white cursor-pointer"
+                      title={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
                     >
                       {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
                 </div>
 
-                {/* Botón Primario: Firebase Email/Password Auth */}
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="w-full h-11 bg-gradient-to-r from-sky-400 to-cyan-500 hover:from-sky-300 hover:to-cyan-400 text-slate-950 font-bold text-xs rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-sky-500/20 active:scale-97 transition-all mt-2 cursor-pointer disabled:opacity-50"
+                  title={authMode === 'register' ? 'Crear cuenta en UPPA y acceder' : 'Iniciar sesión con email y contraseña'}
+                  className="w-full min-h-[46px] uppa-cta-yellow font-black text-xs rounded-xl flex items-center justify-center gap-2 transition-all mt-2 cursor-pointer disabled:opacity-50"
                 >
                   {isSubmitting ? (
                     <RefreshCw className="w-4 h-4 animate-spin" />
                   ) : (
                     <>
-                      <span>
-                        {authMode === 'register'
-                          ? 'Registrarme e Ingresar'
-                          : 'Iniciar Sesión'}
-                      </span>
+                      <span>{authMode === 'register' ? 'Registrarme e Ingresar' : 'Iniciar Sesión'}</span>
                       <ChevronRight className="w-4 h-4" />
                     </>
                   )}
                 </button>
 
-                {/* Google Sign-in */}
                 <div className="pt-1">
                   <button
                     type="button"
                     onClick={() => setIsGoogleChooserOpen(true)}
                     disabled={isSubmitting}
-                    className="w-full h-10 rounded-2xl glass-button text-slate-300 hover:text-white text-xs font-semibold flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 cursor-pointer"
+                    title="Elegir una cuenta de Google para ingresar a UPPA"
+                    className="w-full min-h-[44px] rounded-xl bg-[#101114] hover:bg-white/10 border-2 border-white/15 text-white text-xs font-bold flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
                   >
                     <svg className="w-4 h-4" viewBox="0 0 24 24">
                       <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -540,18 +523,18 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onExploreGuest })
                 </div>
               </form>
 
-              {/* Botón de Recuperar Contraseña / Modo invitado */}
-              <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between text-xs">
+              <div className="mt-4 pt-3 border-t border-white/10 flex items-center justify-between text-xs">
                 <button
                   type="button"
                   onClick={() => setIsResetModalOpen(true)}
-                  className="text-sky-300 hover:text-sky-200 flex items-center gap-1.5 transition-colors text-[11px]"
+                  title="Solicitar enlace para restablecer contraseña"
+                  className="text-[#FFF19A] hover:underline flex items-center gap-1.5 transition-colors text-[11px] font-bold cursor-pointer"
                 >
                   <KeyRound className="w-3.5 h-3.5" />
                   <span>Recuperar contraseña</span>
                 </button>
 
-                <span className="text-[11px] text-slate-500 font-mono">
+                <span className="text-[11px] text-[#9299A5] font-mono">
                   🔒 Autenticación Requerida
                 </span>
               </div>
@@ -560,25 +543,22 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onExploreGuest })
         </div>
       </main>
 
-      {/* Password Reset Modal via Firebase Auth */}
       <ResetPasswordModal
         isOpen={isResetModalOpen}
         onClose={() => setIsResetModalOpen(false)}
         initialEmail={email}
       />
 
-      {/* Selector Interactivo de Cuentas de Google */}
       <GoogleAccountChooserModal
         isOpen={isGoogleChooserOpen}
         onClose={() => setIsGoogleChooserOpen(false)}
         onSuccess={handleGoogleSuccess}
       />
 
-      {/* Minimal Footer */}
-      <footer className="relative z-10 w-full px-6 py-3 border-t border-white/5 flex items-center justify-between text-[10px] text-slate-500 font-mono max-w-6xl mx-auto">
+      <footer className="relative z-10 w-full px-6 py-3 border-t border-white/10 flex items-center justify-between text-[10px] text-[#9299A5] font-mono max-w-6xl mx-auto">
         <span>UPPA · Comunidad de Transporte Zárate ↔ Barrio Malvinas</span>
-        <span className="text-slate-400 flex items-center gap-1">
-          <Shield className="w-3 h-3 text-sky-400" />
+        <span className="text-white/80 flex items-center gap-1">
+          <Shield className="w-3 h-3 text-[#FFF19A]" />
           <span>Firebase Authentication & Firestore</span>
         </span>
       </footer>

@@ -49,67 +49,66 @@ export const ResetPasswordModal: React.FC<ResetPasswordModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="w-full max-w-md bg-[#0a0d14]/95 border border-sky-400/30 rounded-3xl p-6 text-slate-100 shadow-2xl relative overflow-hidden">
-        {/* Subtle top pastel ambient line */}
-        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-cyan-400 via-sky-300 to-indigo-400" />
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="w-full max-w-md bg-[#202329] border-2 border-white/20 rounded-3xl p-6 text-white shadow-[0_8px_0_rgba(0,0,0,0.65)] relative overflow-hidden">
+        <div className="absolute top-0 left-0 right-0 h-1.5 bg-[#FFF19A]" />
 
-        {/* Modal Header */}
-        <div className="flex items-center justify-between pb-4 border-b border-white/5">
+        <div className="flex items-center justify-between pb-4 border-b border-white/10">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-2xl bg-sky-400/15 border border-sky-400/30 flex items-center justify-center text-sky-300">
+            <div className="w-9 h-9 rounded-xl bg-[#101114] border border-[#FFF19A]/45 flex items-center justify-center text-[#FFF19A]">
               <KeyRound className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-white font-display">Recuperar Contraseña</h2>
-              <p className="text-[11px] text-slate-400 font-mono">Firebase Authentication</p>
+              <h2 className="text-base font-black text-white font-display">Recuperar Contraseña</h2>
+              <p className="text-[11px] text-[#9299A5] font-mono">Firebase Authentication</p>
             </div>
           </div>
 
           <button
+            type="button"
             onClick={() => {
               setIsSent(false);
               setErrorMessage(null);
               onClose();
             }}
-            className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white flex items-center justify-center transition-colors"
+            title="Cerrar ventana de recuperación de contraseña"
+            className="w-9 h-9 rounded-xl bg-[#101114] hover:bg-white/10 border border-white/15 text-[#9299A5] hover:text-white flex items-center justify-center transition-colors cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Content */}
         {!isSent ? (
           <div className="pt-4 space-y-4">
-            <div className="p-3 rounded-2xl bg-sky-500/10 border border-sky-500/20 text-xs text-sky-200/90 flex items-start gap-2.5">
-              <Sparkles className="w-4 h-4 text-sky-300 shrink-0 mt-0.5" />
+            <div className="p-3 rounded-xl bg-[#101114] border border-[#FFF19A]/35 text-xs text-white/90 flex items-start gap-2.5">
+              <Sparkles className="w-4 h-4 text-[#FFF19A] shrink-0 mt-0.5" />
               <span>
                 Ingresá tu correo electrónico. Te enviaremos un enlace oficial de{' '}
-                <strong className="text-sky-100">Firebase</strong> para restablecer tu contraseña de forma segura y privada.
+                <strong className="text-[#FFF19A]">Firebase</strong> para restablecer tu contraseña de forma segura y privada.
               </span>
             </div>
 
             {errorMessage && (
-              <div className="p-3 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0" />
+              <div className="p-3 rounded-xl bg-rose-950/50 border border-rose-400/50 text-rose-200 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
                 <span>{errorMessage}</span>
               </div>
             )}
 
             <form onSubmit={handleSendResetEmail} className="space-y-3.5">
               <div>
-                <label className="block text-[11px] font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">
+                <label className="block text-[11px] font-bold text-white mb-1.5 uppercase tracking-wider">
                   Correo electrónico
                 </label>
                 <div className="relative">
-                  <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <Mail className="w-4 h-4 text-[#9299A5] absolute left-3.5 top-1/2 -translate-y-1/2" />
                   <input
                     type="email"
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="ejemplo@gmail.com"
-                    className="w-full bg-white/[0.04] border border-white/10 rounded-2xl pl-10 pr-3.5 py-2.5 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-sky-400"
+                    className="w-full min-h-[44px] bg-[#101114] border-2 border-white/15 rounded-xl pl-10 pr-3.5 py-2.5 text-xs text-white placeholder:text-[#9299A5] focus:outline-none focus:border-[#FFF19A]"
                   />
                 </div>
               </div>
@@ -117,7 +116,8 @@ export const ResetPasswordModal: React.FC<ResetPasswordModalProps> = ({
               <button
                 type="submit"
                 disabled={isSending}
-                className="w-full h-11 bg-gradient-to-r from-sky-400 to-cyan-400 hover:from-sky-300 hover:to-cyan-300 text-slate-950 font-bold text-xs rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-sky-500/20 active:scale-97 transition-all cursor-pointer disabled:opacity-50"
+                title="Enviar enlace de recuperación a tu correo"
+                className="w-full min-h-[46px] uppa-cta-yellow font-black text-xs rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50"
               >
                 {isSending ? (
                   <RefreshCw className="w-4 h-4 animate-spin" />
@@ -131,24 +131,21 @@ export const ResetPasswordModal: React.FC<ResetPasswordModalProps> = ({
             </form>
           </div>
         ) : (
-          /* Success Screen */
           <div className="pt-4 space-y-4 animate-in fade-in duration-200">
-            <div className="p-5 rounded-2xl bg-emerald-500/10 border border-emerald-400/30 text-center space-y-3">
-              <div className="w-12 h-12 rounded-full bg-emerald-400/20 text-emerald-300 mx-auto flex items-center justify-center shadow-lg">
+            <div className="p-5 rounded-2xl bg-[#101114] border-2 border-[#B7F36B]/45 text-center space-y-3">
+              <div className="w-12 h-12 rounded-full bg-[#B7F36B]/20 text-[#B7F36B] mx-auto flex items-center justify-center">
                 <ShieldCheck className="w-6 h-6" />
               </div>
 
               <div>
-                <div className="text-sm font-bold text-emerald-200">
-                  ¡Correo enviado con éxito!
-                </div>
-                <div className="text-xs text-slate-300 mt-1">
+                <div className="text-sm font-black text-[#B7F36B]">¡Correo enviado con éxito!</div>
+                <div className="text-xs text-[#9299A5] mt-1">
                   Enviamos las instrucciones para restablecer tu contraseña a:
                 </div>
-                <div className="text-xs font-mono font-bold text-white mt-1 bg-black/30 py-1 px-3 rounded-lg inline-block border border-white/10">
+                <div className="text-xs font-mono font-bold text-white mt-1 bg-[#202329] py-1 px-3 rounded-lg inline-block border border-white/15">
                   {email}
                 </div>
-                <p className="text-[11px] text-slate-400 mt-2">
+                <p className="text-[11px] text-[#9299A5] mt-2">
                   Revisá tu bandeja de entrada (y la carpeta de spam si es necesario) para crear tu nueva clave.
                 </p>
               </div>
@@ -160,7 +157,8 @@ export const ResetPasswordModal: React.FC<ResetPasswordModalProps> = ({
                 setIsSent(false);
                 onClose();
               }}
-              className="w-full h-11 bg-white/10 hover:bg-white/15 text-white font-bold text-xs rounded-2xl flex items-center justify-center gap-2 transition-all cursor-pointer"
+              title="Cerrar y volver al inicio de sesión"
+              className="w-full min-h-[46px] uppa-cta-green font-black text-xs rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer"
             >
               <Check className="w-4 h-4" />
               <span>Entendido, volver al inicio</span>

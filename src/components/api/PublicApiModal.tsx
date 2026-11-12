@@ -107,45 +107,48 @@ export const PublicApiModal: React.FC<PublicApiModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="w-full max-w-2xl bg-[#0c0f17] border border-slate-700/80 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-[#101114]/90 backdrop-blur-md animate-in fade-in duration-200">
+      <div className="w-full max-w-2xl bg-[#202329] border-2 border-white/20 rounded-3xl shadow-[6px_6px_0px_rgba(0,0,0,0.65)] overflow-hidden flex flex-col max-h-[90vh]">
         {/* Header */}
-        <div className="flex items-center justify-between p-5 border-b border-slate-800">
+        <div className="flex items-center justify-between p-5 border-b border-white/10">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-cyan-950/80 border border-cyan-500/50 flex items-center justify-center text-cyan-400">
+            <div className="w-10 h-10 rounded-xl bg-[#101114] border-2 border-[#FFF19A]/40 flex items-center justify-center text-[#FFF19A]">
               <Terminal className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-white flex items-center gap-2">
+              <h2 className="text-base font-black text-white flex items-center gap-2">
                 API Pública & Cartografía UPPA
               </h2>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-[#9299A5]">
                 Integración con API Key cartográfica y telemetría de conductores en tiempo real
               </p>
             </div>
           </div>
           <button
+            type="button"
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center transition-colors"
+            title="Cerrar ventana de API Pública"
+            aria-label="Cerrar"
+            className="w-11 h-11 rounded-xl bg-[#101114] border border-white/15 text-[#9299A5] hover:text-white flex items-center justify-center transition-colors cursor-pointer"
           >
-            <X className="w-4 h-4" />
+            <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Active API Key Banner */}
-        <div className="px-5 py-2.5 bg-cyan-950/40 border-b border-cyan-800/40 flex items-center justify-between text-xs">
+        <div className="px-5 py-2.5 bg-[#101114] border-b border-white/10 flex items-center justify-between text-xs gap-2 flex-wrap">
           <div className="flex items-center gap-2">
-            <Key className="w-3.5 h-3.5 text-cyan-400" />
-            <span className="text-slate-300">API Key Activa:</span>
-            <code className="text-cyan-300 font-mono font-bold bg-black/40 px-2 py-0.5 rounded border border-cyan-700/50">
+            <Key className="w-3.5 h-3.5 text-[#FFF19A]" />
+            <span className="text-[#9299A5]">API Key Activa:</span>
+            <code className="text-[#FFF19A] font-mono font-bold bg-[#202329] px-2 py-0.5 rounded border border-white/15">
               {MAP_CONFIG.API_KEY}
             </code>
           </div>
-          <span className="text-[11px] text-emerald-400 font-medium">Cartografía & Radar Conectados</span>
+          <span className="text-[11px] text-[#B7F36B] font-bold">Cartografía & Radar Conectados</span>
         </div>
 
         {/* Endpoints bar */}
-        <div className="px-5 py-3 border-b border-slate-800/80 flex items-center gap-2 overflow-x-auto bg-[#090b12]">
+        <div className="px-5 py-3 border-b border-white/10 flex items-center gap-2 overflow-x-auto bg-[#101114]">
           {[
             { path: '/v1/line-status', label: 'GET /line-status' },
             { path: '/v1/cartography/config', label: 'GET /cartography' },
@@ -156,11 +159,13 @@ export const PublicApiModal: React.FC<PublicApiModalProps> = ({
           ].map((ep) => (
             <button
               key={ep.path}
+              type="button"
               onClick={() => setSelectedEndpoint(ep.path)}
-              className={`px-3 py-1.5 rounded-xl font-mono text-xs transition-colors whitespace-nowrap ${
+              title={`Consultar endpoint ${ep.label}`}
+              className={`min-h-[38px] px-3 py-1.5 rounded-xl font-mono text-xs transition-colors whitespace-nowrap cursor-pointer border ${
                 selectedEndpoint === ep.path
-                  ? 'bg-cyan-500 text-slate-950 font-bold'
-                  : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                  ? 'bg-[#FFF19A] border-[#FFF19A] text-[#101114] font-black'
+                  : 'bg-[#202329] border-white/10 text-[#9299A5] hover:text-white'
               }`}
             >
               {ep.label}
@@ -170,23 +175,25 @@ export const PublicApiModal: React.FC<PublicApiModalProps> = ({
 
         {/* JSON Preview */}
         <div className="p-5 flex-1 overflow-hidden flex flex-col">
-          <div className="flex items-center justify-between pb-2 text-xs text-slate-400">
-            <span className="font-mono text-cyan-400">Respuesta HTTP 200 OK · JSON</span>
+          <div className="flex items-center justify-between pb-2 text-xs text-[#9299A5]">
+            <span className="font-mono text-[#B7F36B] font-bold">Respuesta HTTP 200 OK · JSON</span>
             <button
+              type="button"
               onClick={handleCopy}
-              className="flex items-center gap-1.5 text-xs text-slate-300 hover:text-white bg-slate-800/80 px-2.5 py-1 rounded-lg"
+              title="Copiar respuesta JSON al portapapeles"
+              className="min-h-[36px] flex items-center gap-1.5 text-xs text-white bg-[#101114] hover:bg-white/10 border border-white/15 px-3 py-1 rounded-lg cursor-pointer"
             >
-              {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+              {copied ? <Check className="w-3.5 h-3.5 text-[#B7F36B]" /> : <Copy className="w-3.5 h-3.5" />}
               <span>{copied ? 'Copiado' : 'Copiar JSON'}</span>
             </button>
           </div>
 
-          <pre className="flex-1 overflow-auto bg-[#07090e] border border-slate-800 rounded-2xl p-4 font-mono text-xs text-emerald-300 leading-relaxed">
+          <pre className="flex-1 overflow-auto bg-[#101114] border-2 border-white/10 rounded-2xl p-4 font-mono text-xs text-[#B7F36B] leading-relaxed">
             {payloadString}
           </pre>
 
-          <p className="text-[11px] text-slate-500 pt-3">
-            Base URL oficial: <code className="text-cyan-400 font-mono">https://api.uppa.app</code>. Acceso abierto para el ecosistema Zárate-Campana.
+          <p className="text-[11px] text-[#9299A5] pt-3">
+            Base URL oficial: <code className="text-[#FFF19A] font-mono">https://api.uppa.app</code>. Acceso abierto para el ecosistema Zárate-Campana.
           </p>
         </div>
       </div>

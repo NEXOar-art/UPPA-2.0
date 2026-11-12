@@ -12,6 +12,13 @@ interface AdBannerProps {
   onOpenContactModal: () => void;
 }
 
+const isSafeExternalUrl = (raw?: string): string => {
+  if (!raw || typeof raw !== 'string') return '#';
+  const trimmed = raw.trim();
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  return '#';
+};
+
 export const AdBanner: React.FC<AdBannerProps> = ({ ads, onOpenContactModal }) => {
   const [isDismissed, setIsDismissed] = useState(false);
   const [isCompact, setIsCompact] = useState(false);
@@ -36,20 +43,20 @@ export const AdBanner: React.FC<AdBannerProps> = ({ ads, onOpenContactModal }) =
           onClick={() => setIsDismissed(false)}
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
-          className={`h-8.5 rounded-full bg-[#0a0d14]/95 hover:bg-slate-900 text-amber-300 hover:text-white border border-amber-400/40 shadow-2xl backdrop-blur-md text-xs font-bold flex items-center cursor-pointer transition-all duration-500 active:scale-95 ring-1 ring-amber-400/30 group ${
-            isCompact && !isHovered ? 'w-8.5 px-0 justify-center' : 'px-3.5 gap-2'
+          className={`h-9 rounded-xl bg-[#202329] hover:bg-[#101114] text-[#FFF19A] border-2 border-[#FFF19A]/50 shadow-[3px_3px_0px_rgba(0,0,0,0.65)] text-xs font-black flex items-center cursor-pointer transition-all duration-300 active:scale-95 group ${
+            isCompact && !isHovered ? 'w-9 px-0 justify-center' : 'px-3.5 gap-2'
           }`}
           title="Habilitar banner publicitario de auspicios locales"
         >
-          <Megaphone className="w-3.5 h-3.5 text-amber-400 group-hover:scale-110 transition-transform shrink-0" />
+          <Megaphone className="w-4 h-4 text-[#FFF19A] shrink-0" />
           <span
-            className={`transition-all duration-500 ease-in-out overflow-hidden whitespace-nowrap ${
+            className={`transition-all duration-300 ease-in-out overflow-hidden whitespace-nowrap ${
               isCompact && !isHovered ? 'max-w-0 opacity-0 -ml-1 pointer-events-none' : 'max-w-xs opacity-100'
             }`}
           >
             Habilitar Banner Publicitario
           </span>
-          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse ml-0.5 shrink-0" />
+          <span className="w-2 h-2 rounded-full bg-[#B7F36B] ml-0.5 shrink-0" />
         </button>
       </div>
     );
@@ -57,131 +64,124 @@ export const AdBanner: React.FC<AdBannerProps> = ({ ads, onOpenContactModal }) =
 
   if (activeAds.length === 0) return null;
 
-  // Cloned list to achieve smooth infinite looping without visual seams
   const marqueeItems = [...activeAds, ...activeAds, ...activeAds];
 
   return (
     <div
-      className="w-full bg-[#0a0d14]/95 border-t border-slate-800/80 backdrop-blur-xl relative overflow-hidden z-20 transition-all select-none"
+      className="w-full bg-[#101114] border-t-2 border-white/10 relative overflow-hidden z-20 transition-all select-none"
       title="Auspicios locales en vivo: pasá el cursor para pausar y hacer clic en cualquier comercio"
     >
       <div className="flex items-center h-12 sm:h-13 px-2 sm:px-3 gap-2">
-        {/* Left Sticky Compact Pill: "Auspicio Local" que se achica automáticamente a los 5 segundos */}
-        <div className="flex items-center shrink-0 z-10 bg-[#0a0d14] pr-1.5 border-r border-slate-800/80">
+        {/* Left Sticky Compact Pill */}
+        <div className="flex items-center shrink-0 z-10 bg-[#101114] pr-2 border-r border-white/10">
           <button
             type="button"
             onClick={onOpenContactModal}
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}
-            className={`h-7.5 rounded-lg bg-gradient-to-r from-amber-500/20 to-orange-500/20 hover:from-amber-500/35 hover:to-orange-500/35 text-amber-300 hover:text-white border border-amber-400/40 hover:border-amber-300 text-[10px] font-black uppercase tracking-tight flex items-center shadow-sm active:scale-95 transition-all duration-500 ease-in-out cursor-pointer shrink-0 group ${
-              isCompact && !isHovered ? 'w-7.5 px-0 justify-center' : 'px-2 gap-1'
+            className={`h-8 rounded-xl bg-[#FFF19A] hover:bg-[#fff5b8] text-[#101114] border border-[#FFF19A] text-[10px] font-black uppercase tracking-tight flex items-center active:scale-95 transition-all duration-300 ease-in-out cursor-pointer shrink-0 group ${
+              isCompact && !isHovered ? 'w-8 px-0 justify-center' : 'px-2.5 gap-1'
             }`}
             title="Auspicio - Pedir incluir un negocio en el banner publicitario de UPPA"
           >
-            <Megaphone className="w-3 h-3 text-amber-400 group-hover:scale-110 transition-transform shrink-0" />
+            <Megaphone className="w-3.5 h-3.5 text-[#101114] shrink-0" />
             <span
-              className={`transition-all duration-500 ease-in-out overflow-hidden whitespace-nowrap ${
+              className={`transition-all duration-300 ease-in-out overflow-hidden whitespace-nowrap ${
                 isCompact && !isHovered ? 'max-w-0 opacity-0 -ml-1 pointer-events-none' : 'max-w-xs opacity-100 ml-1'
               }`}
             >
               Auspicio
             </span>
-            <span
-              className={`hidden sm:inline text-[8.5px] bg-amber-400/20 px-1 py-0.2 rounded text-amber-200 font-extrabold border border-amber-400/30 transition-all duration-500 ease-in-out overflow-hidden whitespace-nowrap ${
-                isCompact && !isHovered ? 'max-w-0 opacity-0 border-0 p-0 m-0 pointer-events-none' : 'max-w-xs opacity-100 ml-0.5'
-              }`}
-            >
-              + Negocio
-            </span>
           </button>
         </div>
 
-        {/* Infinite Moving Marquee Track (Auto-pausa suavemente al pasar el mouse encima) */}
+        {/* Infinite Moving Marquee Track */}
         <div className="flex-1 overflow-hidden relative">
           <div className="animate-marquee-infinite flex items-center gap-3">
-            {marqueeItems.map((ad, idx) => (
-              <div
-                key={`${ad.id}-${idx}`}
-                className="flex items-center gap-2.5 px-3 py-1 rounded-xl bg-white/[0.03] hover:bg-white/[0.08] border border-white/5 hover:border-sky-400/40 transition-all shrink-0 group"
-              >
-                {/* Image */}
-                <a
-                  href={ad.linkUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="relative w-8 h-8 rounded-lg overflow-hidden shrink-0 border border-white/10 group-hover:border-sky-400 transition-colors"
-                  title={`Visitar ${ad.businessName}`}
+            {marqueeItems.map((ad, idx) => {
+              const safeWebUrl = isSafeExternalUrl(ad.linkUrl);
+              const safeWaUrl = isSafeExternalUrl(ad.whatsappUrl);
+              return (
+                <div
+                  key={`${ad.id}-${idx}`}
+                  className="flex items-center gap-2.5 px-3 py-1 rounded-xl bg-[#202329] hover:border-[#FFF19A]/50 border border-white/10 transition-all shrink-0 group"
                 >
-                  <img
-                    src={ad.imageUrl || 'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=300&q=80'}
-                    alt={ad.businessName}
-                    referrerPolicy="no-referrer"
-                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
-                  />
-                </a>
-
-                {/* Information Text */}
-                <a
-                  href={ad.linkUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2 min-w-0"
-                  title={`Ingresar a ${ad.businessName}: ${ad.linkUrl}`}
-                >
-                  <div className="flex flex-col text-left">
-                    <div className="flex items-center gap-1.5">
-                      <strong className="text-white font-bold text-xs group-hover:text-sky-300 transition-colors truncate">
-                        {ad.businessName}
-                      </strong>
-                      {ad.discountBadge && (
-                        <span className="text-[9.5px] font-mono font-extrabold text-amber-300 bg-amber-400/15 border border-amber-400/30 px-1.5 py-0.2 rounded shrink-0">
-                          {ad.discountBadge}
-                        </span>
-                      )}
-                    </div>
-                    <span className="text-[10.5px] text-slate-400 group-hover:text-slate-200 transition-colors truncate max-w-[190px] sm:max-w-xs">
-                      {ad.title}
-                    </span>
-                  </div>
-                </a>
-
-                {/* Direct Action Buttons: Web and WhatsApp */}
-                <div className="flex items-center gap-1.5 ml-1 shrink-0">
                   <a
-                    href={ad.linkUrl}
+                    href={safeWebUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="h-7 px-2.5 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-400/40 text-cyan-200 hover:text-white text-[11px] font-extrabold flex items-center gap-1 transition-all active:scale-95"
-                    title={`Abrir sitio web oficial: ${ad.linkUrl}`}
+                    className="relative w-8 h-8 rounded-lg overflow-hidden shrink-0 border border-white/15"
+                    title={`Visitar ${ad.businessName}`}
                   >
-                    <span>Web</span>
-                    <ExternalLink className="w-2.5 h-2.5 text-cyan-300" />
+                    <img
+                      src={ad.imageUrl || 'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=300&q=80'}
+                      alt={ad.businessName}
+                      referrerPolicy="no-referrer"
+                      className="w-full h-full object-cover"
+                    />
                   </a>
 
-                  {ad.whatsappUrl && (
+                  <a
+                    href={safeWebUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 min-w-0"
+                    title={`Ingresar a ${ad.businessName}`}
+                  >
+                    <div className="flex flex-col text-left">
+                      <div className="flex items-center gap-1.5">
+                        <strong className="text-white font-bold text-xs group-hover:text-[#FFF19A] transition-colors truncate">
+                          {ad.businessName}
+                        </strong>
+                        {ad.discountBadge && (
+                          <span className="text-[9.5px] font-mono font-black text-[#101114] bg-[#FFF19A] px-1.5 py-0.2 rounded shrink-0">
+                            {ad.discountBadge}
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[10.5px] text-[#9299A5] truncate max-w-[190px] sm:max-w-xs">
+                        {ad.title}
+                      </span>
+                    </div>
+                  </a>
+
+                  <div className="flex items-center gap-1.5 ml-1 shrink-0">
                     <a
-                      href={ad.whatsappUrl}
+                      href={safeWebUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="h-7 px-2.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-400/40 text-emerald-300 hover:text-emerald-200 text-[11px] font-extrabold flex items-center gap-1 transition-all active:scale-95"
-                      title="Contactar o pedir por WhatsApp"
+                      className="h-7 px-2.5 rounded-lg bg-[#101114] hover:bg-white/5 border border-white/15 text-white text-[11px] font-bold flex items-center gap-1 transition-all"
+                      title={`Abrir sitio web oficial de ${ad.businessName}`}
                     >
-                      <MessageCircle className="w-3 h-3 fill-emerald-400/30 text-emerald-400" />
-                      <span className="hidden sm:inline">WhatsApp</span>
+                      <span>Web</span>
+                      <ExternalLink className="w-2.5 h-2.5 text-[#FFF19A]" />
                     </a>
-                  )}
+
+                    {safeWaUrl !== '#' && (
+                      <a
+                        href={safeWaUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="h-7 px-2.5 rounded-lg bg-[#B7F36B] hover:bg-[#c5f784] text-[#101114] text-[11px] font-black flex items-center gap-1 transition-all"
+                        title={`Contactar o pedir a ${ad.businessName} por WhatsApp`}
+                      >
+                        <MessageCircle className="w-3 h-3" />
+                        <span className="hidden sm:inline">WhatsApp</span>
+                      </a>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
-        {/* Right Actions: Anunciar Acá & Botón Cruz "X" para cerrar banner */}
-        <div className="flex items-center gap-1.5 shrink-0 z-10 bg-[#0a0d14] pl-2 border-l border-slate-800/80">
+        {/* Right Actions */}
+        <div className="flex items-center gap-1.5 shrink-0 z-10 bg-[#101114] pl-2 border-l border-white/10">
           <button
             type="button"
             onClick={onOpenContactModal}
-            className="hidden lg:flex px-2 py-1 rounded-lg text-[10.5px] font-semibold text-slate-400 hover:text-amber-300 hover:bg-white/[0.04] transition-colors cursor-pointer"
+            className="hidden lg:flex px-2.5 py-1.5 rounded-lg text-[10.5px] font-bold text-[#9299A5] hover:text-[#FFF19A] hover:bg-[#202329] transition-colors cursor-pointer"
             title="Pedir incluir mi negocio en el banner"
           >
             Anunciar
@@ -190,8 +190,9 @@ export const AdBanner: React.FC<AdBannerProps> = ({ ads, onOpenContactModal }) =
           <button
             type="button"
             onClick={() => setIsDismissed(true)}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+            className="w-8 h-8 rounded-lg text-[#9299A5] hover:text-white hover:bg-[#202329] flex items-center justify-center transition-colors cursor-pointer"
             title="Cerrar banner publicitario (podrás habilitarlo nuevamente en cualquier momento)"
+            aria-label="Cerrar banner"
           >
             <X className="w-4 h-4" />
           </button>

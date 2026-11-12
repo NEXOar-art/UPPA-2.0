@@ -754,7 +754,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
             ${station.details}
           </div>
           <div style="margin-top: 8px;">
-            <a href="https://www.google.com/maps/dir/?api=1&destination=${station.lat},${station.lng}" target="_blank" rel="noopener noreferrer" style="display: block; text-align: center; background: #f59e0b; color: #000; font-size: 11px; font-weight: 800; padding: 6px 10px; border-radius: 8px; text-decoration: none;">
+            <a href="https://www.google.com/maps/dir/?api=1&destination=${station.lat},${station.lng}" target="_blank" rel="noopener noreferrer" title="Abrir ruta GPS en Google Maps hacia ${station.name}" style="display: block; text-align: center; background: #FFF19A; color: #101114; font-size: 11px; font-weight: 800; padding: 6px 10px; border-radius: 8px; text-decoration: none;">
               Llevarme a esta Estación ➔
             </a>
           </div>
@@ -805,7 +805,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
             ${school.details}
           </div>
           <div style="margin-top: 8px;">
-            <a href="https://www.google.com/maps/dir/?api=1&destination=${school.lat},${school.lng}" target="_blank" rel="noopener noreferrer" style="display: block; text-align: center; background: #4f46e5; color: #fff; font-size: 11px; font-weight: 800; padding: 6px 10px; border-radius: 8px; text-decoration: none;">
+            <a href="https://www.google.com/maps/dir/?api=1&destination=${school.lat},${school.lng}" target="_blank" rel="noopener noreferrer" title="Abrir ruta GPS en Google Maps hacia ${school.name}" style="display: block; text-align: center; background: #FFF19A; color: #101114; font-size: 11px; font-weight: 800; padding: 6px 10px; border-radius: 8px; text-decoration: none;">
               Llevarme a esta Escuela ➔
             </a>
           </div>
@@ -1117,7 +1117,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
             📍 Coordenadas: ${stop.lat.toFixed(6)}, ${stop.lng.toFixed(6)}
           </div>
           <div style="margin-top: 8px;">
-            <a href="https://www.google.com/maps/dir/?api=1&destination=${stop.lat},${stop.lng}" target="_blank" rel="noopener noreferrer" style="display: block; text-align: center; background: #06b6d4; color: #021a24; font-size: 11px; font-weight: 800; padding: 6px 10px; border-radius: 8px; text-decoration: none;">
+            <a href="https://www.google.com/maps/dir/?api=1&destination=${stop.lat},${stop.lng}" target="_blank" rel="noopener noreferrer" title="Abrir guía GPS en Google Maps hacia ${stop.name}" style="display: block; text-align: center; background: #B7F36B; color: #101114; font-size: 11px; font-weight: 800; padding: 6px 10px; border-radius: 8px; text-decoration: none;">
               Guía GPS a esta Parada ➔
             </a>
           </div>
@@ -1651,7 +1651,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
             🏁 Destino: ${activeTrackingPassenger.destino}
           </div>
           <div style="margin-top: 8px;">
-            <a href="https://www.google.com/maps/dir/?api=1&destination=${passengerLat},${passengerLng}&travelmode=driving" target="_blank" rel="noopener noreferrer" style="display: block; text-align: center; background: #06b6d4; color: #021a24; font-size: 11px; font-weight: 800; padding: 6px 10px; border-radius: 8px; text-decoration: none;">
+            <a href="https://www.google.com/maps/dir/?api=1&destination=${passengerLat},${passengerLng}&travelmode=driving" target="_blank" rel="noopener noreferrer" title="Abrir navegación GPS en Google Maps hasta el pasajero" style="display: block; text-align: center; background: #B7F36B; color: #101114; font-size: 11px; font-weight: 800; padding: 6px 10px; border-radius: 8px; text-decoration: none;">
               Iniciar Guía GPS en Google Maps ➔
             </a>
           </div>
@@ -1750,7 +1750,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
       onTouchMove={resetHideTimer}
       onPointerDown={resetHideTimer}
       onClick={resetHideTimer}
-      className="relative w-full h-full overflow-hidden bg-[#07090e]"
+      className="relative w-full h-full overflow-hidden bg-[#101114]"
     >
       {/* Map Container Element */}
       <div ref={mapContainerRef} className="w-full h-full z-0" />
@@ -1758,8 +1758,8 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
       {/* Toast de confirmación de evento registrado en el mapa */}
       {eventRegisteredToast && (
         <div className="absolute top-16 left-1/2 -translate-x-1/2 z-50 pointer-events-none animate-in fade-in slide-in-from-top-3 duration-200">
-          <div className="glass-panel px-4 py-2.5 rounded-2xl bg-[#090d18]/95 border border-rose-400/50 shadow-2xl flex items-center gap-2.5 text-xs font-bold text-white backdrop-blur-xl">
-            <span className="w-2.5 h-2.5 rounded-full bg-rose-400 animate-ping" />
+          <div className="px-4 py-2.5 rounded-xl bg-[#202329] border-2 border-[#FFF19A] shadow-[3px_3px_0px_#101114] flex items-center gap-2.5 text-xs font-extrabold text-white">
+            <span className="w-2.5 h-2.5 rounded-full bg-[#B7F36B] animate-ping" />
             <span>{eventRegisteredToast}</span>
           </div>
         </div>
@@ -1773,10 +1773,10 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
               e.stopPropagation();
               resetHideTimer();
             }}
-            className="h-8.5 px-4 rounded-full bg-slate-900/90 hover:bg-slate-800 text-sky-300 hover:text-white border border-sky-400/40 shadow-2xl backdrop-blur-md text-xs font-semibold flex items-center gap-2 cursor-pointer transition-all active:scale-95 ring-1 ring-sky-400/20"
-            title="Tocar para mostrar controles y tarjetas"
+            className="min-h-[44px] px-4 rounded-xl bg-[#202329] hover:border-[#FFF19A] text-[#FFF19A] border-2 border-white/20 shadow-[3px_3px_0px_#101114] text-xs font-extrabold flex items-center gap-2 cursor-pointer transition-all active:scale-95"
+            title="Tocar para mostrar controles y tarjetas del mapa"
           >
-            <span className="w-2 h-2 rounded-full bg-sky-400 animate-pulse" />
+            <span className="w-2 h-2 rounded-full bg-[#B7F36B]" />
             <span>Modo Mapa Libre · Tocar para ver controles</span>
           </button>
         </div>
@@ -1786,7 +1786,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
       <div
         onMouseEnter={handleCardMouseEnter}
         onMouseLeave={handleCardMouseLeave}
-        className={`absolute top-20 right-3 sm:right-4 z-20 flex flex-col gap-2 items-end transition-all duration-500 ease-in-out ${
+        className={`absolute top-16 sm:top-20 right-3 sm:right-4 z-20 flex flex-col gap-2 items-end transition-all duration-500 ease-in-out ${
           areCardsVisible
             ? 'opacity-100 translate-y-0 pointer-events-auto'
             : 'opacity-0 -translate-y-3 pointer-events-none'
@@ -1800,12 +1800,12 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
               const next = !showStops;
               setShowStops(next);
             }}
-            className={`w-10 h-10 rounded-2xl flex items-center justify-center text-lg shadow-xl backdrop-blur-xl border transition-all active:scale-95 cursor-pointer ${
+            className={`w-11 h-11 rounded-xl flex items-center justify-center text-lg border-2 shadow-[2px_2px_0px_#101114] transition-all active:scale-95 cursor-pointer ${
               showStops
-                ? 'bg-cyan-500/25 text-cyan-200 border-cyan-400 ring-2 ring-cyan-400/40 shadow-[0_0_15px_rgba(6,182,212,0.35)] scale-105'
-                : 'glass-panel text-slate-500 border-white/5 opacity-40 hover:opacity-75 grayscale'
+                ? 'bg-[#FFF19A] text-[#101114] border-[#101114]'
+                : 'bg-[#202329]/90 text-[#9299A5] border-white/15 opacity-70 hover:opacity-100 grayscale'
             }`}
-            title={showStops ? 'Ocultar Paradas (🚏)' : 'Mostrar Paradas (🚏)'}
+            title={showStops ? 'Ocultar paradas de colectivo en el mapa' : 'Mostrar paradas de colectivo en el mapa'}
           >
             <span className="leading-none select-none">🚏</span>
           </button>
@@ -1813,40 +1813,41 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
           {/* Desplegable de Paradas con información y buscador */}
           {isStopsPanelOpen && (
             <div
-              className="absolute top-0 right-12 w-80 sm:w-92 max-h-[70vh] rounded-3xl bg-[#090d18]/95 backdrop-blur-2xl border border-white/10 shadow-2xl p-3 z-40 flex flex-col animate-in fade-in slide-in-from-right-2 duration-150"
+              className="absolute top-0 right-13 w-80 sm:w-92 max-h-[70vh] rounded-2xl bg-[#202329] border-2 border-white/15 shadow-[4px_4px_0px_#101114] p-3.5 z-40 flex flex-col animate-in fade-in slide-in-from-right-2 duration-150"
             >
-              <div className="flex items-center justify-between pb-2 border-b border-white/10 shrink-0">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-sm">🚏</span>
+              <div className="flex items-center justify-between pb-2.5 border-b border-white/10 shrink-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-base">🚏</span>
                   <h3 className="text-xs font-black text-white">Paradas Línea 228</h3>
-                  <span className="px-1.5 py-0.2 rounded-full bg-cyan-500/20 text-cyan-300 text-[10px] font-mono font-bold">
+                  <span className="px-1.5 py-0.5 rounded-md bg-[#101114] border border-white/15 text-[#FFF19A] text-[10px] font-mono font-bold">
                     {LINEA_228_STOPS.length}
                   </span>
                 </div>
                 <button
                   onClick={() => setIsStopsPanelOpen(false)}
-                  className="w-6 h-6 rounded-full bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white flex items-center justify-center cursor-pointer transition-colors"
+                  title="Cerrar listado de paradas"
+                  className="w-8 h-8 rounded-lg bg-[#101114] border border-white/10 hover:border-[#FFF19A] text-[#9299A5] hover:text-white flex items-center justify-center cursor-pointer transition-colors"
                 >
-                  <X className="w-3.5 h-3.5" />
+                  <X className="w-4 h-4" />
                 </button>
               </div>
 
               {/* Buscador de paradas */}
-              <div className="pt-2 pb-2 shrink-0">
+              <div className="pt-2.5 pb-2.5 shrink-0">
                 <div className="relative">
-                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                  <Search className="w-3.5 h-3.5 text-[#9299A5] absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
                     type="text"
                     placeholder="Buscar por calle o barrio..."
                     value={stopSearchQuery}
                     onChange={(e) => setStopSearchQuery(e.target.value)}
-                    className="w-full pl-8 pr-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-xs text-white placeholder-slate-400 focus:outline-none focus:border-cyan-400"
+                    className="w-full min-h-[40px] pl-9 pr-3 py-1.5 rounded-xl bg-[#101114] border border-white/15 text-xs text-white placeholder-[#9299A5] focus:outline-none focus:border-[#FFF19A]"
                   />
                 </div>
               </div>
 
               {/* Lista scrollable de paradas */}
-              <div className="overflow-y-auto space-y-1.5 pr-1 flex-1 max-h-[50vh]">
+              <div className="overflow-y-auto space-y-2 pr-1 flex-1 max-h-[50vh]">
                 {LINEA_228_STOPS.filter(
                   (s) =>
                     s.name.toLowerCase().includes(stopSearchQuery.toLowerCase()) ||
@@ -1857,27 +1858,27 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
                   return (
                     <div
                       key={stop.id}
-                      className={`p-2.5 rounded-2xl border transition-all text-xs ${
+                      className={`p-3 rounded-xl border transition-all text-xs ${
                         isMcDonalds
-                          ? 'bg-amber-500/10 border-amber-400/30'
-                          : 'bg-white/[0.03] hover:bg-white/[0.07] border-white/5'
+                          ? 'bg-[#101114] border-[#FFF19A]/50'
+                          : 'bg-[#101114] hover:border-white/25 border-white/10'
                       }`}
                     >
                       <div className="flex items-start justify-between gap-1.5">
                         <div className="min-w-0">
                           <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="px-1.5 py-0.2 rounded bg-cyan-400/15 text-cyan-300 font-mono text-[9.5px] font-bold">
+                            <span className="px-1.5 py-0.5 rounded bg-[#202329] text-[#FFF19A] font-mono text-[9.5px] font-black border border-white/10">
                               #{stop.sequence}
                             </span>
-                            <span className="text-[10px] text-slate-400 font-mono">
+                            <span className="text-[10px] text-[#9299A5] font-mono">
                               {stop.zone}
                             </span>
                           </div>
-                          <h4 className="font-bold text-white text-[11.5px] mt-0.5 leading-snug">
+                          <h4 className="font-extrabold text-white text-[12px] mt-1 leading-snug">
                             {stop.name}
                           </h4>
                           {stop.description && (
-                            <p className="text-[10px] text-slate-400 mt-0.5 line-clamp-1">
+                            <p className="text-[10px] text-[#9299A5] mt-0.5 line-clamp-1">
                               {stop.description}
                             </p>
                           )}
@@ -1885,7 +1886,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
                       </div>
 
                       {/* Botón Llevarme a esta ubicación */}
-                      <div className="mt-2 flex items-center gap-1.5">
+                      <div className="mt-2.5 flex items-center gap-2">
                         <button
                           onClick={() => {
                             if (mapInstanceRef.current) {
@@ -1894,10 +1895,10 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
                             handleCalculateStopTrajectory(stop, totalRoute);
                             setIsStopsPanelOpen(false);
                           }}
-                          className="flex-1 py-1.5 px-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-[10.5px] flex items-center justify-center gap-1.5 shadow-md active:scale-95 transition-all cursor-pointer"
-                          title="Llevarme a esta parada (Inicia guía GPS)"
+                          className="flex-1 min-h-[40px] py-1.5 px-2.5 rounded-xl bg-[#B7F36B] hover:brightness-95 text-[#101114] border border-[#101114] font-black text-[11px] flex items-center justify-center gap-1.5 active:scale-95 transition-all cursor-pointer"
+                          title="Iniciar guía GPS hacia esta parada"
                         >
-                          <Navigation className="w-3 h-3 fill-slate-950" />
+                          <Navigation className="w-3.5 h-3.5 text-[#101114]" />
                           <span>Llevarme a esta ubicación</span>
                         </button>
 
@@ -1909,10 +1910,10 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
                             setSelectedStop({ stop, route: totalRoute });
                             setIsStopsPanelOpen(false);
                           }}
-                          className="p-1.5 rounded-xl glass-button text-slate-300 hover:text-white"
-                          title="Centrar en el mapa"
+                          className="min-h-[40px] min-w-[40px] p-2 rounded-xl bg-[#202329] border border-white/15 hover:border-[#FFF19A] text-[#FFF19A] flex items-center justify-center cursor-pointer"
+                          title="Centrar esta parada en el mapa"
                         >
-                          <MapPin className="w-3 h-3 text-cyan-400" />
+                          <MapPin className="w-4 h-4" />
                         </button>
                       </div>
                     </div>
@@ -1933,12 +1934,12 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
               mapInstanceRef.current.panTo([-34.1683, -58.9592]);
             }
           }}
-          className={`w-10 h-10 rounded-2xl flex items-center justify-center text-lg shadow-xl backdrop-blur-xl border transition-all active:scale-95 cursor-pointer ${
+          className={`w-11 h-11 rounded-xl flex items-center justify-center text-lg border-2 shadow-[2px_2px_0px_#101114] transition-all active:scale-95 cursor-pointer ${
             showGasStations
-              ? 'bg-amber-500/25 text-amber-200 border-amber-400 ring-2 ring-amber-400/40 shadow-[0_0_15px_rgba(245,158,11,0.35)] scale-105'
-              : 'glass-panel text-slate-500 border-white/5 opacity-40 hover:opacity-75 grayscale'
+              ? 'bg-[#FFF19A] text-[#101114] border-[#101114]'
+              : 'bg-[#202329]/90 text-[#9299A5] border-white/15 opacity-70 hover:opacity-100 grayscale'
           }`}
-          title={showGasStations ? 'Ocultar Estaciones de Servicio (⛽)' : 'Mostrar Estaciones de Servicio (⛽)'}
+          title={showGasStations ? 'Ocultar estaciones de servicio' : 'Mostrar estaciones de servicio en el mapa'}
         >
           <span className="leading-none select-none">⛽</span>
         </button>
@@ -1953,17 +1954,17 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
               mapInstanceRef.current.panTo([-34.1800, -58.9500]);
             }
           }}
-          className={`w-10 h-10 rounded-2xl flex items-center justify-center text-lg shadow-xl backdrop-blur-xl border transition-all active:scale-95 cursor-pointer ${
+          className={`w-11 h-11 rounded-xl flex items-center justify-center text-lg border-2 shadow-[2px_2px_0px_#101114] transition-all active:scale-95 cursor-pointer ${
             showSchools
-              ? 'bg-indigo-500/25 text-indigo-200 border-indigo-400 ring-2 ring-indigo-400/40 shadow-[0_0_15px_rgba(99,102,241,0.35)] scale-105'
-              : 'glass-panel text-slate-500 border-white/5 opacity-40 hover:opacity-75 grayscale'
+              ? 'bg-[#FFF19A] text-[#101114] border-[#101114]'
+              : 'bg-[#202329]/90 text-[#9299A5] border-white/15 opacity-70 hover:opacity-100 grayscale'
           }`}
-          title={showSchools ? 'Ocultar Colegios (🏫)' : 'Mostrar Colegios (🏫)'}
+          title={showSchools ? 'Ocultar colegios e instituciones' : 'Mostrar colegios e instituciones en el mapa'}
         >
           <span className="leading-none select-none">🏫</span>
         </button>
 
-        {/* Botón Prestadores de Servicio (Taxi & Motos con icono 🚕 para mostrar/ocultar y filtrar en el mapa) - Solo para Pasajeros */}
+        {/* Botón Prestadores de Servicio (Solo para Pasajeros) */}
         {!isDriverMode && (
           <button
             onClick={() => {
@@ -1971,18 +1972,18 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
               const next = !showTaxis;
               setShowTaxis(next);
             }}
-            className={`w-10 h-10 rounded-2xl flex items-center justify-center text-lg shadow-xl backdrop-blur-xl border transition-all active:scale-95 cursor-pointer ${
+            className={`w-11 h-11 rounded-xl flex items-center justify-center text-lg border-2 shadow-[2px_2px_0px_#101114] transition-all active:scale-95 cursor-pointer ${
               showTaxis
-                ? 'bg-blue-500/25 text-blue-200 border-blue-400 ring-2 ring-blue-400/40 shadow-[0_0_15px_rgba(59,130,246,0.35)] scale-105'
-                : 'glass-panel text-slate-500 border-white/5 opacity-40 hover:opacity-75 grayscale'
+                ? 'bg-[#B7F36B] text-[#101114] border-[#101114]'
+                : 'bg-[#202329]/90 text-[#9299A5] border-white/15 opacity-70 hover:opacity-100 grayscale'
             }`}
-            title={showTaxis ? 'Ocultar Prestadores de Servicio en el mapa (🚕)' : 'Mostrar Prestadores de Servicio en el mapa (🚕)'}
+            title={showTaxis ? 'Ocultar autos y motos en el mapa' : 'Mostrar autos y motos en el mapa'}
           >
             <span className="leading-none select-none">🚕</span>
           </button>
         )}
 
-        {/* Botón 4: Filtro de Eventos y Capas por Categoría (solo icono 🎛️ sin texto) */}
+        {/* Botón 4: Filtro de Eventos y Capas por Categoría */}
         <div className="relative">
           <button
             onClick={() => {
@@ -1994,45 +1995,42 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
                 setIsStopsPanelOpen(false);
               }
             }}
-            className={`w-10 h-10 rounded-2xl flex items-center justify-center text-lg shadow-xl backdrop-blur-xl border transition-all active:scale-95 cursor-pointer ${
+            className={`w-11 h-11 rounded-xl flex items-center justify-center text-lg border-2 shadow-[2px_2px_0px_#101114] transition-all active:scale-95 cursor-pointer ${
               isEventFilterPanelOpen
-                ? 'bg-sky-500/30 text-sky-200 border-sky-400 ring-2 ring-sky-400/40 shadow-[0_0_15px_rgba(56,189,248,0.4)] scale-105'
-                : 'glass-panel text-sky-300 hover:text-white border-white/10 hover:bg-white/10'
+                ? 'bg-[#FFF19A] text-[#101114] border-[#101114]'
+                : 'bg-[#202329]/95 text-white border-white/15 hover:border-[#FFF19A]'
             }`}
-            title="Filtro de capas y eventos por categorías"
+            title="Filtrar capas y categorías de eventos en el mapa"
           >
             <SlidersHorizontal className="w-4 h-4" />
           </button>
 
-          {/* Desplegable de Filtro de Eventos y Capas por Categoría (100% Icon-Only, Sin Etiquetas de Texto) */}
+          {/* Desplegable de Filtro de Eventos y Capas por Categoría */}
           {isEventFilterPanelOpen && (
-            <div className="absolute top-0 right-12 w-72 sm:w-80 rounded-3xl bg-[#090d18]/95 backdrop-blur-2xl border border-white/10 shadow-2xl p-3 z-40 flex flex-col animate-in fade-in slide-in-from-right-2 duration-150">
-              {/* Barra superior de control (Icon-only) */}
+            <div className="absolute top-0 right-13 w-72 sm:w-80 rounded-2xl bg-[#202329] border-2 border-white/15 shadow-[4px_4px_0px_#101114] p-3.5 z-40 flex flex-col animate-in fade-in slide-in-from-right-2 duration-150">
               <div className="flex items-center justify-between pb-2.5 border-b border-white/10 shrink-0">
                 <div className="flex items-center gap-1.5">
-                  <div className="w-7 h-7 rounded-xl bg-sky-500/20 text-sky-300 flex items-center justify-center text-xs border border-sky-400/30">
-                    <SlidersHorizontal className="w-3.5 h-3.5" />
+                  <div className="w-8 h-8 rounded-lg bg-[#101114] text-[#FFF19A] flex items-center justify-center text-xs border border-white/15">
+                    <SlidersHorizontal className="w-4 h-4" />
                   </div>
                 </div>
 
                 <div className="flex items-center gap-1.5">
-                  {/* Visibilidad general de eventos */}
                   <button
                     onClick={() => {
                       resetHideTimer();
                       setShowEvents(!showEvents);
                     }}
-                    className={`w-7 h-7 rounded-xl flex items-center justify-center text-xs border transition-all cursor-pointer ${
+                    className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs border transition-all cursor-pointer ${
                       showEvents
-                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-400/40'
-                        : 'bg-white/5 text-slate-500 border-white/5 opacity-50'
+                        ? 'bg-[#B7F36B] text-[#101114] border-[#101114]'
+                        : 'bg-[#101114] text-[#9299A5] border-white/10'
                     }`}
-                    title={showEvents ? 'Ocultar todos los eventos' : 'Mostrar todos los eventos'}
+                    title={showEvents ? 'Ocultar todos los eventos del mapa' : 'Mostrar todos los eventos en el mapa'}
                   >
-                    {showEvents ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+                    {showEvents ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
                   </button>
 
-                  {/* Restablecer todas las categorías */}
                   <button
                     onClick={() => {
                       resetHideTimer();
@@ -2042,6 +2040,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
                       setShowEvents(true);
                       setShowTaxis(true);
                       setActiveEventCategories({
+                        bus_location: true,
                         accident: true,
                         late: true,
                         traffic: true,
@@ -2054,36 +2053,35 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
                         other: true,
                       });
                     }}
-                    className="w-7 h-7 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white flex items-center justify-center text-xs border border-white/5 transition-all cursor-pointer"
-                    title="Restablecer todas las capas y categorías"
+                    className="w-8 h-8 rounded-lg bg-[#101114] hover:border-[#FFF19A] text-[#9299A5] hover:text-white flex items-center justify-center text-xs border border-white/10 transition-all cursor-pointer"
+                    title="Restablecer todas las capas y categorías visibles"
                   >
-                    <RotateCcw className="w-3.5 h-3.5" />
+                    <RotateCcw className="w-4 h-4" />
                   </button>
 
-                  {/* Cerrar popover */}
                   <button
                     onClick={() => setIsEventFilterPanelOpen(false)}
-                    className="w-7 h-7 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white flex items-center justify-center text-xs border border-white/5 transition-colors cursor-pointer"
-                    title="Cerrar filtro"
+                    className="w-8 h-8 rounded-lg bg-[#101114] hover:border-[#FFF19A] text-[#9299A5] hover:text-white flex items-center justify-center text-xs border border-white/10 transition-colors cursor-pointer"
+                    title="Cerrar panel de filtros"
                   >
-                    <X className="w-3.5 h-3.5" />
+                    <X className="w-4 h-4" />
                   </button>
                 </div>
               </div>
 
-              {/* Fila 1: Alternancia de Capas Principales (🚏, ⛽, 🏫 y 🔍 búsqueda de paradas) */}
+              {/* Fila 1: Alternancia de Capas Principales */}
               <div className="py-2.5 border-b border-white/10 flex items-center justify-center gap-2">
                 <button
                   onClick={() => {
                     resetHideTimer();
                     setShowStops(!showStops);
                   }}
-                  className={`w-10 h-10 rounded-2xl flex items-center justify-center text-lg border transition-all cursor-pointer active:scale-95 ${
+                  className={`w-11 h-11 rounded-xl flex items-center justify-center text-lg border transition-all cursor-pointer active:scale-95 ${
                     showStops
-                      ? 'bg-cyan-500/25 text-cyan-200 border-cyan-400 ring-2 ring-cyan-400/40 shadow-[0_0_12px_rgba(6,182,212,0.3)]'
-                      : 'bg-white/5 text-slate-600 border-white/5 opacity-40 grayscale'
+                      ? 'bg-[#FFF19A] text-[#101114] border-[#101114]'
+                      : 'bg-[#101114] text-[#9299A5] border-white/10 opacity-50 grayscale'
                   }`}
-                  title={showStops ? 'Ocultar Paradas (🚏)' : 'Mostrar Paradas (🚏)'}
+                  title={showStops ? 'Ocultar paradas' : 'Mostrar paradas'}
                 >
                   <span className="leading-none select-none">🚏</span>
                 </button>
@@ -2093,12 +2091,12 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
                     resetHideTimer();
                     setShowGasStations(!showGasStations);
                   }}
-                  className={`w-10 h-10 rounded-2xl flex items-center justify-center text-lg border transition-all cursor-pointer active:scale-95 ${
+                  className={`w-11 h-11 rounded-xl flex items-center justify-center text-lg border transition-all cursor-pointer active:scale-95 ${
                     showGasStations
-                      ? 'bg-amber-500/25 text-amber-200 border-amber-400 ring-2 ring-amber-400/40 shadow-[0_0_12px_rgba(245,158,11,0.3)]'
-                      : 'bg-white/5 text-slate-600 border-white/5 opacity-40 grayscale'
+                      ? 'bg-[#FFF19A] text-[#101114] border-[#101114]'
+                      : 'bg-[#101114] text-[#9299A5] border-white/10 opacity-50 grayscale'
                   }`}
-                  title={showGasStations ? 'Ocultar Estaciones de Servicio (⛽)' : 'Mostrar Estaciones de Servicio (⛽)'}
+                  title={showGasStations ? 'Ocultar estaciones de servicio' : 'Mostrar estaciones de servicio'}
                 >
                   <span className="leading-none select-none">⛽</span>
                 </button>
@@ -2108,12 +2106,12 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
                     resetHideTimer();
                     setShowSchools(!showSchools);
                   }}
-                  className={`w-10 h-10 rounded-2xl flex items-center justify-center text-lg border transition-all cursor-pointer active:scale-95 ${
+                  className={`w-11 h-11 rounded-xl flex items-center justify-center text-lg border transition-all cursor-pointer active:scale-95 ${
                     showSchools
-                      ? 'bg-indigo-500/25 text-indigo-200 border-indigo-400 ring-2 ring-indigo-400/40 shadow-[0_0_12px_rgba(99,102,241,0.3)]'
-                      : 'bg-white/5 text-slate-600 border-white/5 opacity-40 grayscale'
+                      ? 'bg-[#FFF19A] text-[#101114] border-[#101114]'
+                      : 'bg-[#101114] text-[#9299A5] border-white/10 opacity-50 grayscale'
                   }`}
-                  title={showSchools ? 'Ocultar Colegios (🏫)' : 'Mostrar Colegios (🏫)'}
+                  title={showSchools ? 'Ocultar colegios' : 'Mostrar colegios'}
                 >
                   <span className="leading-none select-none">🏫</span>
                 </button>
@@ -2124,14 +2122,14 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
                     setIsStopsPanelOpen(true);
                     setIsEventFilterPanelOpen(false);
                   }}
-                  className="w-10 h-10 rounded-2xl flex items-center justify-center text-cyan-300 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-400/30 transition-all cursor-pointer active:scale-95"
+                  className="w-11 h-11 rounded-xl flex items-center justify-center text-[#FFF19A] bg-[#101114] hover:border-[#FFF19A] border border-white/15 transition-all cursor-pointer active:scale-95"
                   title="Buscar paradas en lista detallada"
                 >
                   <Search className="w-4 h-4" />
                 </button>
               </div>
 
-              {/* Fila 2: Categorías de Eventos e Inconvenientes (100% Icon-Only Grid) */}
+              {/* Fila 2: Categorías de Eventos e Inconvenientes */}
               <div className="pt-2.5 grid grid-cols-5 gap-2">
                 {EVENT_FILTER_CATEGORIES.map((cat) => {
                   const isActive = showEvents && activeEventCategories[cat.key] !== false;
@@ -2145,16 +2143,16 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
                           [cat.key]: !prev[cat.key],
                         }));
                       }}
-                      className={`relative w-11 h-11 rounded-2xl flex items-center justify-center text-lg border transition-all cursor-pointer active:scale-90 ${
+                      className={`relative w-11 h-11 rounded-xl flex items-center justify-center text-lg border transition-all cursor-pointer active:scale-90 ${
                         isActive
-                          ? `${cat.bg} ring-2 ${cat.ring} scale-105 shadow-md`
-                          : 'bg-white/5 text-slate-600 border-white/5 opacity-35 grayscale'
+                          ? 'bg-[#101114] border-[#B7F36B] text-white'
+                          : 'bg-[#101114] text-[#9299A5] border-white/10 opacity-40 grayscale'
                       }`}
                       title={cat.tooltip}
                     >
                       <span className="leading-none select-none">{cat.icon}</span>
                       {isActive && (
-                        <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-emerald-400 ring-2 ring-slate-950" />
+                        <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-[#B7F36B] ring-2 ring-[#202329]" />
                       )}
                     </button>
                   );
@@ -2162,25 +2160,25 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
               </div>
 
               {/* Acceso Rápido Inferior: Registrar Evento */}
-              <div className="mt-2.5 pt-2 border-t border-white/10 flex items-center justify-between">
+              <div className="mt-3 pt-2.5 border-t border-white/10 flex items-center justify-between">
                 <button
                   onClick={() => {
                     resetHideTimer();
                     setIsEventsPanelOpen(true);
                     setIsEventFilterPanelOpen(false);
                   }}
-                  className="w-full py-2 rounded-2xl bg-gradient-to-r from-rose-500/20 to-orange-500/20 hover:from-rose-500/30 hover:to-orange-500/30 border border-rose-400/40 text-rose-300 hover:text-white flex items-center justify-center gap-2 text-xs font-bold transition-all cursor-pointer"
-                  title="Registrar nuevo evento en el mapa"
+                  className="w-full min-h-[44px] py-2 rounded-xl bg-[#FFF19A] hover:brightness-95 border border-[#101114] text-[#101114] flex items-center justify-center gap-2 text-xs font-black transition-all cursor-pointer"
+                  title="Publicar un nuevo evento o ubicación de colectivo"
                 >
                   <Plus className="w-4 h-4" />
-                  <span>⚠️</span>
+                  <span>Publicar Evento</span>
                 </button>
               </div>
             </div>
           )}
         </div>
 
-        {/* Botón 5: Reportar Eventos e Inconvenientes del Transporte (solo icono ⚠️) */}
+        {/* Botón 5: Reportar Eventos e Inconvenientes del Transporte */}
         <button
           onClick={() => {
             resetHideTimer();
@@ -2191,54 +2189,52 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
               setIsEventFilterPanelOpen(false);
             }
           }}
-          className={`w-10 h-10 rounded-2xl flex items-center justify-center text-lg shadow-xl backdrop-blur-xl border transition-all active:scale-95 cursor-pointer ${
+          className={`w-11 h-11 rounded-xl flex items-center justify-center text-lg border-2 shadow-[2px_2px_0px_#101114] transition-all active:scale-95 cursor-pointer ${
             isEventsPanelOpen
-              ? 'bg-rose-500 text-white border-rose-300 ring-2 ring-rose-400/40 shadow-rose-500/30 scale-105'
-              : 'glass-panel text-rose-300 hover:text-white border-white/10 hover:bg-white/10'
+              ? 'bg-[#FFF19A] text-[#101114] border-[#101114]'
+              : 'bg-[#202329]/95 text-[#FFF19A] border-white/15 hover:border-[#FFF19A]'
           }`}
-          title="Eventos e Inconvenientes del transporte"
+          title="Publicar ubicación de colectivo o inconveniente en la ruta"
         >
-          <span className="leading-none select-none animate-pulse">⚠️</span>
+          <span className="leading-none select-none">⚠️</span>
         </button>
       </div>
 
-      {/* Contenedor Superior Centrado: Eventos e Inconvenientes (sin superponerse con las demás funcionalidades) */}
+      {/* Contenedor Superior Centrado: Eventos e Inconvenientes */}
       {isEventsPanelOpen && (
         <div className="fixed inset-0 z-50 flex items-start justify-center pt-4 sm:pt-6 px-3 pointer-events-none">
-          {/* Backdrop con desenfoque suave para cerrar al hacer clic afuera */}
           <div
             onClick={() => setIsEventsPanelOpen(false)}
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm pointer-events-auto transition-opacity"
+            className="fixed inset-0 bg-black/75 backdrop-blur-sm pointer-events-auto transition-opacity"
           />
 
-          {/* Panel Flotante Superior Centrado */}
           <div
             onMouseEnter={handleCardMouseEnter}
             onMouseLeave={handleCardMouseLeave}
-            className="relative pointer-events-auto w-full max-w-lg sm:max-w-xl max-h-[82vh] rounded-3xl bg-[#090d18]/98 backdrop-blur-2xl border border-rose-500/30 shadow-[0_20px_50px_rgba(244,63,94,0.35)] p-4 sm:p-5 z-50 flex flex-col animate-in fade-in slide-in-from-top-4 zoom-in-95 duration-200"
+            className="relative pointer-events-auto w-full max-w-lg sm:max-w-xl max-h-[82vh] rounded-3xl bg-[#202329] border-2 border-[#FFF19A]/50 shadow-[6px_6px_0px_#101114] p-4 sm:p-5 z-50 flex flex-col animate-in fade-in slide-in-from-top-4 zoom-in-95 duration-200"
           >
             {/* Header */}
             <div className="flex items-center justify-between pb-3 border-b border-white/10 shrink-0">
               <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-2xl bg-rose-500/20 text-rose-300 flex items-center justify-center text-lg border border-rose-400/40 shadow-sm">
+                <div className="w-10 h-10 rounded-xl bg-[#FFF19A] text-[#101114] border border-[#101114] flex items-center justify-center text-lg font-black">
                   ⚠️
                 </div>
                 <div>
                   <h3 className="text-sm font-black text-white flex items-center gap-2">
                     Eventos e Inconvenientes
-                    <span className="text-[10px] font-mono font-bold text-rose-300 bg-rose-500/15 px-2 py-0.5 rounded-full border border-rose-500/30">
+                    <span className="text-[10px] font-mono font-black text-[#101114] bg-[#B7F36B] px-2 py-0.5 rounded-md">
                       En Vivo
                     </span>
                   </h3>
-                  <p className="text-xs text-slate-400 leading-tight mt-0.5">
-                    Reportá la ubicación del colectivo en vivo o registrá un inconveniente en ruta
+                  <p className="text-xs text-[#9299A5] leading-tight mt-0.5">
+                    Reportá la ubicación del colectivo o registrá un inconveniente en ruta
                   </p>
                 </div>
               </div>
               <button
                 onClick={() => setIsEventsPanelOpen(false)}
-                className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/15 text-slate-400 hover:text-white flex items-center justify-center cursor-pointer transition-colors"
-                title="Cerrar"
+                className="w-10 h-10 rounded-xl bg-[#101114] hover:border-[#FFF19A] border border-white/15 text-[#9299A5] hover:text-white flex items-center justify-center cursor-pointer transition-colors"
+                title="Cerrar ventana de eventos"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -2251,63 +2247,60 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
                 placeholder="Nota o detalle opcional (ej: Pasó recién frente a Tenaris...)"
                 value={eventCustomNote}
                 onChange={(e) => setEventCustomNote(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-2xl bg-white/5 border border-white/10 text-xs sm:text-sm text-white placeholder-slate-400 focus:outline-none focus:border-rose-400 focus:ring-1 focus:ring-rose-400/50 transition-all shadow-inner"
+                className="w-full min-h-[44px] px-3.5 py-2.5 rounded-xl bg-[#101114] border border-white/15 text-xs sm:text-sm text-white placeholder-[#9299A5] focus:outline-none focus:border-[#FFF19A] transition-all"
               />
             </div>
 
             {/* Indicador de ubicación de registro */}
-            <div className="mb-3 px-3 py-2 rounded-2xl bg-white/[0.03] border border-white/5 text-xs text-slate-400 flex items-center justify-between shrink-0">
+            <div className="mb-3 px-3 py-2 rounded-xl bg-[#101114] border border-white/10 text-xs text-[#9299A5] flex items-center justify-between shrink-0">
               <span className="flex items-center gap-2 truncate">
-                <MapPin className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                <MapPin className="w-3.5 h-3.5 text-[#FFF19A] shrink-0" />
                 <span className="truncate">
-                  {userLocation?.address ? `Ubicación: ${userLocation.address}` : 'Ubicación actual en el corredor Malvinas ↔ Zárate'}
+                  {userLocation?.address ? `Ubicación: ${userLocation.address}` : 'Ubicación actual en corredor Zárate ↔ Campana'}
                 </span>
               </span>
-              <span className="text-[10px] font-mono font-bold text-cyan-300 bg-cyan-500/15 px-2 py-0.5 rounded-md border border-cyan-500/30 shrink-0">
+              <span className="text-[10px] font-mono font-black text-[#101114] bg-[#B7F36B] px-2 py-0.5 rounded-md shrink-0">
                 GPS Activo
               </span>
             </div>
 
-            {/* Lista scrollable de eventos para registrar con 1 toque */}
+            {/* Lista scrollable de eventos */}
             <div className="overflow-y-auto space-y-2.5 pr-1 flex-1 max-h-[50vh]">
               {TRANSIT_EVENT_TYPES.map((evOpt) => {
                 if (evOpt.isPrimary) {
                   return (
                     <div
                       key={evOpt.id}
-                      className="w-full p-3.5 rounded-2xl border-2 border-cyan-400/70 bg-gradient-to-r from-cyan-950/70 via-[#0a1829] to-blue-950/60 shadow-[0_0_24px_rgba(6,182,212,0.35)] space-y-3"
+                      className="w-full p-3.5 rounded-2xl border-2 border-[#FFF19A] bg-[#101114] space-y-3"
                     >
                       <div className="flex items-start justify-between gap-2.5">
                         <div className="flex items-center gap-3">
-                          <div className="w-12 h-12 rounded-2xl bg-cyan-500/25 text-cyan-200 border-2 border-cyan-300 flex items-center justify-center text-2xl shadow-[0_0_15px_rgba(6,182,212,0.6)] shrink-0 animate-pulse">
+                          <div className="w-11 h-11 rounded-xl bg-[#FFF19A] text-[#101114] border border-[#101114] flex items-center justify-center text-xl shrink-0">
                             📍
                           </div>
                           <div>
                             <div className="flex items-center gap-2 flex-wrap">
-                              <h4 className="font-black text-white text-sm sm:text-base font-display">
+                              <h4 className="font-black text-white text-sm font-display">
                                 {evOpt.label}
                               </h4>
-                              <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-gradient-to-r from-cyan-400 to-sky-400 text-slate-950 shadow-sm flex items-center gap-1 animate-pulse">
-                                <span>⭐</span>
+                              <span className="px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-[#B7F36B] text-[#101114] flex items-center gap-1">
                                 <span>Más Usado</span>
                               </span>
                             </div>
-                            <p className="text-[11px] text-cyan-200/90 mt-0.5 leading-snug">
-                              {evOpt.subtitle}. Queda en el mapa de forma estática por 1 minuto.
+                            <p className="text-[11px] text-[#9299A5] mt-0.5 leading-snug">
+                              {evOpt.subtitle}. Permanece 1 minuto en el mapa y se publica en el chat.
                             </p>
                           </div>
                         </div>
                       </div>
 
-                      {/* Selector de Dirección con 2 botones claros: Hacia Zárate / Hacia Malvinas */}
-                      <div className="p-2.5 rounded-xl bg-black/50 border border-cyan-400/30 space-y-2">
+                      <div className="p-2.5 rounded-xl bg-[#202329] border border-white/10 space-y-2">
                         <div className="flex items-center justify-between text-[10.5px]">
-                          <span className="font-bold text-cyan-200 uppercase tracking-wider flex items-center gap-1.5">
-                            <span>🧭</span>
-                            <span>Elegí la dirección del colectivo:</span>
+                          <span className="font-bold text-[#FFF19A] uppercase tracking-wider">
+                            Elegí la dirección del colectivo:
                           </span>
-                          <span className="text-[10px] font-mono text-cyan-400/80">
-                            1 toque para registrar
+                          <span className="text-[10px] font-mono text-[#9299A5]">
+                            1 toque
                           </span>
                         </div>
 
@@ -2315,7 +2308,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
                           <button
                             type="button"
                             onClick={() => handleRegisterEventFromDropdown(evOpt, 'hacia_zarate')}
-                            className="h-10 px-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-black text-xs flex items-center justify-center gap-1.5 shadow-md shadow-cyan-500/30 active:scale-95 transition-all cursor-pointer ring-1 ring-cyan-300"
+                            className="min-h-[44px] px-3 rounded-xl bg-[#FFF19A] hover:brightness-95 text-[#101114] border border-[#101114] font-black text-xs flex items-center justify-center gap-1.5 active:scale-95 transition-all cursor-pointer"
                             title="Reportar colectivo en dirección a Zárate"
                           >
                             <span className="text-sm">➡️</span>
@@ -2325,7 +2318,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
                           <button
                             type="button"
                             onClick={() => handleRegisterEventFromDropdown(evOpt, 'hacia_malvinas')}
-                            className="h-10 px-3 rounded-xl bg-gradient-to-r from-sky-400 to-teal-500 hover:from-sky-300 hover:to-teal-400 text-slate-950 font-black text-xs flex items-center justify-center gap-1.5 shadow-md shadow-sky-500/30 active:scale-95 transition-all cursor-pointer ring-1 ring-sky-300"
+                            className="min-h-[44px] px-3 rounded-xl bg-[#B7F36B] hover:brightness-95 text-[#101114] border border-[#101114] font-black text-xs flex items-center justify-center gap-1.5 active:scale-95 transition-all cursor-pointer"
                             title="Reportar colectivo en dirección a Barrio Malvinas"
                           >
                             <span className="text-sm">⬅️</span>
@@ -2341,22 +2334,22 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
                   <button
                     key={evOpt.id}
                     onClick={() => handleRegisterEventFromDropdown(evOpt)}
-                    className={`w-full p-3 rounded-2xl border text-left transition-all cursor-pointer group active:scale-98 flex items-center gap-3.5 ${evOpt.colorClass}`}
-                    title={`Registrar ${evOpt.label} en el mapa`}
+                    className="w-full min-h-[56px] p-3 rounded-xl border border-white/15 bg-[#101114] hover:border-[#FFF19A] text-left transition-all cursor-pointer group active:scale-98 flex items-center gap-3.5"
+                    title={`Publicar alerta: ${evOpt.label}`}
                   >
-                    <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl shrink-0 bg-black/40 border border-white/10 group-hover:scale-110 transition-transform shadow-sm">
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl shrink-0 bg-[#202329] border border-white/10">
                       {evOpt.icon}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-1">
-                        <h4 className="font-bold text-white text-xs sm:text-sm group-hover:text-rose-200 transition-colors">
+                        <h4 className="font-bold text-white text-xs sm:text-sm group-hover:text-[#FFF19A] transition-colors">
                           {evOpt.label}
                         </h4>
-                        <span className="text-[10px] font-mono font-bold text-slate-300 group-hover:text-white transition-colors bg-white/5 px-2 py-0.5 rounded-lg border border-white/10 shrink-0">
-                          Registrar ➔
+                        <span className="text-[10px] font-mono font-bold text-[#101114] bg-[#FFF19A] px-2 py-0.5 rounded-md shrink-0">
+                          Publicar ➔
                         </span>
                       </div>
-                      <p className="text-[11px] text-slate-300 mt-0.5 leading-snug line-clamp-1">
+                      <p className="text-[11px] text-[#9299A5] mt-0.5 leading-snug line-clamp-1">
                         {evOpt.subtitle}
                       </p>
                     </div>
@@ -2375,75 +2368,69 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
         <div
           onMouseEnter={handleCardMouseEnter}
           onMouseLeave={handleCardMouseLeave}
-          className={`absolute top-16 sm:top-18 left-4 right-4 sm:right-auto sm:w-[380px] z-30 transition-all duration-500 ease-in-out ${
+          className={`absolute top-16 sm:top-18 left-3 right-3 sm:left-4 sm:right-auto sm:w-[380px] z-30 transition-all duration-500 ease-in-out ${
             areCardsVisible
               ? 'opacity-100 translate-y-0 pointer-events-auto'
               : 'opacity-0 -translate-y-3 pointer-events-none'
           }`}
         >
-          <div className="glass-panel p-4 rounded-3xl shadow-2xl border border-emerald-400/40 relative overflow-hidden">
-            {/* Ambient top green gradient line */}
-            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-400 via-teal-300 to-sky-400" />
-
-            <div className="flex items-start justify-between gap-2 pb-2 border-b border-white/5">
+          <div className="bg-[#202329] p-4 rounded-2xl shadow-[5px_5px_0px_#101114] border-2 border-[#B7F36B] relative overflow-hidden">
+            <div className="flex items-start justify-between gap-2 pb-2.5 border-b border-white/10">
               <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping shrink-0" />
-                <span className="text-xs font-bold text-emerald-300 uppercase tracking-wider font-mono">
-                  Trayectoria en Vivo · Driver Titilando
+                <span className="w-2.5 h-2.5 rounded-full bg-[#B7F36B] animate-ping shrink-0" />
+                <span className="text-xs font-black text-[#B7F36B] uppercase tracking-wider font-mono">
+                  Trayectoria en Vivo
                 </span>
               </div>
               {onClearTrackingTaxi && (
                 <button
                   onClick={onClearTrackingTaxi}
-                  className="w-6 h-6 rounded-full bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white flex items-center justify-center transition-colors"
-                  title="Cerrar seguimiento"
+                  className="w-8 h-8 rounded-lg bg-[#101114] border border-white/15 hover:border-[#FFF19A] text-[#9299A5] hover:text-white flex items-center justify-center transition-colors cursor-pointer"
+                  title="Cerrar seguimiento de conductor"
                 >
-                  <X className="w-3.5 h-3.5" />
+                  <X className="w-4 h-4" />
                 </button>
               )}
             </div>
 
             <div className="pt-3 space-y-3">
-              {/* Big ETA Display */}
-              <div className="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-400/25 flex items-center justify-between">
+              <div className="p-3.5 rounded-xl bg-[#101114] border border-white/10 flex items-center justify-between">
                 <div>
-                  <div className="text-[10px] text-emerald-300 font-mono uppercase tracking-wider">
-                    Tiempo estimado en destino
+                  <div className="text-[10px] text-[#9299A5] font-mono uppercase tracking-wider font-bold">
+                    Tiempo estimado de llegada
                   </div>
-                  <div className="text-2xl font-extrabold text-white font-display flex items-baseline gap-1.5 mt-0.5">
+                  <div className="text-2xl font-black text-white font-display flex items-baseline gap-1.5 mt-0.5">
                     <span>{trajectoryInfo.etaMinutes} min</span>
-                    <span className="text-xs font-mono text-emerald-300 font-normal">
+                    <span className="text-xs font-mono text-[#B7F36B] font-bold">
                       ({trajectoryInfo.distKm} km)
                     </span>
                   </div>
                 </div>
 
                 <div className="text-right">
-                  <span className="px-2 py-0.5 rounded-full bg-emerald-400/20 text-emerald-300 text-[10px] font-mono font-semibold">
+                  <span className="px-2.5 py-1 rounded-md bg-[#B7F36B] text-[#101114] text-[10px] font-mono font-black">
                     ~35 km/h
                   </span>
                 </div>
               </div>
 
-              {/* Point A -> Point B itinerary */}
-              <div className="space-y-1.5 text-xs bg-white/[0.03] p-2.5 rounded-2xl border border-white/5">
-                <div className="flex items-center gap-2 text-slate-200">
-                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shrink-0 shadow-[0_0_8px_#10b981]" />
-                  <span className="font-semibold text-slate-300">Punto A:</span>
-                  <span className="text-white truncate">
+              <div className="space-y-1.5 text-xs bg-[#101114] p-3 rounded-xl border border-white/10">
+                <div className="flex items-center gap-2 text-white">
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#B7F36B] shrink-0" />
+                  <span className="font-bold text-[#9299A5]">Punto A:</span>
+                  <span className="text-white truncate font-bold">
                     {activeTrackingTaxi.driverName} ({activeTrackingTaxi.zone})
                   </span>
                 </div>
-                <div className="flex items-center gap-2 text-slate-200">
-                  <span className="w-2.5 h-2.5 rounded-full bg-sky-400 shrink-0 shadow-[0_0_8px_#38bdf8]" />
-                  <span className="font-semibold text-slate-300">Punto B:</span>
+                <div className="flex items-center gap-2 text-white">
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#FFF19A] shrink-0" />
+                  <span className="font-bold text-[#9299A5]">Punto B:</span>
                   <span className="text-white truncate">
-                    {userLocation?.address || 'Tu Ubicación (Barrio Malvinas, Campana)'}
+                    {userLocation?.address || 'Tu Ubicación'}
                   </span>
                 </div>
               </div>
 
-              {/* Action Buttons */}
               <div className="flex items-center gap-2 pt-1">
                 <a
                   href={`https://wa.me/${activeTrackingTaxi.whatsapp}?text=${encodeURIComponent(
@@ -2451,9 +2438,10 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
                   )}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex-1 h-10 rounded-2xl bg-gradient-to-r from-emerald-400 to-teal-400 hover:from-emerald-300 hover:to-teal-300 text-slate-950 font-bold text-xs flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-500/20 active:scale-95 transition-all"
+                  title="Contactar a este prestador por WhatsApp"
+                  className="flex-1 min-h-[44px] rounded-xl bg-[#B7F36B] hover:brightness-95 text-[#101114] border border-[#101114] font-black text-xs flex items-center justify-center gap-1.5 active:scale-95 transition-all"
                 >
-                  <MessageCircle className="w-3.5 h-3.5 fill-slate-950" />
+                  <MessageCircle className="w-4 h-4 text-[#101114]" />
                   <span>Pedir por WhatsApp</span>
                   <ArrowRight className="w-3.5 h-3.5" />
                 </a>
@@ -2461,7 +2449,8 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
                 {onClearTrackingTaxi && (
                   <button
                     onClick={onClearTrackingTaxi}
-                    className="px-3 h-10 rounded-2xl glass-button text-xs text-slate-300 hover:text-white"
+                    title="Cerrar seguimiento de ruta en el mapa"
+                    className="px-3.5 min-h-[44px] rounded-xl bg-[#101114] border border-white/15 hover:border-[#FFF19A] text-xs font-bold text-white cursor-pointer"
                   >
                     Cerrar
                   </button>
@@ -2479,41 +2468,37 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
         <div
           onMouseEnter={handleCardMouseEnter}
           onMouseLeave={handleCardMouseLeave}
-          className={`absolute top-16 sm:top-18 left-4 right-4 sm:right-auto sm:w-[390px] z-30 transition-all duration-500 ease-in-out ${
+          className={`absolute top-16 sm:top-18 left-3 right-3 sm:left-4 sm:right-auto sm:w-[390px] z-30 transition-all duration-500 ease-in-out ${
             areCardsVisible
               ? 'opacity-100 translate-y-0 pointer-events-auto'
               : 'opacity-0 -translate-y-3 pointer-events-none'
           }`}
         >
-          <div className="glass-panel p-4 rounded-3xl shadow-2xl border border-cyan-400/50 relative overflow-hidden bg-[#070b14]/95 backdrop-blur-2xl">
-            {/* Top ambient electric cyan gradient */}
-            <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 animate-pulse" />
-
-            <div className="flex items-start justify-between gap-2 pb-2.5 border-b border-white/5">
+          <div className="p-4 rounded-2xl shadow-[5px_5px_0px_#101114] border-2 border-[#FFF19A] relative overflow-hidden bg-[#202329]">
+            <div className="flex items-start justify-between gap-2 pb-2.5 border-b border-white/10">
               <div className="flex items-center gap-2">
                 <span className="relative flex h-3 w-3">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#B7F36B] opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-[#B7F36B]"></span>
                 </span>
-                <span className="text-xs font-black text-emerald-300 uppercase tracking-wider font-mono flex items-center gap-1.5">
-                  <Navigation className="w-3.5 h-3.5 text-emerald-400 fill-emerald-400" />
+                <span className="text-xs font-black text-[#FFF19A] uppercase tracking-wider font-mono flex items-center gap-1.5">
+                  <Navigation className="w-3.5 h-3.5 text-[#FFF19A]" />
                   <span>Guía GPS Activa · Hacia Parada</span>
                 </span>
               </div>
               <button
                 onClick={handleClearStopTrajectory}
-                className="w-7 h-7 rounded-full bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white flex items-center justify-center transition-colors"
-                title="Finalizar guía GPS"
+                className="w-8 h-8 rounded-lg bg-[#101114] border border-white/15 hover:border-[#FFF19A] text-[#9299A5] hover:text-white flex items-center justify-center transition-colors cursor-pointer"
+                title="Finalizar guía GPS hacia la parada"
               >
-                <X className="w-3.5 h-3.5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
             <div className="pt-3 space-y-3">
-              {/* Distance and ETA calculations */}
-              <div className="p-3.5 rounded-2xl bg-gradient-to-br from-emerald-500/15 via-teal-500/10 to-cyan-500/15 border border-emerald-400/30 flex items-center justify-between">
+              <div className="p-3.5 rounded-xl bg-[#101114] border border-white/10 flex items-center justify-between">
                 <div>
-                  <div className="text-[10px] text-emerald-300 font-mono uppercase tracking-wider font-bold">
+                  <div className="text-[10px] text-[#9299A5] font-mono uppercase tracking-wider font-bold">
                     Distancia Restante
                   </div>
                   <div className="text-2xl font-black text-white font-display flex items-baseline gap-1.5 mt-0.5">
@@ -2526,36 +2511,32 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
                 </div>
 
                 <div className="text-right space-y-1">
-                  <div className="text-xs font-mono text-emerald-300 font-extrabold flex items-center justify-end gap-1.5 bg-emerald-500/20 px-2 py-0.5 rounded-md border border-emerald-400/30">
-                    <span>🚶</span>
-                    <span>~{stopTrajectoryInfo.etaWalkMin} min</span>
+                  <div className="text-xs font-mono text-[#101114] font-black flex items-center justify-end gap-1.5 bg-[#B7F36B] px-2.5 py-0.5 rounded-md">
+                    <span>🚶 ~{stopTrajectoryInfo.etaWalkMin} min</span>
                   </div>
-                  <div className="text-[10.5px] font-mono text-sky-300 flex items-center justify-end gap-1">
-                    <span>🚌</span>
-                    <span>En micro: ~{stopTrajectoryInfo.etaTransitMin} min</span>
+                  <div className="text-[10.5px] font-mono text-[#FFF19A] flex items-center justify-end gap-1">
+                    <span>🚌 En micro: ~{stopTrajectoryInfo.etaTransitMin} min</span>
                   </div>
                 </div>
               </div>
 
-              {/* Point A -> Point B itinerary */}
-              <div className="space-y-1.5 text-xs bg-white/[0.03] p-2.5 rounded-2xl border border-white/5">
-                <div className="flex items-center gap-2 text-slate-200">
-                  <span className="w-2.5 h-2.5 rounded-full bg-sky-400 shrink-0 shadow-[0_0_8px_#38bdf8]" />
-                  <span className="font-semibold text-slate-400 text-[11px]">Origen:</span>
+              <div className="space-y-1.5 text-xs bg-[#101114] p-3 rounded-xl border border-white/10">
+                <div className="flex items-center gap-2 text-white">
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#FFF19A] shrink-0" />
+                  <span className="font-bold text-[#9299A5] text-[11px]">Origen:</span>
                   <span className="text-white truncate font-medium">
                     {userLocation?.address || 'Tu Ubicación GPS Actual'}
                   </span>
                 </div>
-                <div className="flex items-center gap-2 text-slate-200">
-                  <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 shrink-0 shadow-[0_0_8px_#06b6d4]" />
-                  <span className="font-semibold text-cyan-300 text-[11px]">Destino:</span>
-                  <span className="text-cyan-200 font-bold truncate">
+                <div className="flex items-center gap-2 text-white">
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#B7F36B] shrink-0" />
+                  <span className="font-bold text-[#B7F36B] text-[11px]">Destino:</span>
+                  <span className="text-white font-bold truncate">
                     {stopTrajectoryInfo.stop.name} (Parada #{stopTrajectoryInfo.stop.sequence})
                   </span>
                 </div>
               </div>
 
-              {/* Action Buttons: Centrar Recorrido + Google Maps Walking GPS + Finalizar */}
               <div className="flex items-center gap-2 pt-1">
                 <button
                   onClick={() => {
@@ -2569,8 +2550,8 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
                       );
                     }
                   }}
-                  className="flex-1 h-9.5 rounded-2xl bg-gradient-to-r from-cyan-400 to-sky-400 hover:from-cyan-300 hover:to-sky-300 text-slate-950 font-black text-xs flex items-center justify-center gap-1.5 shadow-md shadow-cyan-500/20 active:scale-95 transition-all"
-                  title="Centrar mapa en la ruta a la parada"
+                  className="flex-1 min-h-[44px] rounded-xl bg-[#FFF19A] hover:brightness-95 text-[#101114] border border-[#101114] font-black text-xs flex items-center justify-center gap-1.5 active:scale-95 transition-all cursor-pointer"
+                  title="Centrar el mapa en la trayectoria hacia la parada"
                 >
                   <Maximize2 className="w-3.5 h-3.5" />
                   <span>Centrar</span>
@@ -2580,17 +2561,17 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
                   href={`https://www.google.com/maps/dir/?api=1&destination=${stopTrajectoryInfo.stop.lat},${stopTrajectoryInfo.stop.lng}&travelmode=walking`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="h-9.5 px-3 rounded-2xl glass-button text-xs font-bold text-slate-200 hover:text-white flex items-center justify-center gap-1.5 shadow-sm shrink-0"
-                  title="Abrir en Google Maps con navegación por voz paso a paso"
+                  className="min-h-[44px] px-3 rounded-xl bg-[#B7F36B] hover:brightness-95 border border-[#101114] text-xs font-black text-[#101114] flex items-center justify-center gap-1.5 shrink-0"
+                  title="Abrir en Google Maps con navegación a pie paso a paso"
                 >
-                  <ExternalLink className="w-3.5 h-3.5 text-emerald-300" />
+                  <ExternalLink className="w-3.5 h-3.5 text-[#101114]" />
                   <span>GPS Externo</span>
                 </a>
 
                 <button
                   onClick={handleClearStopTrajectory}
-                  className="px-3 h-9.5 rounded-2xl glass-button text-xs font-medium text-slate-300 hover:text-white"
-                  title="Finalizar guía"
+                  className="px-3 min-h-[44px] rounded-xl bg-[#101114] border border-white/15 hover:border-[#FFF19A] text-xs font-bold text-white cursor-pointer"
+                  title="Finalizar guía hacia esta parada"
                 >
                   Finalizar
                 </button>
@@ -2607,42 +2588,39 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
         <div
           onMouseEnter={handleCardMouseEnter}
           onMouseLeave={handleCardMouseLeave}
-          className={`absolute top-16 sm:top-18 left-4 right-4 sm:right-auto sm:w-[400px] z-30 transition-all duration-500 ease-in-out ${
+          className={`absolute top-16 sm:top-18 left-3 right-3 sm:left-4 sm:right-auto sm:w-[400px] z-30 transition-all duration-500 ease-in-out ${
             areCardsVisible
               ? 'opacity-100 translate-y-0 pointer-events-auto'
               : 'opacity-0 -translate-y-3 pointer-events-none'
           }`}
         >
-          <div className="glass-panel p-4 rounded-3xl shadow-2xl border border-emerald-400/50 relative overflow-hidden bg-[#070b14]/95 backdrop-blur-2xl">
-            <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 animate-pulse" />
-
-            <div className="flex items-start justify-between gap-2 pb-2.5 border-b border-white/5">
+          <div className="p-4 rounded-2xl shadow-[5px_5px_0px_#101114] border-2 border-[#B7F36B] relative overflow-hidden bg-[#202329]">
+            <div className="flex items-start justify-between gap-2 pb-2.5 border-b border-white/10">
               <div className="flex items-center gap-2">
                 <span className="relative flex h-3 w-3">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#B7F36B] opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-[#B7F36B]"></span>
                 </span>
-                <span className="text-xs font-black text-emerald-300 uppercase tracking-wider font-mono flex items-center gap-1.5">
-                  <Navigation className="w-3.5 h-3.5 text-emerald-400 fill-emerald-400" />
+                <span className="text-xs font-black text-[#B7F36B] uppercase tracking-wider font-mono flex items-center gap-1.5">
+                  <Navigation className="w-3.5 h-3.5 text-[#B7F36B]" />
                   <span>Ubicación GPS del Pasajero Habilitada</span>
                 </span>
               </div>
               {onClearTrackingPassenger && (
                 <button
                   onClick={onClearTrackingPassenger}
-                  className="w-7 h-7 rounded-full bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
-                  title="Cerrar seguimiento de pasajero"
+                  className="w-8 h-8 rounded-lg bg-[#101114] border border-white/15 hover:border-[#FFF19A] text-[#9299A5] hover:text-white flex items-center justify-center transition-colors cursor-pointer"
+                  title="Cerrar panel de guía al pasajero"
                 >
-                  <X className="w-3.5 h-3.5" />
+                  <X className="w-4 h-4" />
                 </button>
               )}
             </div>
 
             <div className="pt-3 space-y-3">
-              {/* Distance and ETA calculations */}
-              <div className="p-3.5 rounded-2xl bg-gradient-to-br from-emerald-500/20 via-teal-500/10 to-cyan-500/15 border border-emerald-400/40 flex items-center justify-between">
+              <div className="p-3.5 rounded-xl bg-[#101114] border border-white/10 flex items-center justify-between">
                 <div>
-                  <div className="text-[10px] text-emerald-300 font-mono uppercase tracking-wider font-bold">
+                  <div className="text-[10px] text-[#9299A5] font-mono uppercase tracking-wider font-bold">
                     Distancia al Pasajero
                   </div>
                   <div className="text-2xl font-black text-white font-display flex items-baseline gap-1.5 mt-0.5">
@@ -2655,64 +2633,60 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
                 </div>
 
                 <div className="text-right space-y-1">
-                  <div className="text-xs font-mono text-emerald-300 font-extrabold flex items-center justify-end gap-1.5 bg-emerald-500/25 px-2.5 py-1 rounded-lg border border-emerald-400/40">
-                    <span>🚗</span>
-                    <span>~{passengerTrajectoryInfo.etaDriveMin} min en viaje</span>
+                  <div className="text-xs font-mono text-[#101114] font-black flex items-center justify-end gap-1.5 bg-[#FFF19A] px-2.5 py-1 rounded-md">
+                    <span>🚗 ~{passengerTrajectoryInfo.etaDriveMin} min</span>
                   </div>
-                  <div className="text-[10px] font-mono text-cyan-300 flex items-center justify-end gap-1">
-                    <span>GPS</span>
+                  <div className="text-[10px] font-mono text-[#B7F36B] flex items-center justify-end gap-1">
                     <span>Ruta óptima trazada</span>
                   </div>
                 </div>
               </div>
 
-              {/* Passenger Info & Addresses */}
-              <div className="space-y-1.5 text-xs bg-white/[0.03] p-3 rounded-2xl border border-white/5">
-                <div className="flex items-center justify-between pb-1.5 mb-1 border-b border-white/5">
+              <div className="space-y-2 text-xs bg-[#101114] p-3 rounded-xl border border-white/10">
+                <div className="flex items-center justify-between pb-1.5 mb-1 border-b border-white/10">
                   <div className="flex items-center gap-2">
-                    <span className="w-6 h-6 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 flex items-center justify-center font-bold text-xs">
+                    <span className="w-6 h-6 rounded-lg bg-[#202329] border border-white/15 text-white flex items-center justify-center font-bold text-xs">
                       🧑
                     </span>
-                    <span className="font-bold text-white text-xs">
+                    <span className="font-extrabold text-white text-xs">
                       {passengerTrajectoryInfo.solicitud.nombrePasajero}
                     </span>
                   </div>
-                  <span className="text-[9.5px] uppercase font-bold text-emerald-300 bg-emerald-500/20 px-2 py-0.5 rounded border border-emerald-400/30">
+                  <span className="text-[9.5px] uppercase font-black text-[#101114] bg-[#B7F36B] px-2 py-0.5 rounded-md">
                     {passengerTrajectoryInfo.solicitud.tipoVehiculoRequerido === 'moto' ? 'Moto Taxi' : 'Auto Taxi'}
                   </span>
                 </div>
 
-                <div className="flex items-start gap-2 text-slate-200">
-                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shrink-0 mt-1 shadow-[0_0_8px_#34d399]" />
+                <div className="flex items-start gap-2 text-white">
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#B7F36B] shrink-0 mt-1" />
                   <div className="min-w-0 flex-1">
-                    <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider block">Punto de Encuentro:</span>
+                    <span className="text-[10px] font-bold text-[#B7F36B] uppercase tracking-wider block">Punto de Encuentro:</span>
                     <span className="text-white font-medium text-xs block leading-tight">
                       {passengerTrajectoryInfo.solicitud.origen}
                     </span>
                   </div>
                 </div>
 
-                <div className="flex items-start gap-2 text-slate-200 pt-1">
-                  <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 shrink-0 mt-1 shadow-[0_0_8px_#06b6d4]" />
+                <div className="flex items-start gap-2 text-white pt-1">
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#FFF19A] shrink-0 mt-1" />
                   <div className="min-w-0 flex-1">
-                    <span className="text-[10px] font-bold text-cyan-400 uppercase tracking-wider block">Destino Final:</span>
-                    <span className="text-cyan-200 font-medium text-xs block leading-tight">
+                    <span className="text-[10px] font-bold text-[#FFF19A] uppercase tracking-wider block">Destino Final:</span>
+                    <span className="text-white font-medium text-xs block leading-tight">
                       {passengerTrajectoryInfo.solicitud.destino}
                     </span>
                   </div>
                 </div>
               </div>
 
-              {/* Action Buttons */}
               <div className="flex items-center gap-2 pt-1 flex-wrap">
                 <a
                   href={`https://www.google.com/maps/dir/?api=1&destination=${passengerTrajectoryInfo.passengerLat},${passengerTrajectoryInfo.passengerLng}&travelmode=driving`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex-1 h-10 rounded-2xl bg-gradient-to-r from-emerald-400 to-teal-400 hover:from-emerald-300 hover:to-teal-300 text-slate-950 font-black text-xs flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-500/25 active:scale-95 transition-all cursor-pointer ring-1 ring-emerald-300"
-                  title="Abrir en Google Maps con navegación por voz paso a paso"
+                  className="flex-1 min-h-[44px] px-3 rounded-xl bg-[#B7F36B] hover:brightness-95 text-[#101114] border border-[#101114] font-black text-xs flex items-center justify-center gap-1.5 active:scale-95 transition-all cursor-pointer"
+                  title="Abrir en Google Maps con navegación GPS paso a paso hacia el pasajero"
                 >
-                  <Navigation className="w-3.5 h-3.5 fill-slate-950 text-slate-950" />
+                  <Navigation className="w-4 h-4 text-[#101114]" />
                   <span>Google Maps GPS</span>
                 </a>
 
@@ -2723,10 +2697,10 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
                     )}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="h-10 px-3 rounded-2xl bg-[#25D366]/20 hover:bg-[#25D366]/30 border border-[#25D366]/40 text-[#25D366] font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-sm"
-                    title="Enviar WhatsApp al Pasajero"
+                    className="min-h-[44px] px-3 rounded-xl bg-[#FFF19A] hover:brightness-95 border border-[#101114] text-[#101114] font-black text-xs flex items-center justify-center gap-1.5 transition-all"
+                    title="Enviar mensaje por WhatsApp al pasajero"
                   >
-                    <MessageCircle className="w-3.5 h-3.5" />
+                    <MessageCircle className="w-4 h-4" />
                     <span>WhatsApp</span>
                   </a>
                 )}
@@ -2734,8 +2708,8 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
                 {onClearTrackingPassenger && (
                   <button
                     onClick={onClearTrackingPassenger}
-                    className="px-3 h-10 rounded-2xl glass-button text-xs font-semibold text-slate-300 hover:text-white cursor-pointer"
-                    title="Finalizar navegación"
+                    className="px-3 min-h-[44px] rounded-xl bg-[#101114] border border-white/15 hover:border-[#FFF19A] text-xs font-bold text-white cursor-pointer"
+                    title="Finalizar navegación hacia el pasajero"
                   >
                     Llegué / Finalizar
                   </button>
@@ -2746,49 +2720,35 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
         </div>
       )}
 
-      {/* Stop Inspector Bottom Drawer (Minimal Glass Drawer) con Información Completa y Botón IR (Guía GPS) */}
+      {/* Stop Inspector Bottom Drawer */}
       {!stopTrajectoryInfo && selectedStop && (
         <div
           onMouseEnter={handleCardMouseEnter}
           onMouseLeave={handleCardMouseLeave}
-          className={`absolute bottom-6 left-4 right-4 sm:left-auto sm:right-auto sm:left-4 sm:w-92 z-30 transition-all duration-500 ease-in-out ${
+          className={`absolute bottom-6 left-3 right-3 sm:right-auto sm:left-4 sm:w-92 z-30 transition-all duration-500 ease-in-out ${
             areCardsVisible
               ? 'opacity-100 translate-y-0 pointer-events-auto'
               : 'opacity-0 translate-y-4 pointer-events-none'
           }`}
         >
-          <div className="glass-panel p-4 rounded-3xl shadow-2xl space-y-3 border border-white/10 bg-[#080c16]/95 backdrop-blur-2xl">
-            {/* Top Accent Line with Route Color */}
-            <div
-              className="h-1 rounded-full w-full"
-              style={{ backgroundColor: selectedStop.route.color || '#38bdf8' }}
-            />
+          <div className="p-4 rounded-2xl shadow-[5px_5px_0px_#101114] space-y-3 border-2 border-white/15 bg-[#202329]">
+            <div className="h-1 rounded-full w-full bg-[#FFF19A]" />
 
-            {/* Header: Stop Name & Route */}
             <div className="flex items-start justify-between gap-2">
               <div className="flex items-start gap-2.5">
-                <div
-                  className="w-8 h-8 rounded-2xl flex items-center justify-center shrink-0 text-white font-bold text-xs shadow-md mt-0.5"
-                  style={{
-                    backgroundColor: `${selectedStop.route.color}30`,
-                    border: `1.5px solid ${selectedStop.route.color}`,
-                  }}
-                >
+                <div className="w-9 h-9 rounded-xl bg-[#101114] border border-[#FFF19A]/60 flex items-center justify-center shrink-0 text-white font-bold text-sm mt-0.5">
                   🚏
                 </div>
                 <div>
                   <h4 className="text-xs font-black text-white leading-tight">
                     {selectedStop.stop.name}
                   </h4>
-                  <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                    <span
-                      className="w-2 h-2 rounded-full shrink-0"
-                      style={{ backgroundColor: selectedStop.route.color }}
-                    />
-                    <span className="text-[10px] text-slate-300 font-medium">
+                  <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                    <span className="w-2 h-2 rounded-full shrink-0 bg-[#B7F36B]" />
+                    <span className="text-[10px] text-[#9299A5] font-semibold">
                       {selectedStop.route.name}
                     </span>
-                    <span className="text-[9.5px] font-mono text-cyan-300 bg-cyan-500/10 px-1.5 py-0.2 rounded border border-cyan-400/20">
+                    <span className="text-[9.5px] font-mono text-[#101114] font-black bg-[#FFF19A] px-1.5 py-0.5 rounded">
                       Parada #{selectedStop.stop.sequence}
                     </span>
                   </div>
@@ -2796,14 +2756,13 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
               </div>
               <button
                 onClick={() => setSelectedStop(null)}
-                className="w-7 h-7 rounded-full bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white flex items-center justify-center transition-colors shrink-0"
-                title="Cerrar"
+                className="w-8 h-8 rounded-lg bg-[#101114] border border-white/15 hover:border-[#FFF19A] text-[#9299A5] hover:text-white flex items-center justify-center transition-colors shrink-0 cursor-pointer"
+                title="Cerrar detalle de parada"
               >
-                <X className="w-3.5 h-3.5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            {/* Metrics: Distance, Walking ETA, Frequency */}
             {(() => {
               const uLat = userLocation?.lat || -34.195;
               const uLng = userLocation?.lng || -58.972;
@@ -2812,34 +2771,33 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
               const distText = dKm < 1 ? `${Math.round(dKm * 1000)} m` : `${dKm.toFixed(1)} km`;
 
               return (
-                <div className="grid grid-cols-3 gap-1.5 text-center bg-white/[0.03] p-2 rounded-2xl border border-white/5">
+                <div className="grid grid-cols-3 gap-1.5 text-center bg-[#101114] p-2.5 rounded-xl border border-white/10">
                   <div className="space-y-0.5">
-                    <div className="text-[9px] font-mono text-slate-400 uppercase">Distancia</div>
-                    <div className="text-xs font-black text-cyan-300 font-mono">{distText}</div>
+                    <div className="text-[9px] font-mono text-[#9299A5] uppercase">Distancia</div>
+                    <div className="text-xs font-black text-white font-mono">{distText}</div>
                   </div>
-                  <div className="space-y-0.5 border-x border-white/5">
-                    <div className="text-[9px] font-mono text-slate-400 uppercase">Caminando</div>
-                    <div className="text-xs font-black text-emerald-300 font-mono">~{walkMin} min</div>
+                  <div className="space-y-0.5 border-x border-white/10">
+                    <div className="text-[9px] font-mono text-[#9299A5] uppercase">Caminando</div>
+                    <div className="text-xs font-black text-[#B7F36B] font-mono">~{walkMin} min</div>
                   </div>
                   <div className="space-y-0.5">
-                    <div className="text-[9px] font-mono text-slate-400 uppercase">Frecuencia</div>
-                    <div className="text-xs font-black text-amber-300 font-mono">c/{selectedStop.route.frequencyMinutes}m</div>
+                    <div className="text-[9px] font-mono text-[#9299A5] uppercase">Frecuencia</div>
+                    <div className="text-xs font-black text-[#FFF19A] font-mono">c/{selectedStop.route.frequencyMinutes}m</div>
                   </div>
                 </div>
               );
             })()}
 
-            {/* BOTÓN "IR" (GUÍA GPS) PROMINENTE */}
             <div className="flex items-center gap-2 pt-0.5">
               <button
                 onClick={() => {
                   handleCalculateStopTrajectory(selectedStop.stop, selectedStop.route);
                   setSelectedStop(null);
                 }}
-                className="flex-1 h-11 rounded-2xl bg-gradient-to-r from-emerald-400 via-teal-400 to-cyan-400 hover:from-emerald-300 hover:to-cyan-300 text-slate-950 font-black text-xs flex items-center justify-center gap-2 shadow-xl shadow-emerald-500/25 active:scale-95 transition-all cursor-pointer ring-1 ring-emerald-300"
+                className="flex-1 min-h-[44px] rounded-xl bg-[#B7F36B] hover:brightness-95 text-[#101114] border border-[#101114] font-black text-xs flex items-center justify-center gap-2 active:scale-95 transition-all cursor-pointer"
                 title="Iniciar Guía GPS en tiempo real hacia esta parada"
               >
-                <Navigation className="w-4 h-4 fill-slate-950 text-slate-950" />
+                <Navigation className="w-4 h-4 text-[#101114]" />
                 <span className="tracking-tight text-xs uppercase font-black">IR · Iniciar Guía GPS</span>
               </button>
 
@@ -2847,24 +2805,24 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
                 href={`https://www.google.com/maps/dir/?api=1&destination=${selectedStop.stop.lat},${selectedStop.stop.lng}&travelmode=walking`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="h-11 px-3 rounded-2xl glass-button text-xs font-bold text-slate-200 hover:text-white flex items-center justify-center gap-1 shadow-sm shrink-0"
-                title="Abrir en Google Maps con navegación por voz"
+                className="min-h-[44px] px-3 rounded-xl bg-[#101114] border border-white/15 hover:border-[#FFF19A] text-xs font-bold text-white flex items-center justify-center gap-1 shrink-0"
+                title="Abrir parada en Google Maps"
               >
-                <ExternalLink className="w-3.5 h-3.5 text-sky-300" />
+                <ExternalLink className="w-3.5 h-3.5 text-[#FFF19A]" />
                 <span className="hidden sm:inline text-[11px]">Maps</span>
               </a>
             </div>
 
-            {/* Opción Alternativa: Pedir Transporte si el colectivo demora */}
             {onOpenPedirTransporte && (
               <button
                 onClick={() => {
                   onOpenPedirTransporte();
                   setSelectedStop(null);
                 }}
-                className="w-full h-8.5 rounded-xl bg-gradient-to-r from-amber-500/20 via-orange-500/20 to-amber-600/20 hover:from-amber-500/30 hover:to-orange-500/30 border border-amber-400/35 text-amber-200 font-extrabold text-[10.5px] flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-sm"
+                title="Solicitar un auto o moto desde esta parada"
+                className="w-full min-h-[44px] rounded-xl bg-[#FFF19A] hover:brightness-95 border border-[#101114] text-[#101114] font-black text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer"
               >
-                <Zap className="w-3.5 h-3.5 fill-amber-300 text-amber-300" />
+                <Zap className="w-4 h-4 fill-[#101114] text-[#101114]" />
                 <span>Pedir Transporte Alternativo en esta parada</span>
               </button>
             )}

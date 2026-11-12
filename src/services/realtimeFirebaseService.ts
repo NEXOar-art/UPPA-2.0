@@ -1327,11 +1327,32 @@ export async function aceptarSolicitudTransporte(
   choferId: string,
   choferNombre: string,
   choferTelefono: string
-): Promise<void> {
+): Promise<SolicitudTransporteFirestore | null> {
   const cached = getCached<SolicitudTransporteFirestore[]>('solicitudes', MOCK_INITIAL_SOLICITUDES);
-  const existing = cached.find((s) => s.id === solicitudId);
+  let existing = cached.find((s) => s.id === solicitudId);
+
+  // Verificar estado real en Firestore para evitar que dos choferes acepten el mismo viaje
+  try {
+    const docRef = doc(db, COL_SOLICITUDES, solicitudId);
+    const snap = await getDoc(docRef);
+    if (snap.exists()) {
+      const serverData = { id: snap.id, ...(snap.data() as Omit<SolicitudTransporteFirestore, 'id'>) };
+      existing = serverData;
+    }
+  } catch {
+    // offline fallback usa caché local
+  }
+
   if (existing && isSolicitudExpired(existing)) {
     throw new Error('Esta solicitud ha expirado tras 12 minutos sin chofer asignado. El pasajero debe emitir una nueva solicitud.');
+  }
+  if (existing && existing.estado !== 'pendiente') {
+    if (existing.choferId && existing.choferId !== choferId) {
+      throw new Error('Esta solicitud ya fue aceptada por otro prestador de servicio.');
+    }
+    if (existing.estado === 'anulado' || existing.estado === 'cancelado' || existing.estado === 'completado') {
+      throw new Error(`Esta solicitud ya se encuentra ${existing.estado}.`);
+    }
   }
 
   const now = Date.now();
@@ -1349,15 +1370,11 @@ export async function aceptarSolicitudTransporte(
     intentosFallidosCodigo: 0,
   };
 
-  // Actualizar caché local
+  const updatedList = cached.map((s) => (s.id === solicitudId ? { ...s, ...patch } : s));
   try {
-    setCached(
-      'solicitudes',
-      cached.map((s) => (s.id === solicitudId ? { ...s, ...patch } : s))
-    );
+    setCached('solicitudes', updatedList);
   } catch {}
 
-  // Broadcast entre pestañas
   try {
     solicitudesBroadcastChannel?.postMessage({
       type: 'UPDATE_SOLICITUD',
@@ -1366,11 +1383,12 @@ export async function aceptarSolicitudTransporte(
     });
   } catch {}
 
+  // SEGURIDAD: NO incluir el código de abordaje en el push global (el pasajero lo ve exclusivamente en su tarjeta privada)
   triggerInAppPushNotification(
     '✅ ¡Viaje Aceptado!',
-    `${choferNombre} aceptó el viaje. Tu código de abordaje seguro es: ${codigoSeguridad}. Pasáselo al subir.`,
+    `${choferNombre} aceptó el viaje y va en camino con GPS. El pasajero ya tiene su código de abordaje en pantalla.`,
     'transporte',
-    { solicitudId, choferId, codigoSeguridad }
+    { solicitudId, choferId }
   );
 
   // Cuando un prestador acepta un servicio, pasa automáticamente a estado OCUPADO
@@ -1387,21 +1405,36 @@ export async function aceptarSolicitudTransporte(
   } catch (error) {
     console.warn('Firestore aceptarSolicitud notice (resilient mode active):', error);
   }
+
+  return existing ? { ...existing, ...patch } : null;
 }
 
 /**
  * Valida el código alfanumérico provisto por el pasajero al subir al vehículo.
  * Si es correcto: habilita el viaje y pasa a estado 'en_camino'.
- * Si es incorrecto: contabiliza intento y si supera 3 intentos (o se anula), el viaje queda anulado.
+ * Si es incorrecto: contabiliza intento en Firestore/caché y si supera 3 intentos, el viaje queda anulado.
  */
 export async function validarCodigoSeguridadViaje(
   solicitudId: string,
-  codigoIngresado: string
+  codigoIngresado: string,
+  choferId?: string
 ): Promise<{ success: boolean; error?: string; anular?: boolean; codigoValidado?: boolean }> {
   const cached = getCached<SolicitudTransporteFirestore[]>('solicitudes', MOCK_INITIAL_SOLICITUDES);
-  const sol = cached.find((s) => s.id === solicitudId);
+  let sol = cached.find((s) => s.id === solicitudId);
+
+  try {
+    const docRef = doc(db, COL_SOLICITUDES, solicitudId);
+    const snap = await getDoc(docRef);
+    if (snap.exists()) {
+      sol = { id: snap.id, ...(snap.data() as Omit<SolicitudTransporteFirestore, 'id'>) };
+    }
+  } catch {}
+
   if (!sol) {
     return { success: false, error: 'Solicitud no encontrada.' };
+  }
+  if (choferId && sol.choferId && sol.choferId !== choferId) {
+    return { success: false, error: 'Solo el prestador asignado a este viaje puede validar el código.' };
   }
   if (sol.estado === 'anulado' || sol.estado === 'cancelado' || sol.estado === 'completado') {
     return { success: false, error: `El viaje ya se encuentra ${sol.estado}.` };
@@ -1452,7 +1485,7 @@ export async function validarCodigoSeguridadViaje(
     return { success: true, codigoValidado: true };
   }
 
-  // Código incorrecto -> incrementar intentos o anular
+  // Código incorrecto -> incrementar intentos en caché y Firestore, o anular
   const intentos = (sol.intentosFallidosCodigo || 0) + 1;
   if (intentos >= 3) {
     await anularViajePorCodigo(solicitudId, 'Código de seguridad incorrecto ingresado 3 veces.');
@@ -1476,6 +1509,14 @@ export async function validarCodigoSeguridadViaje(
       type: 'UPDATE_SOLICITUD',
       solicitudId,
       patch,
+    });
+  } catch {}
+
+  try {
+    const docRef = doc(db, COL_SOLICITUDES, solicitudId);
+    await updateDoc(docRef, {
+      intentosFallidosCodigo: intentos,
+      actualizadoEn: serverTimestamp(),
     });
   } catch {}
 

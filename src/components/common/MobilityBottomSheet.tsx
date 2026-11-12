@@ -142,17 +142,16 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
             setIsMinimized(false);
             setDragOffsetY(0);
           }}
-          className="px-4 py-2.5 rounded-2xl bg-[#0b0f1b]/95 hover:bg-[#12182a] border border-cyan-400/50 text-white shadow-2xl backdrop-blur-2xl flex items-center gap-2.5 text-xs font-black transition-all cursor-pointer active:scale-95 group ring-2 ring-cyan-400/25"
+          className="min-h-[44px] px-4 py-2.5 rounded-2xl bg-[#202329] hover:bg-[#101114] border-2 border-[#FFF19A]/60 text-white shadow-[4px_4px_0px_rgba(0,0,0,0.65)] flex items-center gap-2.5 text-xs font-black transition-all cursor-pointer active:scale-95 group"
           title="Abrir panel de opciones de transporte"
         >
-          <div className="w-6 h-6 rounded-lg bg-cyan-500/20 text-cyan-300 flex items-center justify-center border border-cyan-400/30 group-hover:scale-110 transition-transform">
+          <div className="w-6 h-6 rounded-lg bg-[#FFF19A] text-[#101114] flex items-center justify-center shrink-0">
             <Maximize2 className="w-3.5 h-3.5" />
           </div>
           <span>Opciones de Transporte</span>
-          <span className="text-[10px] text-cyan-400 font-bold bg-cyan-500/10 px-2 py-0.5 rounded-full border border-cyan-400/20">
+          <span className="text-[10px] text-[#101114] font-black bg-[#B7F36B] px-2 py-0.5 rounded-md">
             Abrir
           </span>
-          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
         </button>
       </div>
     );
@@ -166,38 +165,35 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
         transition: dragOffsetY === 0 ? 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)' : 'none',
       }}
     >
-      <div className="bg-[#0b0f1b]/95 backdrop-blur-2xl border border-white/10 rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden transition-all duration-300">
-        {/* Barra superior con doble función: Tocar para expandir / Arrastrar hacia abajo para ocultar */}
+      <div className="bg-[#202329]/95 backdrop-blur-xl border-2 border-white/15 rounded-t-3xl sm:rounded-3xl shadow-[0_-4px_24px_rgba(0,0,0,0.6)] overflow-hidden transition-all duration-300">
+        {/* Barra superior de agarre */}
         <div
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
           onPointerCancel={handlePointerCancel}
           style={{ touchAction: 'none' }}
-          className="w-full pt-2.5 pb-1 flex flex-col items-center justify-center cursor-grab active:cursor-grabbing hover:bg-white/[0.04] transition-colors select-none group"
+          className="w-full pt-2.5 pb-1 flex flex-col items-center justify-center cursor-grab active:cursor-grabbing hover:bg-white/[0.03] transition-colors select-none group"
           title={
             isExpanded
               ? 'Tocar para contraer · Arrastrar hacia abajo para ocultar el panel'
               : 'Tocar para expandir panel hacia arriba · Arrastrar hacia abajo para ocultar'
           }
         >
-          {/* Barra central de agarre */}
-          <div className="w-14 h-1.5 bg-slate-600/80 group-hover:bg-cyan-400/80 rounded-full transition-all group-active:w-20 group-active:bg-cyan-400" />
-          
-          {/* Micro indicadores de función dual: Expandir / Arrastrar para Ocultar */}
-          <div className="flex items-center gap-1.5 mt-1 text-[9.5px] font-bold text-slate-400 group-hover:text-cyan-300 transition-colors">
-            <ChevronUp className="w-3 h-3 text-cyan-400" />
+          <div className="w-14 h-1.5 bg-[#9299A5]/60 group-hover:bg-[#FFF19A] rounded-full transition-all group-active:w-20" />
+          <div className="flex items-center gap-1.5 mt-1 text-[9.5px] font-bold text-[#9299A5] group-hover:text-[#FFF19A] transition-colors">
+            <ChevronUp className="w-3 h-3 text-[#FFF19A]" />
             <span>{isExpanded ? 'Tocar para contraer' : 'Tocar para expandir'}</span>
-            <span className="text-slate-600">·</span>
+            <span>·</span>
             <span>Arrastrar hacia abajo para ocultar</span>
-            <ChevronDown className="w-3 h-3 text-slate-400 animate-bounce" />
+            <ChevronDown className="w-3 h-3 text-[#9299A5]" />
           </div>
         </div>
 
-        {/* Header: sin el título "¿Qué querés hacer?" y con botón "x" para minimizar */}
+        {/* Header */}
         <div className="px-3.5 sm:px-5 pt-1 pb-2 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+            <span className="w-2.5 h-2.5 rounded-full bg-[#B7F36B] shrink-0" />
             <p className="text-xs sm:text-sm font-black text-white tracking-tight truncate">
               ¡Hola, {userName || 'Pasajero'}!
             </p>
@@ -207,30 +203,29 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
             <button
               type="button"
               onClick={() => setIsExpanded((prev) => !prev)}
-              className={`flex items-center gap-1.5 text-[11px] font-black px-2.5 py-1.5 rounded-xl border transition-all cursor-pointer active:scale-95 shadow-sm ${
+              className={`min-h-[38px] flex items-center gap-1.5 text-[11px] font-black px-3 py-1.5 rounded-xl border-2 transition-all cursor-pointer active:scale-95 ${
                 isExpanded
-                  ? 'text-cyan-200 bg-cyan-500/20 border-cyan-400/60 ring-1 ring-cyan-400/40'
-                  : 'text-sky-400 hover:text-sky-300 bg-sky-500/10 border-sky-400/20'
+                  ? 'text-[#101114] bg-[#FFF19A] border-[#FFF19A]'
+                  : 'text-white hover:border-[#FFF19A] bg-[#101114] border-white/15'
               }`}
-              title={isExpanded ? 'Ocultar listado de paradas' : 'Ver 62 Paradas'}
+              title={isExpanded ? 'Ocultar listado de paradas' : 'Ver 62 Paradas de Línea 228'}
             >
               <span>{isExpanded ? 'Ocultar listado' : '62 Paradas'}</span>
               {isExpanded ? (
-                <ChevronUp className="w-3.5 h-3.5 text-cyan-300 stroke-[3]" />
+                <ChevronUp className="w-3.5 h-3.5 stroke-[3]" />
               ) : (
                 <ChevronDown className="w-3.5 h-3.5" />
               )}
             </button>
 
-            {/* BOTÓN "X" PARA MINIMIZAR Y VER EL MAPA COMPLETO */}
             <button
               type="button"
               onClick={() => {
                 setIsExpanded(false);
                 setIsMinimized(true);
               }}
-              className="w-8 h-8 rounded-full bg-white/10 hover:bg-rose-500/20 text-slate-300 hover:text-rose-200 border border-white/15 hover:border-rose-400/50 flex items-center justify-center transition-all cursor-pointer active:scale-95 shadow-sm"
-              title="Minimizar panel (x)"
+              className="w-9 h-9 rounded-xl bg-[#101114] hover:border-rose-400 text-[#9299A5] hover:text-rose-300 border border-white/15 flex items-center justify-center transition-all cursor-pointer active:scale-95"
+              title="Minimizar panel de opciones (x)"
               aria-label="Minimizar panel"
             >
               <X className="w-4 h-4 stroke-[2.5]" />
@@ -238,85 +233,76 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
           </div>
         </div>
 
-        {/* 3 Action Cards Inspiradas en la captura de Cabify:
-            1. "Pedir Transporte Alternativo"
-            2. "Taxi & Motos" con 3 puntitos para "Ranking de Prestadores"
-            3. "Chat Comunitario"
-        */}
-        {/* 4 Action Cards Inspiradas en el panel de opciones de movilidad:
-            1. "Pedir Transporte Alternativo"
-            2. "Taxi & Motos" con 3 puntitos para "Ranking de Prestadores"
-            3. "Prestar Servicio" (Habilitación de Chofer Auto & Moto)
-            4. "Chat Comunitario"
-        */}
+        {/* 4 Action Cards */}
         <div className="px-3.5 sm:px-5 pb-3">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {/* Card 1: Pedir Transporte Alternativo */}
             <button
+              type="button"
               onClick={onOpenPedirTransporte}
-              className="p-2 sm:p-2.5 rounded-2xl bg-gradient-to-b from-amber-500/15 to-orange-500/5 hover:from-amber-500/25 hover:to-orange-500/15 border border-amber-400/40 text-left transition-all group shadow-md shadow-amber-500/5 active:scale-95 cursor-pointer flex flex-col justify-between"
+              title="Emitir una solicitud rápida de Moto Taxi o Auto Taxi"
+              className="min-h-[76px] p-2.5 rounded-2xl bg-[#101114] hover:border-[#FFF19A] border-2 border-[#FFF19A]/40 text-left transition-all group active:scale-95 cursor-pointer flex flex-col justify-between"
             >
               <div className="flex items-center justify-between mb-1.5">
-                <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-300 flex items-center justify-center border border-amber-400/30 group-hover:scale-105 transition-transform">
-                  <Zap className="w-4 h-4 fill-amber-400 text-amber-400" />
+                <div className="w-8 h-8 rounded-xl bg-[#FFF19A] text-[#101114] flex items-center justify-center">
+                  <Zap className="w-4 h-4 fill-[#101114]" />
                 </div>
-                <span className="px-1.5 py-0.2 rounded text-[8.5px] font-black uppercase tracking-wider bg-amber-400/20 text-amber-300 border border-amber-400/30">
+                <span className="px-1.5 py-0.5 rounded text-[8.5px] font-black uppercase tracking-wider bg-[#FFF19A]/15 text-[#FFF19A] border border-[#FFF19A]/40">
                   Rápido
                 </span>
               </div>
               <div>
-                <span className="text-[11px] sm:text-xs font-black text-amber-100 block leading-tight group-hover:text-amber-200">
+                <span className="text-[11px] sm:text-xs font-black text-white block leading-tight group-hover:text-[#FFF19A]">
                   Pedir Transporte
                 </span>
-                <span className="text-[9px] text-amber-300/80 block mt-0.5 truncate">
+                <span className="text-[9.5px] text-[#9299A5] block mt-0.5 truncate">
                   Moto & Auto Taxi
                 </span>
               </div>
             </button>
 
-            {/* Card 2: Taxi & Motos con 3 puntitos para Ranking de Prestadores */}
-            <div className="relative p-2 sm:p-2.5 rounded-2xl bg-gradient-to-b from-emerald-500/15 to-teal-500/5 hover:from-emerald-500/25 hover:to-teal-500/15 border border-emerald-400/40 text-left transition-all group shadow-md shadow-emerald-500/5 flex flex-col justify-between">
+            {/* Card 2: Taxi & Motos con Ranking */}
+            <div className="relative min-h-[76px] p-2.5 rounded-2xl bg-[#101114] hover:border-[#B7F36B] border-2 border-[#B7F36B]/40 text-left transition-all group flex flex-col justify-between">
               <div className="flex items-center justify-between mb-1.5">
                 <button
                   type="button"
                   onClick={onOpenTaxis}
-                  className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-300 flex items-center justify-center border border-emerald-400/30 group-hover:scale-105 transition-transform cursor-pointer"
-                  title="Abrir Taxis & Motos"
+                  className="w-8 h-8 rounded-xl bg-[#B7F36B] text-[#101114] flex items-center justify-center cursor-pointer"
+                  title="Abrir sección Taxis & Motos"
                 >
                   <div className="flex items-center -space-x-1">
-                    <Bike className="w-3.5 h-3.5 text-emerald-300" />
-                    <Car className="w-3.5 h-3.5 text-teal-300" />
+                    <Bike className="w-3.5 h-3.5" />
+                    <Car className="w-3.5 h-3.5" />
                   </div>
                 </button>
 
-                {/* 3 Puntitos para desplegar el Ranking de Prestadores */}
                 <RankingPrestadoresDropdown
                   isOpen={isRankingDropdownOpen}
                   onClose={() => setIsRankingDropdownOpen(false)}
                   onOpenTaxiTab={onOpenTaxis}
                   placement="top"
-                  triggerButtonClassName="w-6 h-6 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/35 border border-emerald-400/40 text-emerald-300 flex items-center justify-center transition-all cursor-pointer"
+                  triggerButtonClassName="w-7 h-7 rounded-lg bg-[#202329] hover:border-[#FFF19A] border border-white/15 text-[#FFF19A] flex items-center justify-center transition-all cursor-pointer"
                 />
               </div>
 
               <button
                 type="button"
                 onClick={onOpenTaxis}
+                title="Ver prestadores habilitados en Taxis & Motos"
                 className="text-left w-full cursor-pointer"
               >
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] sm:text-xs font-black text-emerald-100 block leading-tight group-hover:text-emerald-200">
-                    Taxi & Motos
-                  </span>
-                </div>
-                <span className="text-[9px] text-emerald-300/80 block mt-0.5 truncate">
+                <span className="text-[11px] sm:text-xs font-black text-white block leading-tight group-hover:text-[#B7F36B]">
+                  Taxi & Motos
+                </span>
+                <span className="text-[9.5px] text-[#9299A5] block mt-0.5 truncate">
                   Prestadores en vivo
                 </span>
               </button>
             </div>
 
-            {/* Card 3: Prestar Servicio (Habilitación Chofer) */}
+            {/* Card 3: Prestar Servicio */}
             <button
+              type="button"
               onClick={() => {
                 if (onOpenPrestarServicio) {
                   onOpenPrestarServicio();
@@ -324,21 +310,22 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
                   onOpenTaxis();
                 }
               }}
-              className="p-2 sm:p-2.5 rounded-2xl bg-gradient-to-b from-cyan-500/15 to-blue-500/5 hover:from-cyan-500/25 hover:to-blue-500/15 border border-cyan-400/40 text-left transition-all group shadow-md shadow-cyan-500/5 active:scale-95 cursor-pointer flex flex-col justify-between"
+              title="Habilitar mi Auto o Moto para prestar servicio de traslado"
+              className="min-h-[76px] p-2.5 rounded-2xl bg-[#101114] hover:border-white/50 border-2 border-white/15 text-left transition-all group active:scale-95 cursor-pointer flex flex-col justify-between"
             >
               <div className="flex items-center justify-between mb-1.5">
-                <div className="w-8 h-8 rounded-xl bg-cyan-500/20 text-cyan-300 flex items-center justify-center border border-cyan-400/30 group-hover:scale-105 transition-transform">
-                  <Sparkles className="w-4 h-4 text-cyan-300" />
+                <div className="w-8 h-8 rounded-xl bg-[#202329] text-[#FFF19A] border border-white/15 flex items-center justify-center">
+                  <Sparkles className="w-4 h-4" />
                 </div>
-                <span className="px-1.5 py-0.2 rounded text-[8.5px] font-black uppercase tracking-wider bg-cyan-400/20 text-cyan-300 border border-cyan-400/30">
+                <span className="px-1.5 py-0.5 rounded text-[8.5px] font-black uppercase tracking-wider bg-[#202329] text-white border border-white/15">
                   Choferes
                 </span>
               </div>
               <div>
-                <span className="text-[11px] sm:text-xs font-black text-cyan-100 block leading-tight group-hover:text-cyan-200">
+                <span className="text-[11px] sm:text-xs font-black text-white block leading-tight group-hover:text-[#FFF19A]">
                   Prestar Servicio
                 </span>
-                <span className="text-[9px] text-cyan-300/80 block mt-0.5 truncate">
+                <span className="text-[9.5px] text-[#9299A5] block mt-0.5 truncate">
                   Habilitá tu unidad
                 </span>
               </div>
@@ -346,28 +333,30 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
 
             {/* Card 4: Chat Comunitario */}
             <button
+              type="button"
               onClick={onOpenChat}
-              className="p-2 sm:p-2.5 rounded-2xl bg-gradient-to-b from-purple-500/15 to-indigo-500/5 hover:from-purple-500/25 hover:to-indigo-500/15 border border-purple-400/40 text-left transition-all group shadow-md shadow-purple-500/5 active:scale-95 cursor-pointer flex flex-col justify-between"
+              title="Abrir Chat Comunitario de pasajeros y choferes"
+              className="min-h-[76px] p-2.5 rounded-2xl bg-[#101114] hover:border-white/50 border-2 border-white/15 text-left transition-all group active:scale-95 cursor-pointer flex flex-col justify-between"
             >
               <div className="flex items-center justify-between mb-1.5">
-                <div className="w-8 h-8 rounded-xl bg-purple-500/20 text-purple-300 flex items-center justify-center border border-purple-400/30 group-hover:scale-105 transition-transform">
-                  <MessageSquare className="w-4 h-4 text-purple-300" />
+                <div className="w-8 h-8 rounded-xl bg-[#202329] text-white border border-white/15 flex items-center justify-center">
+                  <MessageSquare className="w-4 h-4" />
                 </div>
                 {unreadChatCount > 0 ? (
-                  <span className="px-1.5 py-0.2 rounded-full text-[9px] font-black bg-purple-500 text-white animate-pulse">
+                  <span className="px-1.5 py-0.5 rounded-md text-[9.5px] font-black bg-[#FFF19A] text-[#101114]">
                     {unreadChatCount}
                   </span>
                 ) : (
-                  <span className="px-1.5 py-0.2 rounded text-[8.5px] font-black uppercase tracking-wider bg-purple-400/20 text-purple-300 border border-purple-400/30">
+                  <span className="px-1.5 py-0.5 rounded text-[8.5px] font-black uppercase tracking-wider bg-[#202329] text-[#9299A5] border border-white/10">
                     Vecinos
                   </span>
                 )}
               </div>
               <div>
-                <span className="text-[11px] sm:text-xs font-black text-purple-100 block leading-tight group-hover:text-purple-200">
+                <span className="text-[11px] sm:text-xs font-black text-white block leading-tight group-hover:text-[#FFF19A]">
                   Chat Comunitario
                 </span>
-                <span className="text-[9px] text-purple-300/80 block mt-0.5 truncate">
+                <span className="text-[9.5px] text-[#9299A5] block mt-0.5 truncate">
                   Alertas en directo
                 </span>
               </div>
@@ -375,61 +364,60 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
           </div>
         </div>
 
-        {/* Corredor Card Línea 228 con Telemetría en Vivo */}
+        {/* Corredor Card Línea 228 */}
         <div className="px-3.5 sm:px-5 pb-3">
-          <div className="p-3.5 rounded-2xl bg-[#0c1222]/90 backdrop-blur-xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.6)] space-y-2.5">
+          <div className="p-3.5 rounded-2xl bg-[#101114] border-2 border-white/10 space-y-2.5">
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-xl bg-cyan-500/20 text-cyan-300 flex items-center justify-center border border-cyan-400/30">
-                  <Bus className="w-3.5 h-3.5 text-cyan-300" />
+                <div className="w-8 h-8 rounded-xl bg-[#202329] text-[#FFF19A] flex items-center justify-center border border-white/15">
+                  <Bus className="w-4 h-4" />
                 </div>
                 <div>
                   <h3 className="text-xs sm:text-sm font-black text-white flex items-center gap-1.5">
                     <span>Línea 228</span>
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse inline-block" />
+                    <span className="w-2 h-2 rounded-full bg-[#B7F36B] inline-block" />
                   </h3>
-                  <p className="text-[10px] text-slate-300 font-medium">
-                    Corredor en vivo · <strong className="text-cyan-300">62 paradas</strong>
+                  <p className="text-[10px] text-[#9299A5] font-medium">
+                    Corredor en vivo · <strong className="text-white">62 paradas</strong>
                   </p>
                 </div>
               </div>
 
               {/* Live telemetry badges */}
               <div className="flex items-center gap-1.5">
-                <span className="px-2 py-0.5 rounded-lg text-[10px] font-black bg-amber-500/20 text-amber-300 border border-amber-400/40 flex items-center gap-1" title="Demora estimada actual">
-                  <Clock className="w-3 h-3 text-amber-400" />
+                <span className="px-2 py-0.5 rounded-lg text-[10px] font-black bg-[#202329] text-[#FFF19A] border border-white/10 flex items-center gap-1" title="Demora estimada actual">
+                  <Clock className="w-3 h-3" />
                   <span>+18m</span>
                 </span>
-                <span className="px-2 py-0.5 rounded-lg text-[10px] font-black bg-sky-500/20 text-sky-300 border border-sky-400/40 flex items-center gap-1" title="Velocidad promedio">
-                  <Gauge className="w-3 h-3 text-sky-400" />
+                <span className="px-2 py-0.5 rounded-lg text-[10px] font-black bg-[#202329] text-white border border-white/10 flex items-center gap-1" title="Velocidad promedio">
+                  <Gauge className="w-3 h-3 text-[#FFF19A]" />
                   <span>42 km/h</span>
                 </span>
-                <span className="px-2 py-0.5 rounded-lg text-[10px] font-black bg-emerald-500/25 text-emerald-300 border border-emerald-400/50 flex items-center gap-1" title="Próximo arribo">
-                  <Activity className="w-3 h-3 text-emerald-400 animate-pulse" />
-                  <span>· ETA 1m</span>
+                <span className="px-2 py-0.5 rounded-lg text-[10px] font-black bg-[#B7F36B] text-[#101114] flex items-center gap-1" title="Próximo arribo">
+                  <Activity className="w-3 h-3" />
+                  <span>ETA 1m</span>
                 </span>
               </div>
             </div>
 
-            {/* Quick action bar inside telemetry */}
-            <div className="flex items-center justify-between pt-1 border-t border-white/5 text-[10.5px]">
-              <span className="text-slate-400 flex items-center gap-1">
-                <MapPin className="w-3 h-3 text-cyan-400" />
-                <span>Traza completa por RP 6 y Colectora</span>
+            <div className="flex items-center justify-between pt-2 border-t border-white/10 text-[10.5px] gap-2">
+              <span className="text-[#9299A5] flex items-center gap-1 truncate">
+                <MapPin className="w-3 h-3 text-[#FFF19A] shrink-0" />
+                <span className="truncate">Traza completa por RP 6 y Colectora</span>
               </span>
               <button
                 type="button"
                 onClick={() => setIsExpanded((prev) => !prev)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer active:scale-95 shadow-sm ${
+                className={`min-h-[36px] px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer active:scale-95 shrink-0 border ${
                   isExpanded
-                    ? 'bg-cyan-500/25 hover:bg-cyan-500/35 text-cyan-200 border border-cyan-400/60 shadow-cyan-500/20 ring-1 ring-cyan-400/50'
-                    : 'bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 hover:text-cyan-300 border border-cyan-400/30'
+                    ? 'bg-[#FFF19A] text-[#101114] border-[#FFF19A]'
+                    : 'bg-[#202329] hover:border-[#FFF19A] text-white border-white/15'
                 }`}
-                title={isExpanded ? 'Ocultar listado de paradas' : 'Explorar las 62 paradas'}
+                title={isExpanded ? 'Ocultar listado de paradas' : 'Explorar las 62 paradas de Línea 228'}
               >
-                <span>{isExpanded ? 'Ocultar listado' : 'Explorar las 62 paradas'}</span>
+                <span>{isExpanded ? 'Ocultar listado' : 'Explorar 62 paradas'}</span>
                 {isExpanded ? (
-                  <ChevronUp className="w-3.5 h-3.5 text-cyan-300 stroke-[3]" />
+                  <ChevronUp className="w-3.5 h-3.5 stroke-[3]" />
                 ) : (
                   <ChevronDown className="w-3.5 h-3.5" />
                 )}
@@ -438,17 +426,16 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
           </div>
         </div>
 
-        {/* Upward scrolling list of 62 stops (scrolling web hacia arriba) */}
+        {/* Upward scrolling list of 62 stops */}
         {isExpanded && (
           <div className="px-3.5 sm:px-5 pb-3 border-t border-white/10 pt-3 animate-in slide-in-from-bottom-2 duration-200">
-            {/* Barra superior de listado con botón 'Ocultar listado' y 'Minimizar' */}
             <div className="flex items-center justify-between pb-2.5 mb-2.5 border-b border-white/10 gap-2">
               <div className="flex items-center gap-2 min-w-0">
-                <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse shrink-0" />
+                <span className="w-2.5 h-2.5 rounded-full bg-[#B7F36B] shrink-0" />
                 <span className="text-xs font-black text-white truncate">
                   62 Paradas de Línea 228
                 </span>
-                <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-400/30">
+                <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-[#101114] text-[#FFF19A] border border-white/15">
                   {filteredStops.length}
                 </span>
               </div>
@@ -457,11 +444,11 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
                 <button
                   type="button"
                   onClick={() => setIsExpanded(false)}
-                  className="px-3 py-1.5 rounded-xl bg-cyan-500/25 hover:bg-cyan-500/40 text-cyan-200 hover:text-white border border-cyan-400/60 font-black text-xs flex items-center gap-1.5 shadow-md shadow-cyan-500/20 active:scale-95 transition-all cursor-pointer ring-1 ring-cyan-400/40"
+                  className="min-h-[36px] px-3 py-1.5 rounded-xl bg-[#FFF19A] text-[#101114] font-black text-xs flex items-center gap-1.5 active:scale-95 transition-all cursor-pointer"
                   title="Ocultar listado de paradas"
                 >
-                  <ChevronUp className="w-3.5 h-3.5 text-cyan-300 stroke-[3]" />
-                  <span>Ocultar listado</span>
+                  <ChevronUp className="w-3.5 h-3.5 stroke-[3]" />
+                  <span>Ocultar</span>
                 </button>
 
                 <button
@@ -470,7 +457,7 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
                     setIsExpanded(false);
                     setIsMinimized(true);
                   }}
-                  className="w-8 h-8 rounded-full bg-white/10 hover:bg-rose-500/20 text-slate-300 hover:text-rose-200 border border-white/15 hover:border-rose-400/50 flex items-center justify-center active:scale-95 transition-all cursor-pointer shadow-sm"
+                  className="w-9 h-9 rounded-xl bg-[#101114] hover:border-rose-400 text-[#9299A5] hover:text-rose-300 border border-white/15 flex items-center justify-center active:scale-95 transition-all cursor-pointer"
                   title="Minimizar panel (x)"
                   aria-label="Minimizar panel"
                 >
@@ -482,24 +469,26 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
             {/* Search and zone filters */}
             <div className="space-y-2 mb-2.5">
               <div className="relative">
-                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <Search className="w-3.5 h-3.5 text-[#9299A5] absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Buscar entre las 62 paradas (ej: McDonald's, Plaza, Alem)..."
-                  className="w-full bg-[#131826] border border-slate-700 focus:border-cyan-400 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-slate-400 focus:outline-none transition-colors"
+                  className="w-full min-h-[40px] bg-[#101114] border-2 border-white/10 focus:border-[#FFF19A] rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-[#9299A5] focus:outline-none transition-colors"
                 />
               </div>
 
               {/* Zone pills */}
-              <div className="flex items-center gap-1 overflow-x-auto pb-1 text-[10px] scrollbar-none">
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-[10px] scrollbar-none">
                 <button
+                  type="button"
                   onClick={() => setSelectedZone('all')}
-                  className={`px-2 py-0.5 rounded-lg font-bold shrink-0 transition-all cursor-pointer ${
+                  title="Mostrar todas las zonas de paradas"
+                  className={`min-h-[32px] px-2.5 py-1 rounded-lg font-black shrink-0 transition-all cursor-pointer border ${
                     selectedZone === 'all'
-                      ? 'bg-cyan-500 text-slate-950 shadow-sm'
-                      : 'bg-white/5 text-slate-400 hover:text-white'
+                      ? 'bg-[#FFF19A] border-[#FFF19A] text-[#101114]'
+                      : 'bg-[#101114] border-white/10 text-[#9299A5] hover:text-white'
                   }`}
                 >
                   Todas (62)
@@ -507,11 +496,13 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
                 {zones.map((zone) => (
                   <button
                     key={zone}
+                    type="button"
                     onClick={() => setSelectedZone(zone)}
-                    className={`px-2 py-0.5 rounded-lg font-bold shrink-0 transition-all cursor-pointer ${
+                    title={`Filtrar paradas por zona ${zone}`}
+                    className={`min-h-[32px] px-2.5 py-1 rounded-lg font-bold shrink-0 transition-all cursor-pointer border ${
                       selectedZone === zone
-                        ? 'bg-cyan-500 text-slate-950 shadow-sm'
-                        : 'bg-white/5 text-slate-400 hover:text-white'
+                        ? 'bg-[#FFF19A] border-[#FFF19A] text-[#101114]'
+                        : 'bg-[#101114] border-white/10 text-[#9299A5] hover:text-white'
                     }`}
                   >
                     {zone}
@@ -521,36 +512,36 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
             </div>
 
             {/* Scrollable container with all 62 stops */}
-            <div className="max-h-60 sm:max-h-72 overflow-y-auto space-y-1.5 pr-1 scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent">
+            <div className="max-h-60 sm:max-h-72 overflow-y-auto space-y-1.5 pr-1">
               {filteredStops.map((stop) => (
                 <div
                   key={stop.id}
-                  className="p-2 rounded-xl bg-white/[0.03] hover:bg-white/[0.08] border border-white/5 hover:border-cyan-400/40 flex items-center justify-between gap-2 transition-all group"
+                  className="p-2.5 rounded-xl bg-[#101114] hover:border-[#FFF19A]/50 border border-white/10 flex items-center justify-between gap-2 transition-all group"
                 >
                   <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                    <span className="w-6 h-6 rounded-lg bg-cyan-500/15 border border-cyan-400/30 text-cyan-300 font-mono font-black text-[10px] flex items-center justify-center shrink-0">
+                    <span className="w-7 h-7 rounded-lg bg-[#202329] border border-white/15 text-[#FFF19A] font-mono font-black text-[10px] flex items-center justify-center shrink-0">
                       #{stop.sequence}
                     </span>
                     <div className="min-w-0 flex-1">
-                      <p className="text-xs font-bold text-white truncate group-hover:text-cyan-200">
+                      <p className="text-xs font-bold text-white truncate group-hover:text-[#FFF19A]">
                         {stop.name}
                       </p>
-                      <div className="flex items-center gap-1.5 mt-0.5">
-                        <span className="text-[9px] text-slate-400 truncate">
+                      <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                        <span className="text-[9.5px] text-[#9299A5] truncate">
                           {stop.zone}
                         </span>
                         {stop.sequence === 1 && (
-                          <span className="text-[8.5px] font-black text-emerald-300 bg-emerald-500/20 px-1 rounded">
+                          <span className="text-[8.5px] font-black text-[#101114] bg-[#B7F36B] px-1.5 rounded">
                             CABECERA ORIGEN
                           </span>
                         )}
                         {stop.sequence === 62 && (
-                          <span className="text-[8.5px] font-black text-rose-300 bg-rose-500/20 px-1 rounded">
+                          <span className="text-[8.5px] font-black text-rose-200 bg-rose-500/20 border border-rose-400/30 px-1.5 rounded">
                             TERMINAL DESTINO
                           </span>
                         )}
                         {stop.id === 'p228-mcdonalds' && (
-                          <span className="text-[8.5px] font-black text-amber-300 bg-amber-500/20 px-1 rounded">
+                          <span className="text-[8.5px] font-black text-[#101114] bg-[#FFF19A] px-1.5 rounded">
                             PUNTO ESTRATÉGICO
                           </span>
                         )}
@@ -562,8 +553,8 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
                     <button
                       type="button"
                       onClick={() => onSelectStop(stop)}
-                      className="px-2 py-1 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/35 border border-cyan-400/40 text-cyan-300 font-bold text-[10px] flex items-center gap-1 shrink-0 cursor-pointer active:scale-95 transition-all"
-                      title="Ver en el mapa"
+                      className="min-h-[36px] px-2.5 py-1 rounded-lg bg-[#202329] hover:bg-[#FFF19A] hover:text-[#101114] border border-white/15 text-white font-bold text-[10.5px] flex items-center gap-1 shrink-0 cursor-pointer active:scale-95 transition-all"
+                      title={`Centrar parada ${stop.name} en el mapa`}
                     >
                       <Navigation className="w-3 h-3" />
                       <span>Ver</span>
@@ -573,15 +564,14 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
               ))}
 
               {filteredStops.length === 0 && (
-                <div className="text-center py-6 text-slate-400 text-xs">
+                <div className="text-center py-6 text-[#9299A5] text-xs">
                   No se encontraron paradas con ese criterio.
                 </div>
               )}
             </div>
 
-            {/* Barra inferior fija para Ocultar Listado y Minimizar sin tener que volver a subir */}
-            <div className="sticky bottom-0 -mx-1 px-2 pt-2.5 pb-1 bg-gradient-to-t from-[#0b0f1b] via-[#0b0f1b]/95 to-[#0b0f1b]/80 border-t border-white/10 backdrop-blur-md flex items-center justify-between gap-2 mt-2 rounded-b-2xl">
-              <span className="text-[11px] text-slate-300 font-medium truncate">
+            <div className="sticky bottom-0 -mx-1 px-2 pt-2.5 pb-1 bg-[#202329] border-t border-white/10 flex items-center justify-between gap-2 mt-2 rounded-b-2xl">
+              <span className="text-[11px] text-[#9299A5] font-medium truncate">
                 ¿Terminaste de consultar?
               </span>
 
@@ -589,10 +579,10 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
                 <button
                   type="button"
                   onClick={() => setIsExpanded(false)}
-                  className="px-3.5 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-black text-xs flex items-center gap-1.5 shadow-lg shadow-cyan-500/30 active:scale-95 transition-all cursor-pointer"
+                  className="min-h-[40px] px-3.5 py-2 rounded-xl uppa-cta-yellow font-black text-xs flex items-center gap-1.5 cursor-pointer"
                   title="Ocultar listado de paradas"
                 >
-                  <ChevronUp className="w-4 h-4 text-slate-950 stroke-[3]" />
+                  <ChevronUp className="w-4 h-4 stroke-[3]" />
                   <span>Ocultar listado</span>
                 </button>
 
@@ -602,7 +592,7 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
                     setIsExpanded(false);
                     setIsMinimized(true);
                   }}
-                  className="px-3 py-2 rounded-xl bg-white/10 hover:bg-rose-500/20 text-white hover:text-rose-200 border border-white/20 hover:border-rose-400/50 font-bold text-xs flex items-center gap-1.5 active:scale-95 transition-all cursor-pointer shadow-sm"
+                  className="min-h-[40px] px-3 py-2 rounded-xl bg-[#101114] hover:border-rose-400 text-white hover:text-rose-300 border border-white/15 font-bold text-xs flex items-center gap-1.5 cursor-pointer"
                   title="Minimizar panel (x)"
                   aria-label="Minimizar panel"
                 >

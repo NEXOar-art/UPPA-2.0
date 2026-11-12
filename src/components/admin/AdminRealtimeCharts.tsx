@@ -3,9 +3,7 @@ import {
   ResponsiveContainer,
   AreaChart,
   Area,
-  BarChart,
   Bar,
-  LineChart,
   Line,
   PieChart,
   Pie,
@@ -18,7 +16,6 @@ import {
   ComposedChart,
 } from 'recharts';
 import {
-  Activity,
   AlertTriangle,
   Car,
   Bike,
@@ -27,11 +24,16 @@ import {
   RefreshCw,
   Zap,
   ShieldAlert,
-  Users,
   CheckCircle2,
-  Calendar,
 } from 'lucide-react';
-import { ReporteFirestore, HabilitacionChofer, UsuarioFirestore, MapEvent, TaxiListing, SolicitudTransporteFirestore } from '../../types';
+import {
+  ReporteFirestore,
+  HabilitacionChofer,
+  UsuarioFirestore,
+  MapEvent,
+  TaxiListing,
+  SolicitudTransporteFirestore,
+} from '../../types';
 
 interface AdminRealtimeChartsProps {
   reportes: ReporteFirestore[];
@@ -42,18 +44,16 @@ interface AdminRealtimeChartsProps {
   solicitudes?: SolicitudTransporteFirestore[];
 }
 
-// Colores modernos y contrastados para el dashboard oscuro
 const COLORS = {
-  purple: '#a855f7',
-  cyan: '#06b6d4',
-  emerald: '#10b981',
-  amber: '#f59e0b',
-  rose: '#f43f5e',
-  blue: '#3b82f6',
-  indigo: '#6366f1',
+  yellow: '#FFF19A',
+  green: '#B7F36B',
+  white: '#FFFFFF',
+  muted: '#9299A5',
+  rose: '#F87171',
+  blue: '#60A5FA',
 };
 
-const PIE_COLORS = ['#f59e0b', '#f43f5e', '#a855f7', '#06b6d4', '#10b981', '#3b82f6'];
+const PIE_COLORS = ['#FFF19A', '#F87171', '#FFFFFF', '#B7F36B', '#9299A5'];
 
 export const AdminRealtimeCharts: React.FC<AdminRealtimeChartsProps> = ({
   reportes,
@@ -64,11 +64,8 @@ export const AdminRealtimeCharts: React.FC<AdminRealtimeChartsProps> = ({
   solicitudes = [],
 }) => {
   const [timeWindow, setTimeWindow] = useState<'24h' | 'pico' | 'ultimas12'>('24h');
-  const [selectedMetric, setSelectedMetric] = useState<'all' | 'traffic' | 'drivers'>('all');
   const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date());
-  const [isLiveAnimating, setIsLiveAnimating] = useState(true);
 
-  // Helper para interpretar marcas de tiempo de Firestore o locales
   const parseTimestamp = (val: any): number => {
     if (!val) return 0;
     if (typeof val.toMillis === 'function') return val.toMillis();
@@ -81,58 +78,17 @@ export const AdminRealtimeCharts: React.FC<AdminRealtimeChartsProps> = ({
     return 0;
   };
 
-  // 1. Métricas de Reportes de Tráfico por Hora (00:00 - 23:00)
+  // 1. Reportes de Tráfico por Hora (100% desde Firestore reportes + eventos del mapa)
   const trafficByHourData = useMemo(() => {
-    const hours = Array.from({ length: 24 }, (_, i) => {
-      const label = `${String(i).padStart(2, '0')}:00`;
-      return {
-        hora: label,
-        horaNum: i,
-        congestion: 0,
-        accidentes: 0,
-        controles: 0,
-        totalReportes: 0,
-      };
-    });
+    const hours = Array.from({ length: 24 }, (_, i) => ({
+      hora: `${String(i).padStart(2, '0')}:00`,
+      horaNum: i,
+      congestion: 0,
+      accidentes: 0,
+      controles: 0,
+      totalReportes: 0,
+    }));
 
-    // Curva base representativa de flujo Zárate - Campana (picos de 07:00 a 09:00 y de 17:00 a 20:00)
-    const baseTrafficPattern: Record<number, { cong: number; acc: number; cont: number }> = {
-      0: { cong: 0, acc: 0, cont: 1 },
-      1: { cong: 0, acc: 0, cont: 0 },
-      2: { cong: 0, acc: 0, cont: 0 },
-      3: { cong: 0, acc: 0, cont: 0 },
-      4: { cong: 1, acc: 0, cont: 1 },
-      5: { cong: 2, acc: 0, cont: 1 },
-      6: { cong: 5, acc: 1, cont: 2 },
-      7: { cong: 9, acc: 2, cont: 3 }, // Pico matutino
-      8: { cong: 8, acc: 1, cont: 2 },
-      9: { cong: 4, acc: 0, cont: 1 },
-      10: { cong: 3, acc: 1, cont: 1 },
-      11: { cong: 4, acc: 0, cont: 2 },
-      12: { cong: 6, acc: 1, cont: 1 }, // Mediodía
-      13: { cong: 5, acc: 0, cont: 1 },
-      14: { cong: 4, acc: 0, cont: 1 },
-      15: { cong: 4, acc: 1, cont: 2 },
-      16: { cong: 6, acc: 1, cont: 2 },
-      17: { cong: 10, acc: 2, cont: 3 }, // Pico vespertino salida laboral
-      18: { cong: 12, acc: 3, cont: 4 }, // Pico máximo
-      19: { cong: 9, acc: 1, cont: 3 },
-      20: { cong: 7, acc: 1, cont: 2 },
-      21: { cong: 4, acc: 0, cont: 2 },
-      22: { cong: 2, acc: 0, cont: 1 },
-      23: { cong: 1, acc: 0, cont: 1 },
-    };
-
-    // Aplicar curva base
-    hours.forEach((h) => {
-      const pattern = baseTrafficPattern[h.horaNum] || { cong: 0, acc: 0, cont: 0 };
-      h.congestion = pattern.cong;
-      h.accidentes = pattern.acc;
-      h.controles = pattern.cont;
-      h.totalReportes = pattern.cong + pattern.acc + pattern.cont;
-    });
-
-    // Sumar reportes reales de Firestore
     reportes.forEach((rep) => {
       const timeMs = parseTimestamp(rep.creadoEn);
       if (timeMs > 0) {
@@ -150,7 +106,6 @@ export const AdminRealtimeCharts: React.FC<AdminRealtimeChartsProps> = ({
       }
     });
 
-    // Sumar eventos activos en el mapa
     events.forEach((ev) => {
       const timeMs = parseTimestamp(ev.reportedAt);
       if (timeMs > 0) {
@@ -160,8 +115,6 @@ export const AdminRealtimeCharts: React.FC<AdminRealtimeChartsProps> = ({
             hours[hIndex].congestion += 1;
           } else if (ev.type === 'accident') {
             hours[hIndex].accidentes += 1;
-          } else if (ev.type === 'corte' || ev.type === 'danger') {
-            hours[hIndex].controles += 1;
           } else {
             hours[hIndex].controles += 1;
           }
@@ -175,55 +128,52 @@ export const AdminRealtimeCharts: React.FC<AdminRealtimeChartsProps> = ({
     }
     if (timeWindow === 'ultimas12') {
       const currentHour = new Date().getHours();
-      return hours.filter((h) => {
-        const diff = (currentHour - h.horaNum + 24) % 24;
-        return diff <= 12;
-      });
+      return hours.filter((h) => (currentHour - h.horaNum + 24) % 24 <= 12);
     }
 
     return hours;
   }, [reportes, events, timeWindow]);
 
-  // 2. Actividad de Conductores Conectados Durante el Día
+  // 2. Actividad real de conductores y demanda real de solicitudes por hora
   const driverActivityData = useMemo(() => {
-    // Calculamos conductores activos reales en este momento
     const now = Date.now();
-    const activeHabs = habilitaciones.filter(
-      (h) => h.estado === 'activo' && (!h.endsAt || h.endsAt > now)
+    const activeHabs = habilitaciones.filter((h) => h.estado === 'activo' && (!h.endsAt || h.endsAt > now));
+    const currentAutos = Math.max(
+      activeHabs.filter((h) => h.vehicleType === 'auto').length,
+      taxis.filter((t) => t.vehicleType === 'auto').length
     );
-    const activeAutoHabs = activeHabs.filter((h) => h.vehicleType === 'auto').length;
-    const activeMotoHabs = activeHabs.filter((h) => h.vehicleType === 'moto').length;
-    const realTaxiAutos = taxis.filter((t) => t.vehicleType === 'auto').length;
-    const realTaxiMotos = taxis.filter((t) => t.vehicleType === 'moto').length;
+    const currentMotos = Math.max(
+      activeHabs.filter((h) => h.vehicleType === 'moto').length,
+      taxis.filter((t) => t.vehicleType === 'moto').length
+    );
 
-    const currentTotalAutos = Math.max(activeAutoHabs, realTaxiAutos, 3);
-    const currentTotalMotos = Math.max(activeMotoHabs, realTaxiMotos, 4);
+    const requestsByHour = Array.from({ length: 24 }, () => 0);
+    solicitudes.forEach((sol) => {
+      const ms = parseTimestamp(sol.fechaSolicitud);
+      if (ms > 0) {
+        const h = new Date(ms).getHours();
+        if (h >= 0 && h < 24) requestsByHour[h] += 1;
+      }
+    });
 
-    // Mapeo horario con picos de demanda
+    const currentHour = new Date().getHours();
     const hours = Array.from({ length: 24 }, (_, i) => {
-      const label = `${String(i).padStart(2, '0')}:00`;
-
-      // Multiplicadores de conductores según momento del día
-      let factor = 0.2;
-      if (i >= 6 && i <= 9) factor = 0.95; // Mañana pico escolar / laboral
-      else if (i >= 10 && i <= 12) factor = 0.65;
-      else if (i >= 13 && i <= 15) factor = 0.55;
-      else if (i >= 16 && i <= 20) factor = 1.0; // Tarde pico
-      else if (i >= 21 && i <= 23) factor = 0.45;
-      else if (i >= 0 && i <= 5) factor = 0.15; // Nocturno
-
-      const autos = Math.round(currentTotalAutos * factor) + (i === new Date().getHours() ? 1 : 0);
-      const motos = Math.round(currentTotalMotos * factor) + (i === new Date().getHours() ? 1 : 0);
-      const micros = i >= 5 && i <= 22 ? 6 : 2;
+      const autos = i === currentHour ? currentAutos : activeHabs.filter((h) => {
+        const createdH = parseTimestamp(h.createdAt);
+        return h.vehicleType === 'auto' && createdH > 0 && new Date(createdH).getHours() <= i;
+      }).length;
+      const motos = i === currentHour ? currentMotos : activeHabs.filter((h) => {
+        const createdH = parseTimestamp(h.createdAt);
+        return h.vehicleType === 'moto' && createdH > 0 && new Date(createdH).getHours() <= i;
+      }).length;
 
       return {
-        hora: label,
+        hora: `${String(i).padStart(2, '0')}:00`,
         horaNum: i,
         autos,
         motos,
-        micros,
-        totalConductores: autos + motos + micros,
-        demandaViajes: Math.round((autos + motos) * 1.4),
+        totalConductores: autos + motos,
+        demandaViajes: requestsByHour[i],
       };
     });
 
@@ -231,17 +181,13 @@ export const AdminRealtimeCharts: React.FC<AdminRealtimeChartsProps> = ({
       return hours.filter((h) => (h.horaNum >= 6 && h.horaNum <= 10) || (h.horaNum >= 16 && h.horaNum <= 21));
     }
     if (timeWindow === 'ultimas12') {
-      const currentHour = new Date().getHours();
-      return hours.filter((h) => {
-        const diff = (currentHour - h.horaNum + 24) % 24;
-        return diff <= 12;
-      });
+      return hours.filter((h) => (currentHour - h.horaNum + 24) % 24 <= 12);
     }
 
     return hours;
-  }, [habilitaciones, taxis, timeWindow]);
+  }, [habilitaciones, taxis, solicitudes, timeWindow]);
 
-  // 3. Distribución de Tipos de Incidentes (Torta / Donut)
+  // 3. Distribución real de incidentes
   const incidentDistributionData = useMemo(() => {
     let congestiones = 0;
     let accidentes = 0;
@@ -270,37 +216,54 @@ export const AdminRealtimeCharts: React.FC<AdminRealtimeChartsProps> = ({
       { name: 'Accidentes de Tránsito', value: accidentes },
       { name: 'Cortes / Desvíos', value: cortes },
       { name: 'Controles Policiales', value: controles },
-      { name: 'Incidencias Climáticas', value: clima },
+      { name: 'Otras Incidencias', value: clima },
     ];
   }, [reportes, events]);
 
-  // 4. Estadísticas Rápidas de Cabecera
+  // 4. Estadísticas Reales de Cabecera
   const stats = useMemo(() => {
+    const now = Date.now();
     const totalIncidentes = trafficByHourData.reduce((acc, curr) => acc + curr.totalReportes, 0);
     const maxHour = [...trafficByHourData].sort((a, b) => b.totalReportes - a.totalReportes)[0];
-    const conductoresActivosAhora = driverActivityData.find((d) => d.horaNum === new Date().getHours())?.totalConductores || 12;
+
+    const activeHabs = habilitaciones.filter((h) => h.estado === 'activo' && (!h.endsAt || h.endsAt > now));
+    const activeAutosCount = Math.max(
+      activeHabs.filter((h) => h.vehicleType === 'auto').length,
+      taxis.filter((t) => t.vehicleType === 'auto').length
+    );
+    const activeMotosCount = Math.max(
+      activeHabs.filter((h) => h.vehicleType === 'moto').length,
+      taxis.filter((t) => t.vehicleType === 'moto').length
+    );
+    const conductoresOnline = activeAutosCount + activeMotosCount;
     const choferesRegistrados = usuarios.filter((u) => u.esChofer || u.rol?.includes('chofer')).length;
+
+    const acceptedOrDone = solicitudes.filter((s) => s.estado === 'aceptado' || s.estado === 'completado').length;
+    const tasaCobertura =
+      solicitudes.length > 0 ? `${Math.round((acceptedOrDone / solicitudes.length) * 100)}%` : 'Sin solicitudes';
 
     return {
       totalIncidentes,
-      horaPico: maxHour ? `${maxHour.hora} (${maxHour.totalReportes} reportes)` : '18:00',
-      conductoresOnline: conductoresActivosAhora,
-      choferesTotales: Math.max(choferesRegistrados, habilitaciones.length, 8),
-      efectividadRespuesta: '94.2%',
+      horaPico: maxHour && maxHour.totalReportes > 0 ? `${maxHour.hora} (${maxHour.totalReportes})` : 'Sin pico aún',
+      conductoresOnline,
+      activeAutosCount,
+      activeMotosCount,
+      choferesTotales: Math.max(choferesRegistrados, activeHabs.length),
+      tasaCobertura,
+      solicitudesTotales: solicitudes.length,
     };
-  }, [trafficByHourData, driverActivityData, usuarios, habilitaciones]);
+  }, [trafficByHourData, habilitaciones, taxis, usuarios, solicitudes]);
 
   const handleRefresh = () => {
     setLastRefreshed(new Date());
   };
 
-  // Custom Tooltip estilizado para gráficos oscuros
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       return (
-        <div className="bg-slate-950/95 backdrop-blur-md p-3.5 rounded-xl border border-white/10 shadow-2xl text-xs space-y-1.5 min-w-[170px]">
-          <div className="flex items-center gap-1.5 font-bold text-white border-b border-white/10 pb-1">
-            <Clock className="w-3.5 h-3.5 text-cyan-400" />
+        <div className="bg-[#101114] p-3.5 rounded-xl border-2 border-white/20 shadow-[4px_4px_0px_#000000] text-xs space-y-1.5 min-w-[170px]">
+          <div className="flex items-center gap-1.5 font-black text-white border-b border-white/10 pb-1">
+            <Clock className="w-3.5 h-3.5 text-[#FFF19A]" />
             <span>Franja: {label}</span>
           </div>
           {payload.map((entry: any, index: number) => (
@@ -320,57 +283,56 @@ export const AdminRealtimeCharts: React.FC<AdminRealtimeChartsProps> = ({
 
   return (
     <div className="space-y-5 animate-in fade-in duration-300">
-      {/* Header y Controles en Tiempo Real */}
-      <div className="p-4 rounded-2xl bg-[#0f1422] border border-purple-500/20 shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      {/* Header y Controles */}
+      <div className="p-4 rounded-2xl bg-[#202329] border-2 border-white/15 shadow-[4px_4px_0px_#000000] flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div className="space-y-1">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-purple-500/20 text-purple-400 flex items-center justify-center">
+            <div className="w-9 h-9 rounded-xl bg-[#101114] border border-[#FFF19A]/45 text-[#FFF19A] flex items-center justify-center">
               <TrendingUp className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <span>Telemetría y Métricas en Tiempo Real (Recharts)</span>
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+              <h3 className="text-sm font-black text-white flex items-center gap-2 flex-wrap">
+                <span>Telemetría y Métricas en Tiempo Real</span>
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black bg-[#B7F36B]/15 text-[#B7F36B] border border-[#B7F36B]/45">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#B7F36B] animate-ping" />
                   <span>EN VIVO</span>
                 </span>
               </h3>
-              <p className="text-xs text-slate-400">
-                Monitoreo activo del corredor vial Zárate - Campana y flota conectada a Firestore
+              <p className="text-xs text-[#9299A5]">
+                Monitoreo real del corredor vial Zárate - Campana y flota conectada a Firestore
               </p>
             </div>
           </div>
         </div>
 
-        {/* Filtros de Ventana de Tiempo */}
         <div className="flex flex-wrap items-center gap-2 self-stretch md:self-auto">
-          <div className="bg-slate-900/90 p-1 rounded-xl border border-white/5 flex items-center gap-1 text-xs">
+          <div className="bg-[#101114] p-1 rounded-xl border border-white/15 flex items-center gap-1 text-xs">
             <button
+              type="button"
               onClick={() => setTimeWindow('24h')}
-              className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
-                timeWindow === '24h'
-                  ? 'bg-purple-600 text-white shadow-sm'
-                  : 'text-slate-400 hover:text-white'
+              title="Ver métricas completas de 24 horas"
+              className={`px-2.5 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
+                timeWindow === '24h' ? 'bg-[#FFF19A] text-[#101114]' : 'text-[#9299A5] hover:text-white'
               }`}
             >
               24 Horas
             </button>
             <button
+              type="button"
               onClick={() => setTimeWindow('pico')}
-              className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
-                timeWindow === 'pico'
-                  ? 'bg-purple-600 text-white shadow-sm'
-                  : 'text-slate-400 hover:text-white'
+              title="Filtrar por franjas horarias pico"
+              className={`px-2.5 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
+                timeWindow === 'pico' ? 'bg-[#FFF19A] text-[#101114]' : 'text-[#9299A5] hover:text-white'
               }`}
             >
               Horas Pico
             </button>
             <button
+              type="button"
               onClick={() => setTimeWindow('ultimas12')}
-              className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
-                timeWindow === 'ultimas12'
-                  ? 'bg-purple-600 text-white shadow-sm'
-                  : 'text-slate-400 hover:text-white'
+              title="Ver únicamente las últimas 12 horas"
+              className={`px-2.5 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
+                timeWindow === 'ultimas12' ? 'bg-[#FFF19A] text-[#101114]' : 'text-[#9299A5] hover:text-white'
               }`}
             >
               Últimas 12h
@@ -378,93 +340,93 @@ export const AdminRealtimeCharts: React.FC<AdminRealtimeChartsProps> = ({
           </div>
 
           <button
+            type="button"
             onClick={handleRefresh}
-            className="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-white/10 transition-colors flex items-center gap-1.5 text-xs font-semibold"
-            title="Refrescar métricas"
+            className="px-3 min-h-[38px] rounded-xl bg-[#101114] hover:bg-white/10 text-white border border-white/15 transition-colors flex items-center gap-1.5 text-xs font-bold cursor-pointer"
+            title="Refrescar hora de sincronización de métricas"
           >
-            <RefreshCw className="w-3.5 h-3.5" />
+            <RefreshCw className="w-3.5 h-3.5 text-[#FFF19A]" />
             <span className="hidden sm:inline">Refrescar</span>
           </button>
         </div>
       </div>
 
-      {/* KPI Cards Rápidos */}
-      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        <div className="p-3.5 rounded-2xl bg-[#0f1422] border border-white/5 space-y-1 relative overflow-hidden group hover:border-purple-500/30 transition-colors">
+      {/* KPI Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="p-3.5 rounded-2xl bg-[#202329] border-2 border-white/15 space-y-1">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Reportes Tráfico</span>
-            <AlertTriangle className="w-4 h-4 text-amber-400" />
+            <span className="text-[11px] font-bold text-[#9299A5] uppercase tracking-wider">Reportes Tráfico</span>
+            <AlertTriangle className="w-4 h-4 text-[#FFF19A]" />
           </div>
           <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-black text-amber-300 font-mono">{stats.totalIncidentes}</span>
-            <span className="text-[10px] text-emerald-400 font-bold">+12% hoy</span>
+            <span className="text-2xl font-black text-[#FFF19A] font-mono">{stats.totalIncidentes}</span>
+            <span className="text-[10px] text-[#B7F36B] font-bold">Reales</span>
           </div>
-          <span className="text-[10px] text-slate-500 block truncate">Demoras, cortes y siniestros</span>
+          <span className="text-[10px] text-[#9299A5] block truncate">Demoras, cortes y siniestros</span>
         </div>
 
-        <div className="p-3.5 rounded-2xl bg-[#0f1422] border border-white/5 space-y-1 relative overflow-hidden group hover:border-cyan-500/30 transition-colors">
+        <div className="p-3.5 rounded-2xl bg-[#202329] border-2 border-white/15 space-y-1">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Conductores Online</span>
-            <div className="flex items-center gap-1 text-cyan-400">
+            <span className="text-[11px] font-bold text-[#9299A5] uppercase tracking-wider">Conductores Online</span>
+            <div className="flex items-center gap-1 text-[#B7F36B]">
               <Car className="w-3.5 h-3.5" />
               <Bike className="w-3.5 h-3.5" />
             </div>
           </div>
           <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-black text-cyan-300 font-mono">{stats.conductoresOnline}</span>
-            <span className="text-[10px] text-cyan-400 font-bold">Autos & Motos</span>
+            <span className="text-2xl font-black text-[#B7F36B] font-mono">{stats.conductoresOnline}</span>
+            <span className="text-[10px] text-white font-bold">Autos & Motos</span>
           </div>
-          <span className="text-[10px] text-slate-500 block truncate">{stats.choferesTotales} choferes habilitados</span>
+          <span className="text-[10px] text-[#9299A5] block truncate">{stats.choferesTotales} choferes registrados</span>
         </div>
 
-        <div className="p-3.5 rounded-2xl bg-[#0f1422] border border-white/5 space-y-1 relative overflow-hidden group hover:border-rose-500/30 transition-colors">
+        <div className="p-3.5 rounded-2xl bg-[#202329] border-2 border-white/15 space-y-1">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Hora Mayor Demanda</span>
-            <Clock className="w-4 h-4 text-rose-400" />
+            <span className="text-[11px] font-bold text-[#9299A5] uppercase tracking-wider">Hora Mayor Demanda</span>
+            <Clock className="w-4 h-4 text-[#FFF19A]" />
           </div>
           <div className="flex items-baseline gap-2">
-            <span className="text-xl font-black text-rose-300 font-mono truncate">{stats.horaPico}</span>
+            <span className="text-lg font-black text-white font-mono truncate">{stats.horaPico}</span>
           </div>
-          <span className="text-[10px] text-slate-500 block truncate">Franja vespertina Panamericana</span>
+          <span className="text-[10px] text-[#9299A5] block truncate">Corredor Panamericana / Colectora</span>
         </div>
 
-        <div className="p-3.5 rounded-2xl bg-[#0f1422] border border-white/5 space-y-1 relative overflow-hidden group hover:border-emerald-500/30 transition-colors">
+        <div className="p-3.5 rounded-2xl bg-[#202329] border-2 border-white/15 space-y-1">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Tasa de Cobertura</span>
-            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+            <span className="text-[11px] font-bold text-[#9299A5] uppercase tracking-wider">Tasa de Cobertura</span>
+            <CheckCircle2 className="w-4 h-4 text-[#B7F36B]" />
           </div>
           <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-black text-emerald-300 font-mono">{stats.efectividadRespuesta}</span>
-            <span className="text-[10px] text-emerald-400 font-bold">Óptima</span>
+            <span className="text-xl font-black text-[#B7F36B] font-mono truncate">{stats.tasaCobertura}</span>
           </div>
-          <span className="text-[10px] text-slate-500 block truncate">Viajes aceptados & despachados</span>
+          <span className="text-[10px] text-[#9299A5] block truncate">Sobre {stats.solicitudesTotales} solicitudes</span>
         </div>
       </div>
 
-      {/* GRÁFICO 1: Reportes de Tráfico por Hora (AreaChart) */}
-      <div className="p-4 sm:p-5 rounded-2xl bg-[#0f1422] border border-white/5 shadow-xl space-y-3">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/5 pb-3">
+      {/* GRÁFICO 1 */}
+      <div className="p-4 sm:p-5 rounded-2xl bg-[#202329] border-2 border-white/15 shadow-[4px_4px_0px_#000000] space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/10 pb-3">
           <div>
-            <h4 className="text-sm font-bold text-white flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-amber-400" />
+            <h4 className="text-sm font-black text-white flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-[#FFF19A]" />
               <span>Cantidad de Reportes de Tráfico por Hora</span>
             </h4>
-            <p className="text-xs text-slate-400">
-              Evolución horaria de demoras, accidentes viales y controles en el corredor Campana - Zárate
+            <p className="text-xs text-[#9299A5]">
+              Evolución horaria real de demoras, accidentes viales y controles en Campana - Zárate
             </p>
           </div>
           <div className="flex items-center gap-3 text-xs">
             <div className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded-md bg-amber-500" />
-              <span className="text-slate-300 text-[11px]">Congestión</span>
+              <span className="w-3 h-3 rounded-sm bg-[#FFF19A]" />
+              <span className="text-white text-[11px]">Congestión</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded-md bg-rose-500" />
-              <span className="text-slate-300 text-[11px]">Accidentes</span>
+              <span className="w-3 h-3 rounded-sm bg-[#F87171]" />
+              <span className="text-white text-[11px]">Accidentes</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded-md bg-purple-500" />
-              <span className="text-slate-300 text-[11px]">Controles</span>
+              <span className="w-3 h-3 rounded-sm bg-[#B7F36B]" />
+              <span className="text-white text-[11px]">Controles</span>
             </div>
           </div>
         </div>
@@ -474,27 +436,27 @@ export const AdminRealtimeCharts: React.FC<AdminRealtimeChartsProps> = ({
             <AreaChart data={trafficByHourData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
               <defs>
                 <linearGradient id="colorCongestion" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor={COLORS.amber} stopOpacity={0.6} />
-                  <stop offset="95%" stopColor={COLORS.amber} stopOpacity={0.0} />
+                  <stop offset="5%" stopColor={COLORS.yellow} stopOpacity={0.5} />
+                  <stop offset="95%" stopColor={COLORS.yellow} stopOpacity={0.0} />
                 </linearGradient>
                 <linearGradient id="colorAccidentes" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor={COLORS.rose} stopOpacity={0.6} />
+                  <stop offset="5%" stopColor={COLORS.rose} stopOpacity={0.5} />
                   <stop offset="95%" stopColor={COLORS.rose} stopOpacity={0.0} />
                 </linearGradient>
                 <linearGradient id="colorControles" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor={COLORS.purple} stopOpacity={0.6} />
-                  <stop offset="95%" stopColor={COLORS.purple} stopOpacity={0.0} />
+                  <stop offset="5%" stopColor={COLORS.green} stopOpacity={0.5} />
+                  <stop offset="95%" stopColor={COLORS.green} stopOpacity={0.0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-              <XAxis dataKey="hora" stroke="#64748b" fontSize={11} tickLine={false} />
-              <YAxis stroke="#64748b" fontSize={11} tickLine={false} allowDecimals={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" vertical={false} />
+              <XAxis dataKey="hora" stroke="#9299A5" fontSize={11} tickLine={false} />
+              <YAxis stroke="#9299A5" fontSize={11} tickLine={false} allowDecimals={false} />
               <Tooltip content={<CustomTooltip />} />
               <Area
                 type="monotone"
                 dataKey="congestion"
                 name="Congestión"
-                stroke={COLORS.amber}
+                stroke={COLORS.yellow}
                 strokeWidth={2}
                 fillOpacity={1}
                 fill="url(#colorCongestion)"
@@ -512,7 +474,7 @@ export const AdminRealtimeCharts: React.FC<AdminRealtimeChartsProps> = ({
                 type="monotone"
                 dataKey="controles"
                 name="Controles"
-                stroke={COLORS.purple}
+                stroke={COLORS.green}
                 strokeWidth={2}
                 fillOpacity={1}
                 fill="url(#colorControles)"
@@ -521,39 +483,39 @@ export const AdminRealtimeCharts: React.FC<AdminRealtimeChartsProps> = ({
                 type="monotone"
                 dataKey="totalReportes"
                 name="Total Reportes"
-                stroke={COLORS.cyan}
-                strokeWidth={2.5}
-                dot={{ r: 3, fill: COLORS.cyan }}
+                stroke={COLORS.white}
+                strokeWidth={2}
+                dot={{ r: 3, fill: COLORS.white }}
               />
             </AreaChart>
           </ResponsiveContainer>
         </div>
       </div>
 
-      {/* GRÁFICO 2: Actividad de los Conductores Conectados Durante el Día (ComposedChart / Bar + Line) */}
-      <div className="p-4 sm:p-5 rounded-2xl bg-[#0f1422] border border-white/5 shadow-xl space-y-3">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/5 pb-3">
+      {/* GRÁFICO 2 */}
+      <div className="p-4 sm:p-5 rounded-2xl bg-[#202329] border-2 border-white/15 shadow-[4px_4px_0px_#000000] space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/10 pb-3">
           <div>
-            <h4 className="text-sm font-bold text-white flex items-center gap-2">
-              <Car className="w-4 h-4 text-cyan-400" />
-              <span>Actividad de los Conductores Conectados Durante el Día</span>
+            <h4 className="text-sm font-black text-white flex items-center gap-2">
+              <Car className="w-4 h-4 text-[#FFF19A]" />
+              <span>Actividad de Conductores y Demanda de Viajes</span>
             </h4>
-            <p className="text-xs text-slate-400">
-              Disponibilidad en vivo de Taxi Auto, Taxi Moto y Colectivos en ruta frente a la demanda estimada
+            <p className="text-xs text-[#9299A5]">
+              Disponibilidad real de Taxi Auto y Taxi Moto frente a solicitudes de viaje registradas
             </p>
           </div>
           <div className="flex items-center gap-3 text-xs">
             <div className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded-md bg-cyan-500" />
-              <span className="text-slate-300 text-[11px]">Taxi Auto</span>
+              <span className="w-3 h-3 rounded-sm bg-[#FFF19A]" />
+              <span className="text-white text-[11px]">Taxi Auto</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded-md bg-emerald-500" />
-              <span className="text-slate-300 text-[11px]">Taxi Moto</span>
+              <span className="w-3 h-3 rounded-sm bg-[#B7F36B]" />
+              <span className="text-white text-[11px]">Taxi Moto</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="w-3 h-0.5 bg-purple-400 inline-block" />
-              <span className="text-slate-300 text-[11px]">Demanda Estimada</span>
+              <span className="w-3 h-0.5 bg-white inline-block" />
+              <span className="text-white text-[11px]">Solicitudes</span>
             </div>
           </div>
         </div>
@@ -561,37 +523,35 @@ export const AdminRealtimeCharts: React.FC<AdminRealtimeChartsProps> = ({
         <div className="h-72 w-full pt-2">
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={driverActivityData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-              <XAxis dataKey="hora" stroke="#64748b" fontSize={11} tickLine={false} />
-              <YAxis stroke="#64748b" fontSize={11} tickLine={false} allowDecimals={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" vertical={false} />
+              <XAxis dataKey="hora" stroke="#9299A5" fontSize={11} tickLine={false} />
+              <YAxis stroke="#9299A5" fontSize={11} tickLine={false} allowDecimals={false} />
               <Tooltip content={<CustomTooltip />} />
-              <Bar dataKey="autos" name="Taxi Auto" fill={COLORS.cyan} radius={[4, 4, 0, 0]} stackId="a" />
-              <Bar dataKey="motos" name="Taxi Moto" fill={COLORS.emerald} radius={[4, 4, 0, 0]} stackId="a" />
-              <Bar dataKey="micros" name="Líneas de Micro" fill="#475569" radius={[4, 4, 0, 0]} stackId="a" />
+              <Bar dataKey="autos" name="Taxi Auto" fill={COLORS.yellow} radius={[4, 4, 0, 0]} stackId="a" />
+              <Bar dataKey="motos" name="Taxi Moto" fill={COLORS.green} radius={[4, 4, 0, 0]} stackId="a" />
               <Line
                 type="monotone"
                 dataKey="demandaViajes"
-                name="Demanda Solicitada"
-                stroke={COLORS.purple}
+                name="Solicitudes Reales"
+                stroke={COLORS.white}
                 strokeWidth={2.5}
                 strokeDasharray="4 4"
-                dot={false}
+                dot={{ r: 2.5, fill: COLORS.white }}
               />
             </ComposedChart>
           </ResponsiveContainer>
         </div>
       </div>
 
-      {/* DOS GRÁFICOS COMPLEMENTARIOS: Distribución de Incidentes y Flujo de Transporte */}
+      {/* GRÁFICO 3 + Resumen */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Distribución por Categoría */}
-        <div className="p-4 sm:p-5 rounded-2xl bg-[#0f1422] border border-white/5 shadow-xl space-y-3">
-          <div className="border-b border-white/5 pb-2.5">
-            <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
-              <ShieldAlert className="w-3.5 h-3.5 text-rose-400" />
+        <div className="p-4 sm:p-5 rounded-2xl bg-[#202329] border-2 border-white/15 shadow-[4px_4px_0px_#000000] space-y-3">
+          <div className="border-b border-white/10 pb-2.5">
+            <h4 className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-2">
+              <ShieldAlert className="w-3.5 h-3.5 text-[#F87171]" />
               <span>Distribución de Incidentes Viales</span>
             </h4>
-            <p className="text-[11px] text-slate-400">Proporción por tipo de reporte en el mapa</p>
+            <p className="text-[11px] text-[#9299A5]">Proporción real por tipo de reporte en el mapa</p>
           </div>
 
           <div className="h-60 w-full flex items-center justify-center">
@@ -603,7 +563,7 @@ export const AdminRealtimeCharts: React.FC<AdminRealtimeChartsProps> = ({
                   cy="50%"
                   innerRadius={50}
                   outerRadius={80}
-                  paddingAngle={5}
+                  paddingAngle={4}
                   dataKey="value"
                 >
                   {incidentDistributionData.map((_, index) => (
@@ -613,68 +573,68 @@ export const AdminRealtimeCharts: React.FC<AdminRealtimeChartsProps> = ({
                 <Tooltip
                   formatter={(value: any, name: any) => [`${value} reportes`, name]}
                   contentStyle={{
-                    backgroundColor: '#020617',
+                    backgroundColor: '#101114',
                     borderRadius: '12px',
-                    borderColor: 'rgba(255,255,255,0.1)',
+                    borderColor: 'rgba(255,255,255,0.2)',
                     fontSize: '11px',
+                    color: '#FFFFFF',
                   }}
                 />
                 <Legend
                   verticalAlign="bottom"
                   height={36}
                   iconType="circle"
-                  formatter={(value) => <span className="text-slate-300 text-[11px]">{value}</span>}
+                  formatter={(value) => <span className="text-[#9299A5] text-[11px]">{value}</span>}
                 />
               </PieChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        {/* Resumen Operativo y Estado de Flota */}
-        <div className="p-4 sm:p-5 rounded-2xl bg-[#0f1422] border border-white/5 shadow-xl space-y-3 flex flex-col justify-between">
+        <div className="p-4 sm:p-5 rounded-2xl bg-[#202329] border-2 border-white/15 shadow-[4px_4px_0px_#000000] space-y-3 flex flex-col justify-between">
           <div>
-            <div className="border-b border-white/5 pb-2.5">
-              <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                <Zap className="w-3.5 h-3.5 text-amber-400" />
+            <div className="border-b border-white/10 pb-2.5">
+              <h4 className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-2">
+                <Zap className="w-3.5 h-3.5 text-[#FFF19A]" />
                 <span>Estado Operativo de la Flota UPPA</span>
               </h4>
-              <p className="text-[11px] text-slate-400">Indicadores clave de rendimiento en tiempo real</p>
+              <p className="text-[11px] text-[#9299A5]">Conteos directos de Firestore en tiempo real</p>
             </div>
 
             <div className="grid grid-cols-2 gap-2.5 mt-3">
-              <div className="p-3 rounded-xl bg-slate-900/60 border border-white/5 space-y-1">
-                <span className="text-[10px] text-slate-400 uppercase font-semibold">Taxis Auto Habilitados</span>
-                <span className="text-lg font-black text-cyan-400 block font-mono">
-                  {habilitaciones.filter((h) => h.vehicleType === 'auto').length || taxis.filter((t) => t.vehicleType === 'auto').length || 4}
+              <div className="p-3 rounded-xl bg-[#101114] border border-white/10 space-y-1">
+                <span className="text-[10px] text-[#9299A5] uppercase font-bold">Taxis Auto Habilitados</span>
+                <span className="text-lg font-black text-[#FFF19A] block font-mono">
+                  {stats.activeAutosCount}
                 </span>
-                <span className="text-[10px] text-slate-500">Con clave admin 0608</span>
+                <span className="text-[10px] text-[#9299A5]">Activos ahora</span>
               </div>
-              <div className="p-3 rounded-xl bg-slate-900/60 border border-white/5 space-y-1">
-                <span className="text-[10px] text-slate-400 uppercase font-semibold">Taxis Moto Habilitados</span>
-                <span className="text-lg font-black text-emerald-400 block font-mono">
-                  {habilitaciones.filter((h) => h.vehicleType === 'moto').length || taxis.filter((t) => t.vehicleType === 'moto').length || 5}
+              <div className="p-3 rounded-xl bg-[#101114] border border-white/10 space-y-1">
+                <span className="text-[10px] text-[#9299A5] uppercase font-bold">Taxis Moto Habilitados</span>
+                <span className="text-lg font-black text-[#B7F36B] block font-mono">
+                  {stats.activeMotosCount}
                 </span>
-                <span className="text-[10px] text-slate-500">Con clave admin 0608</span>
+                <span className="text-[10px] text-[#9299A5]">Activos ahora</span>
               </div>
-              <div className="p-3 rounded-xl bg-slate-900/60 border border-white/5 space-y-1">
-                <span className="text-[10px] text-slate-400 uppercase font-semibold">Tiempo Medio de Demora</span>
-                <span className="text-lg font-black text-amber-400 block font-mono">14 min</span>
-                <span className="text-[10px] text-slate-500">Tramo puente Zárate</span>
+              <div className="p-3 rounded-xl bg-[#101114] border border-white/10 space-y-1">
+                <span className="text-[10px] text-[#9299A5] uppercase font-bold">Viajes Solicitados</span>
+                <span className="text-lg font-black text-white block font-mono">{stats.solicitudesTotales}</span>
+                <span className="text-[10px] text-[#9299A5]">Total registrados</span>
               </div>
-              <div className="p-3 rounded-xl bg-slate-900/60 border border-white/5 space-y-1">
-                <span className="text-[10px] text-slate-400 uppercase font-semibold">Usuarios Registrados</span>
-                <span className="text-lg font-black text-purple-400 block font-mono">{usuarios.length || 24}</span>
-                <span className="text-[10px] text-slate-500">En base de datos Firebase</span>
+              <div className="p-3 rounded-xl bg-[#101114] border border-white/10 space-y-1">
+                <span className="text-[10px] text-[#9299A5] uppercase font-bold">Usuarios Registrados</span>
+                <span className="text-lg font-black text-[#FFF19A] block font-mono">{usuarios.length}</span>
+                <span className="text-[10px] text-[#9299A5]">En base Firestore</span>
               </div>
             </div>
           </div>
 
-          <div className="p-3 rounded-xl bg-purple-500/10 border border-purple-500/20 text-xs text-purple-200 flex items-center justify-between">
+          <div className="p-3 rounded-xl bg-[#101114] border border-[#B7F36B]/35 text-xs text-white flex items-center justify-between">
             <span className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-purple-400 animate-ping" />
+              <span className="w-2 h-2 rounded-full bg-[#B7F36B] animate-ping" />
               <span>Sincronización continua de datos vía Firestore</span>
             </span>
-            <span className="font-mono text-[11px] text-purple-300">
+            <span className="font-mono text-[11px] text-[#B7F36B] font-bold">
               {lastRefreshed.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
             </span>
           </div>
