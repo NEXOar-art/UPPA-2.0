@@ -407,6 +407,24 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
   };
   resetHideTimerRef.current = resetHideTimer;
 
+  useEffect(() => {
+    window.dispatchEvent(
+      new CustomEvent('uppa-map-cards-visibility', {
+        detail: { visible: areCardsVisible },
+      })
+    );
+  }, [areCardsVisible]);
+
+  useEffect(() => {
+    const handleShowControls = () => {
+      resetHideTimerRef.current();
+    };
+    window.addEventListener('uppa-map-show-controls', handleShowControls);
+    return () => {
+      window.removeEventListener('uppa-map-show-controls', handleShowControls);
+    };
+  }, []);
+
   const getEventCategoryKey = (type: any): string => {
     switch (type) {
       case 'bus_location':
@@ -1774,22 +1792,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
         </div>
       )}
 
-      {/* Pill indicador cuando las tarjetas están ocultas en Modo Mapa Libre */}
-      {!areCardsVisible && (
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 pointer-events-auto animate-in fade-in zoom-in-95 duration-300">
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              resetHideTimer();
-            }}
-            className="min-h-[44px] px-4 rounded-xl bg-[#202329] hover:border-[#FFF19A] text-[#FFF19A] border-2 border-white/20 shadow-[3px_3px_0px_#101114] text-xs font-extrabold flex items-center gap-2 cursor-pointer transition-all active:scale-95"
-            title="Tocar para mostrar controles y tarjetas del mapa"
-          >
-            <span className="w-2 h-2 rounded-full bg-[#B7F36B]" />
-            <span>Modo Mapa Libre · Tocar para ver controles</span>
-          </button>
-        </div>
-      )}
+      {/* El indicador compacto sin texto de Modo Mapa Libre ahora se ubica junto al botón Opciones de transporte */}
 
       {/* Margen Derecho del Mapa: Botones Flotantes (Paradas, Estación de Servicio, Escuelas) */}
       <div

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import {
   Bus,
   Bike,
@@ -18,6 +18,7 @@ import {
   Activity,
   Layers,
   Minimize2,
+  SlidersHorizontal,
   X,
 } from 'lucide-react';
 import { LINEA_228_STOPS, Linea228Stop } from '../../data/linea228Stops';
@@ -47,6 +48,16 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedZone, setSelectedZone] = useState<string>('all');
   const [isRankingDropdownOpen, setIsRankingDropdownOpen] = useState(false);
+  const [isMapFreeMode, setIsMapFreeMode] = useState(false);
+
+  useEffect(() => {
+    const handleVisibility = (e: Event) => {
+      const custom = e as CustomEvent<{ visible: boolean }>;
+      setIsMapFreeMode(!custom.detail?.visible);
+    };
+    window.addEventListener('uppa-map-cards-visibility', handleVisibility);
+    return () => window.removeEventListener('uppa-map-cards-visibility', handleVisibility);
+  }, []);
 
   // Arrastre táctil / mouse para ocultar el panel hacia abajo
   const [dragOffsetY, setDragOffsetY] = useState(0);
@@ -134,7 +145,7 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
 
   if (isMinimized) {
     return (
-      <div className="w-full max-w-sm mx-auto px-4 pointer-events-auto flex justify-center pb-1 uppa-card-enter">
+      <div className="w-full max-w-sm mx-auto px-4 pointer-events-auto flex items-center justify-center gap-2 pb-1 uppa-card-enter">
         <button
           type="button"
           onClick={() => {
@@ -153,6 +164,22 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
             <ChevronUp className="w-2.5 h-2.5 stroke-[3]" />
           </span>
         </button>
+
+        {isMapFreeMode && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              window.dispatchEvent(new CustomEvent('uppa-map-show-controls'));
+            }}
+            className="relative w-7 h-7 rounded-full uppa-glass-ios border border-white/25 hover:border-[#FFF19A] hover:shadow-[0_0_10px_rgba(255,241,154,0.45)] text-[#FFF19A] flex items-center justify-center cursor-pointer transition-all uppa-card-enter"
+            title="Modo Mapa Libre · Tocar para ver controles"
+            aria-label="Modo Mapa Libre · Tocar para ver controles"
+          >
+            <SlidersHorizontal className="w-3 h-3" />
+            <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-[#B7F36B] border border-[#101114] animate-pulse" />
+          </button>
+        )}
       </div>
     );
   }
@@ -200,6 +227,22 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
           </div>
 
           <div className="flex items-center gap-1.5 shrink-0">
+            {isMapFreeMode && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  window.dispatchEvent(new CustomEvent('uppa-map-show-controls'));
+                }}
+                className="relative w-7 h-7 rounded-full uppa-glass-ios border border-white/25 hover:border-[#FFF19A] hover:shadow-[0_0_10px_rgba(255,241,154,0.45)] text-[#FFF19A] flex items-center justify-center cursor-pointer transition-all"
+                title="Modo Mapa Libre · Tocar para ver controles"
+                aria-label="Modo Mapa Libre · Tocar para ver controles"
+              >
+                <SlidersHorizontal className="w-3 h-3" />
+                <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-[#B7F36B] border border-[#101114] animate-pulse" />
+              </button>
+            )}
+
             <button
               type="button"
               onClick={() => setIsExpanded((prev) => !prev)}
