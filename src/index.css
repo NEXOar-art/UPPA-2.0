@@ -306,3 +306,152 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #9299A5;
 }
+
+/* ============================================================================
+   UPPA Microinteracciones (1 -> 0.95 -> 1), iOS Glassmorphism & Efectos UPPA
+   ============================================================================ */
+button,
+[role="button"],
+.uppa-press {
+  transition:
+    transform 190ms cubic-bezier(0.34, 1.56, 0.64, 1),
+    background-color 150ms ease,
+    border-color 150ms ease,
+    box-shadow 150ms ease,
+    filter 150ms ease,
+    opacity 150ms ease;
+}
+
+button:not(:disabled):active,
+[role="button"]:not([aria-disabled="true"]):active,
+.uppa-press:active {
+  transform: scale(0.95);
+}
+
+.uppa-glass-ios {
+  background: linear-gradient(
+    145deg,
+    rgba(32, 35, 41, 0.78),
+    rgba(16, 17, 20, 0.86)
+  );
+  backdrop-filter: blur(22px) saturate(160%);
+  -webkit-backdrop-filter: blur(22px) saturate(160%);
+  border: 1.5px solid rgba(255, 255, 255, 0.24);
+  box-shadow:
+    0 12px 34px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+
+@keyframes uppa-fade-elevate {
+  0% {
+    opacity: 0;
+    transform: translateY(10px) scale(0.97);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.uppa-card-enter {
+  animation: uppa-fade-elevate 280ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes uppa-vehicle-approach-track {
+  0% {
+    transform: translateX(0%);
+  }
+  70% {
+    transform: translateX(84%);
+  }
+  100% {
+    transform: translateX(0%);
+  }
+}
+
+.uppa-vehicle-approach-track {
+  will-change: transform;
+  animation: uppa-vehicle-approach-track 3.4s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+
+@keyframes uppa-match-left {
+  0% {
+    opacity: 0;
+    transform: translateX(-16px) scale(0.85);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+@keyframes uppa-match-right {
+  0% {
+    opacity: 0;
+    transform: translateX(16px) scale(0.85);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+@keyframes uppa-match-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  65% {
+    opacity: 1;
+    transform: scale(1.22);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.uppa-match-left {
+  animation: uppa-match-left 450ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.uppa-match-right {
+  animation: uppa-match-right 450ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.uppa-match-pop {
+  animation: uppa-match-pop 420ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+@keyframes uppa-check-pop {
+  0% {
+    transform: scale(0.65);
+  }
+  65% {
+    transform: scale(1.18);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.uppa-check-pop {
+  animation: uppa-check-pop 280ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .uppa-vehicle-approach-track,
+  .uppa-card-enter,
+  .uppa-match-left,
+  .uppa-match-right,
+  .uppa-match-pop,
+  .uppa-check-pop {
+    animation: none !important;
+  }
+  button:not(:disabled):active,
+  [role="button"]:not([aria-disabled="true"]):active,
+  .uppa-press:active {
+    transform: none !important;
+  }
+}
+

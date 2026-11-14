@@ -45,9 +45,11 @@ import { SplashScreen } from './components/splash/SplashScreen';
 import { PedirTransporteModal } from './components/common/PedirTransporteModal';
 import { MobilityBottomSheet } from './components/common/MobilityBottomSheet';
 import { TicketConsultaModal } from './components/common/TicketConsultaModal';
+import { ActiveRideGlassWidget } from './components/common/ActiveRideGlassWidget';
 import { RankingPrestadoresDropdown } from './components/taxi/RankingPrestadoresDropdown';
 import { Linea228Stop } from './data/linea228Stops';
 import { useAuth } from './context/AuthContext';
+import { playMicroSound } from './utils/soundEffects';
 import {
   ActiveDriverSession,
   getActiveDriverSession,
@@ -57,6 +59,9 @@ import {
   subscribeToHabilitacionesChofer,
   obtenerHabilitacionesActuales,
   subscribeToChat,
+  subscribeToSolicitudesTransporte,
+  isSolicitudExpired,
+  isSolicitudAceptadaExpired,
   onPushNotification,
   triggerInAppPushNotification,
   crearReporte,
@@ -616,6 +621,8 @@ export default function App() {
   const [contextEventForChat, setContextEventForChat] = useState<MapEvent | null>(null);
   const [communityChatList, setCommunityChatList] = useState<MensajeChatFirestore[]>([]);
   const [dismissedChatMsgId, setDismissedChatMsgId] = useState<string | null>(null);
+  const [solicitudesList, setSolicitudesList] = useState<SolicitudTransporteFirestore[]>([]);
+  const [dismissedGlassRideId, setDismissedGlassRideId] = useState<string | null>(null);
 
   // Eventos Push en Pantalla (Exposición de 7 segundos para mantener el mapa despejado)
   const [screenPushEvents, setScreenPushEvents] = useState<PushNotificationPayload[]>([]);
@@ -812,11 +819,16 @@ export default function App() {
       setCommunityChatList(msgs);
     });
 
+    const unsubSolicitudes = subscribeToSolicitudesTransporte((list) => {
+      setSolicitudesList(list || []);
+    });
+
     return () => {
       unsubReportes();
       unsubHabs();
       unsubNotif();
       unsubChat();
+      unsubSolicitudes();
     };
   }, []);
 
@@ -1176,6 +1188,58 @@ export default function App() {
     // Solo se devuelven los prestadores de servicio 100% reales habilitados por el Administrador
     return result;
   }, [habilitacionesList, driverSession, currentUser, userLocation]);
+
+  const myLiveActiveSolicitud = useMemo(() => {
+    const now = Date.now();
+    const getTs = (s: SolicitudTransporteFirestore) => {
+      if (typeof s.fechaAceptado === 'number') return s.fechaAceptado;
+      if (typeof s.fechaSolicitud === 'number') return s.fechaSolicitud;
+      if (typeof s.fechaSolicitud?.seconds === 'number') return s.fechaSolicitud.seconds * 1000;
+      return 0;
+    };
+    const relevant = solicitudesList.filter((sol) => {
+      if (sol.estado === 'cancelado' || sol.estado === 'expirada' || sol.estado === 'anulado') return false;
+      if (isSolicitudExpired(sol, now) || isSolicitudAceptadaExpired(sol, now)) return false;
+      const isMyPassengerRide =
+        (currentUser.id && sol.pasajeroId === currentUser.id) ||
+        (currentUser.uid && sol.pasajeroId === currentUser.uid);
+      const isMyDriverRide =
+        Boolean(sol.choferId) &&
+        ((currentUser.id && sol.choferId === currentUser.id) ||
+          (currentUser.uid && sol.choferId === currentUser.uid));
+      return Boolean(isMyPassengerRide || isMyDriverRide);
+    });
+    if (relevant.length === 0) return null;
+    // Priorizar viajes aceptados/en curso sobre pendientes recientes
+    const sorted = [...relevant].sort((a, b) => {
+      const rank = (s: SolicitudTransporteFirestore) =>
+        s.estado === 'en_camino' || s.estado === 'aceptado'
+          ? 3
+          : s.estado === 'pendiente'
+          ? 2
+          : s.estado === 'completado'
+          ? 1
+          : 0;
+      const diffRank = rank(b) - rank(a);
+      if (diffRank !== 0) return diffRank;
+      return getTs(b) - getTs(a);
+    });
+    return sorted[0] || null;
+  }, [solicitudesList, currentUser.id, currentUser.uid]);
+
+  const matchedLiveDriver = useMemo(() => {
+    if (!myLiveActiveSolicitud?.choferId) return null;
+    return (
+      marketplaceTaxis.find(
+        (t) =>
+          t.userId === myLiveActiveSolicitud.choferId ||
+          t.id === myLiveActiveSolicitud.choferId ||
+          (myLiveActiveSolicitud.choferNombre &&
+            t.driverName.trim().toLowerCase() ===
+              myLiveActiveSolicitud.choferNombre.trim().toLowerCase())
+      ) || null
+    );
+  }, [myLiveActiveSolicitud, marketplaceTaxis]);
 
   const handlePublishTaxi = (
     listingData: Omit<TaxiListing, 'id' | 'startsAt' | 'endsAt' | 'status' | 'rating' | 'completedRides'>,
@@ -1833,6 +1897,43 @@ export default function App() {
               />
             </div>
 
+            {/* Tarjeta Glassmorphism iOS de Viaje Activo en Mapa */}
+            {myLiveActiveSolicitud &&
+              myLiveActiveSolicitud.id !== dismissedGlassRideId &&
+              !activeTrackingPassenger &&
+              !activeTrackingTaxi && (
+                <div className="absolute top-16 left-3 right-3 sm:left-4 sm:right-auto sm:w-[375px] z-20 pointer-events-auto">
+                  <ActiveRideGlassWidget
+                    solicitud={myLiveActiveSolicitud}
+                    matchedDriver={matchedLiveDriver}
+                    userLocation={userLocation}
+                    isDriverViewer={Boolean(
+                      myLiveActiveSolicitud.choferId &&
+                        ((currentUser.id && myLiveActiveSolicitud.choferId === currentUser.id) ||
+                          (currentUser.uid && myLiveActiveSolicitud.choferId === currentUser.uid))
+                    )}
+                    onLocateOnMap={() => {
+                      const viewerIsDriver = Boolean(
+                        myLiveActiveSolicitud.choferId &&
+                          ((currentUser.id && myLiveActiveSolicitud.choferId === currentUser.id) ||
+                            (currentUser.uid && myLiveActiveSolicitud.choferId === currentUser.uid))
+                      );
+                      if (viewerIsDriver) {
+                        setActiveTrackingPassenger(myLiveActiveSolicitud);
+                        showToast(`📍 GPS activado hacia ${myLiveActiveSolicitud.nombrePasajero}`);
+                      } else if (matchedLiveDriver) {
+                        setActiveTrackingTaxi(matchedLiveDriver);
+                        showToast(`Trazando trayectoria con ${matchedLiveDriver.driverName}`);
+                      } else {
+                        setActiveTab('taxi');
+                      }
+                    }}
+                    onOpenTaxiTab={() => setActiveTab('taxi')}
+                    onClose={() => setDismissedGlassRideId(myLiveActiveSolicitud.id)}
+                  />
+                </div>
+              )}
+
             {/* Cabify-Inspired Mobility Bottom Sheet (Panel inferior con scrolling web hacia arriba) */}
             <div className="absolute bottom-2 left-0 right-0 z-30 pointer-events-none">
               <MobilityBottomSheet
@@ -1969,17 +2070,17 @@ export default function App() {
           <button
             onClick={() => setActiveTab('map')}
             title="Ver mapa en vivo, recorridos y colectivos"
-            className={`min-h-[48px] py-1 px-1 rounded-xl flex flex-col items-center justify-center transition-all cursor-pointer ${
+            className={`min-h-[48px] py-1 px-1 rounded-xl flex flex-col items-center justify-center transition-all cursor-pointer group ${
               activeTab === 'map'
                 ? 'text-[#FFF19A] font-black'
                 : 'text-[#9299A5] hover:text-white'
             }`}
           >
             <div
-              className={`p-1.5 rounded-lg transition-all ${
+              className={`p-1.5 rounded-lg transition-all border ${
                 activeTab === 'map'
-                  ? 'bg-[#FFF19A] border border-[#101114] text-[#101114]'
-                  : 'bg-transparent text-[#9299A5]'
+                  ? 'bg-[#FFF19A] border-[#FFF19A] text-[#101114] shadow-[0_0_10px_rgba(255,241,154,0.35)]'
+                  : 'bg-[#202329] border-white/20 text-[#9299A5] group-hover:text-[#FFF19A] group-hover:border-[#FFF19A] group-hover:shadow-[0_0_10px_rgba(255,241,154,0.45)]'
               }`}
             >
               <Bus className="w-4 h-4" />
@@ -2001,7 +2102,7 @@ export default function App() {
             className="min-h-[48px] py-1 px-1 rounded-xl flex flex-col items-center justify-center transition-all cursor-pointer text-[#9299A5] hover:text-white group"
             title="Centrar el mapa en mi ubicación GPS actual"
           >
-            <div className="p-1.5 rounded-lg bg-transparent group-hover:bg-[#202329] text-[#B7F36B] transition-all">
+            <div className="p-1.5 rounded-lg bg-[#202329] border border-white/20 group-hover:border-[#FFF19A] group-hover:shadow-[0_0_10px_rgba(255,241,154,0.45)] text-[#B7F36B] transition-all">
               <Navigation className="w-4 h-4" />
             </div>
             <span className="text-[9.5px] tracking-tight mt-0.5 font-bold whitespace-nowrap text-[#9299A5] group-hover:text-white">
@@ -2019,7 +2120,7 @@ export default function App() {
             className="min-h-[48px] py-1 px-1 rounded-xl flex flex-col items-center justify-center transition-all cursor-pointer text-[#9299A5] hover:text-white group"
             title="Enfocar el recorrido completo en el mapa"
           >
-            <div className="p-1.5 rounded-lg bg-transparent group-hover:bg-[#202329] text-white transition-all">
+            <div className="p-1.5 rounded-lg bg-[#202329] border border-white/20 group-hover:border-[#FFF19A] group-hover:shadow-[0_0_10px_rgba(255,241,154,0.45)] text-white group-hover:text-[#FFF19A] transition-all">
               <Maximize2 className="w-4 h-4" />
             </div>
             <span className="text-[10px] tracking-tight mt-0.5 font-bold whitespace-nowrap text-[#9299A5] group-hover:text-white">
@@ -2032,17 +2133,17 @@ export default function App() {
             <button
               onClick={() => setActiveTab('taxi')}
               title="Ir a Taxis & Motos para pedir o ver prestadores habilitados"
-              className={`min-h-[48px] py-1 px-1 rounded-xl flex flex-col items-center justify-center transition-all cursor-pointer flex-1 ${
+              className={`min-h-[48px] py-1 px-1 rounded-xl flex flex-col items-center justify-center transition-all cursor-pointer flex-1 group ${
                 activeTab === 'taxi'
                   ? 'text-[#B7F36B] font-black'
                   : 'text-[#9299A5] hover:text-white'
               }`}
             >
               <div
-                className={`p-1.5 rounded-lg transition-all flex items-center -space-x-1 ${
+                className={`p-1.5 rounded-lg transition-all flex items-center -space-x-1 border ${
                   activeTab === 'taxi'
-                    ? 'bg-[#B7F36B] border border-[#101114] text-[#101114]'
-                    : 'bg-transparent text-[#9299A5]'
+                    ? 'bg-[#B7F36B] border-[#B7F36B] text-[#101114] shadow-[0_0_10px_rgba(183,243,107,0.35)]'
+                    : 'bg-[#202329] border-white/20 text-[#9299A5] group-hover:text-[#FFF19A] group-hover:border-[#FFF19A] group-hover:shadow-[0_0_10px_rgba(255,241,154,0.45)]'
                 }`}
               >
                 <Bike className="w-3.5 h-3.5" />
@@ -2057,7 +2158,7 @@ export default function App() {
               <RankingPrestadoresDropdown
                 placement="top"
                 onOpenTaxiTab={() => setActiveTab('taxi')}
-                triggerButtonClassName="w-5 h-5 rounded-md bg-[#202329] hover:border-[#FFF19A] border border-white/20 text-[#FFF19A] flex items-center justify-center transition-all cursor-pointer"
+                triggerButtonClassName="w-5 h-5 rounded-md bg-[#202329] hover:border-[#FFF19A] hover:shadow-[0_0_10px_rgba(255,241,154,0.45)] border border-white/20 text-[#FFF19A] flex items-center justify-center transition-all cursor-pointer"
               />
             </div>
           </div>
@@ -2066,17 +2167,17 @@ export default function App() {
           <button
             onClick={() => setActiveTab('chat')}
             title="Abrir el chat comunitario de pasajeros y prestadores"
-            className={`min-h-[48px] py-1 px-1 rounded-xl flex flex-col items-center justify-center transition-all cursor-pointer relative ${
+            className={`min-h-[48px] py-1 px-1 rounded-xl flex flex-col items-center justify-center transition-all cursor-pointer relative group ${
               activeTab === 'chat'
                 ? 'text-[#FFF19A] font-black'
                 : 'text-[#9299A5] hover:text-white'
             }`}
           >
             <div
-              className={`p-1.5 rounded-lg transition-all relative ${
+              className={`p-1.5 rounded-lg transition-all relative border ${
                 activeTab === 'chat'
-                  ? 'bg-[#FFF19A] border border-[#101114] text-[#101114]'
-                  : 'bg-transparent text-[#9299A5]'
+                  ? 'bg-[#FFF19A] border-[#FFF19A] text-[#101114] shadow-[0_0_10px_rgba(255,241,154,0.35)]'
+                  : 'bg-[#202329] border-white/20 text-[#9299A5] group-hover:text-[#FFF19A] group-hover:border-[#FFF19A] group-hover:shadow-[0_0_10px_rgba(255,241,154,0.45)]'
               }`}
             >
               <MessageSquare className="w-4 h-4" />
@@ -2095,17 +2196,17 @@ export default function App() {
             onClick={() => setIsTicketModalOpen(true)}
             title="Ticket de consulta"
             aria-label="Ticket de consulta"
-            className={`min-h-[48px] py-1 px-0.5 rounded-xl flex flex-col items-center justify-center transition-all cursor-pointer ${
+            className={`min-h-[48px] py-1 px-0.5 rounded-xl flex flex-col items-center justify-center transition-all cursor-pointer group ${
               isTicketModalOpen
                 ? 'text-[#FFF19A] font-black'
                 : 'text-[#9299A5] hover:text-white'
             }`}
           >
             <div
-              className={`p-1.5 rounded-lg transition-all ${
+              className={`p-1.5 rounded-lg transition-all border ${
                 isTicketModalOpen
-                  ? 'bg-[#FFF19A] border border-[#101114] text-[#101114]'
-                  : 'bg-transparent text-[#9299A5]'
+                  ? 'bg-[#FFF19A] border-[#FFF19A] text-[#101114] shadow-[0_0_10px_rgba(255,241,154,0.35)]'
+                  : 'bg-[#202329] border-white/20 text-[#9299A5] group-hover:text-[#FFF19A] group-hover:border-[#FFF19A] group-hover:shadow-[0_0_10px_rgba(255,241,154,0.45)]'
               }`}
             >
               <Ticket className="w-4 h-4" />
@@ -2117,17 +2218,17 @@ export default function App() {
           <button
             onClick={() => setActiveTab('admin')}
             title="Abrir el panel de Administración UPPA"
-            className={`min-h-[48px] py-1 px-0.5 rounded-xl flex flex-col items-center justify-center transition-all cursor-pointer ${
+            className={`min-h-[48px] py-1 px-0.5 rounded-xl flex flex-col items-center justify-center transition-all cursor-pointer group ${
               activeTab === 'admin'
                 ? 'text-[#FFF19A] font-black'
                 : 'text-[#9299A5] hover:text-white'
             }`}
           >
             <div
-              className={`p-1.5 rounded-lg transition-all ${
+              className={`p-1.5 rounded-lg transition-all border ${
                 activeTab === 'admin'
-                  ? 'bg-[#FFF19A] border border-[#101114] text-[#101114]'
-                  : 'bg-transparent text-[#9299A5]'
+                  ? 'bg-[#FFF19A] border-[#FFF19A] text-[#101114] shadow-[0_0_10px_rgba(255,241,154,0.35)]'
+                  : 'bg-[#202329] border-white/20 text-[#9299A5] group-hover:text-[#FFF19A] group-hover:border-[#FFF19A] group-hover:shadow-[0_0_10px_rgba(255,241,154,0.45)]'
               }`}
             >
               <Shield className="w-4 h-4" />
@@ -2177,6 +2278,7 @@ export default function App() {
         onClose={() => setIsPublishTaxiOpen(false)}
         onSubmit={handlePublishTaxi}
         onActivateDriverSession={(session) => {
+          playMicroSound('payment_done');
           setDriverSession(session);
           setCurrentUser((prev) => ({
             ...prev,

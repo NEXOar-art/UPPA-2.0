@@ -3,6 +3,7 @@ import L from 'leaflet';
 import { TransitRoute, MapEvent, LiveBus, TaxiListing, BusStop, EventType, SolicitudTransporteFirestore } from '../../types';
 import { UserLocation, getDistanceKm } from '../../utils/geolocation';
 import { calculateRealBusSpeed } from '../../utils/busSpeedEstimator';
+import { playMicroSound } from '../../utils/soundEffects';
 import { MAP_CONFIG } from '../../config/api';
 import {
   Crosshair,
@@ -1437,6 +1438,9 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
         distKm: calculatedDistKm,
         etaMinutes: calculatedEtaMin,
       });
+      if (calculatedDistKm <= 0.5 || calculatedEtaMin <= 2) {
+        playMicroSound('driver_near');
+      }
 
       // 1. PUNTO A (Driver): TITILANDO con halo pulsante
       const driverTitilandoIcon = L.divIcon({
@@ -1599,6 +1603,9 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
         passengerLat,
         passengerLng,
       });
+      if (calculatedDistKm <= 0.5 || calculatedEtaMin <= 2) {
+        playMicroSound('driver_near');
+      }
 
       // 1. PUNTO A (Chofer GPS en camino)
       const driverMarkerIcon = L.divIcon({
@@ -2376,7 +2383,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
               : 'opacity-0 -translate-y-3 pointer-events-none'
           }`}
         >
-          <div className="bg-[#202329] p-4 rounded-2xl shadow-[5px_5px_0px_#101114] border-2 border-[#B7F36B] relative overflow-hidden">
+          <div className="uppa-glass-ios uppa-card-enter p-4 rounded-2xl border-[#B7F36B]/70 relative overflow-hidden">
             <div className="flex items-start justify-between gap-2 pb-2.5 border-b border-white/10">
               <div className="flex items-center gap-2">
                 <span className="w-2.5 h-2.5 rounded-full bg-[#B7F36B] animate-ping shrink-0" />
@@ -2416,7 +2423,27 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
                 </div>
               </div>
 
-              <div className="space-y-1.5 text-xs bg-[#101114] p-3 rounded-xl border border-white/10">
+              <div className="rounded-xl bg-[#101114]/65 border border-white/15 px-3 py-1.5 space-y-1">
+                <div className="flex items-center justify-between text-[10px] font-bold">
+                  <span className="text-[#B7F36B]">Vehículo acercándose</span>
+                  <span className="text-[#FFF19A] font-mono">~{trajectoryInfo.etaMinutes} min</span>
+                </div>
+                <div className="relative h-5 flex items-center justify-between overflow-hidden px-1">
+                  <div className="absolute inset-x-3 top-1/2 -translate-y-1/2 border-t-2 border-dashed border-[#FFF19A]/45" />
+                  <div className="relative z-10 flex-1 pr-6 overflow-hidden">
+                    <div className="w-full uppa-vehicle-approach-track">
+                      <span className="text-sm leading-none inline-block" aria-hidden="true">
+                        {activeTrackingTaxi.vehicleType === 'moto' ? '🛵' : '🚗'}
+                      </span>
+                    </div>
+                  </div>
+                  <span className="relative z-10 text-sm leading-none shrink-0" aria-hidden="true">
+                    📍
+                  </span>
+                </div>
+              </div>
+
+              <div className="space-y-1.5 text-xs bg-[#101114]/70 p-3 rounded-xl border border-white/10">
                 <div className="flex items-center gap-2 text-white">
                   <span className="w-2.5 h-2.5 rounded-full bg-[#B7F36B] shrink-0" />
                   <span className="font-bold text-[#9299A5]">Punto A:</span>
@@ -2476,7 +2503,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
               : 'opacity-0 -translate-y-3 pointer-events-none'
           }`}
         >
-          <div className="p-4 rounded-2xl shadow-[5px_5px_0px_#101114] border-2 border-[#FFF19A] relative overflow-hidden bg-[#202329]">
+          <div className="uppa-glass-ios uppa-card-enter p-4 rounded-2xl border-[#FFF19A]/70 relative overflow-hidden">
             <div className="flex items-start justify-between gap-2 pb-2.5 border-b border-white/10">
               <div className="flex items-center gap-2">
                 <span className="relative flex h-3 w-3">
@@ -2596,7 +2623,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
               : 'opacity-0 -translate-y-3 pointer-events-none'
           }`}
         >
-          <div className="p-4 rounded-2xl shadow-[5px_5px_0px_#101114] border-2 border-[#B7F36B] relative overflow-hidden bg-[#202329]">
+          <div className="uppa-glass-ios uppa-card-enter p-4 rounded-2xl border-[#B7F36B]/75 relative overflow-hidden">
             <div className="flex items-start justify-between gap-2 pb-2.5 border-b border-white/10">
               <div className="flex items-center gap-2">
                 <span className="relative flex h-3 w-3">
@@ -2644,7 +2671,27 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
                 </div>
               </div>
 
-              <div className="space-y-2 text-xs bg-[#101114] p-3 rounded-xl border border-white/10">
+              <div className="rounded-xl bg-[#101114]/65 border border-white/15 px-3 py-1.5 space-y-1">
+                <div className="flex items-center justify-between text-[10px] font-bold">
+                  <span className="text-[#B7F36B]">Acercándose al pasajero</span>
+                  <span className="text-[#FFF19A] font-mono">~{passengerTrajectoryInfo.etaDriveMin} min</span>
+                </div>
+                <div className="relative h-5 flex items-center justify-between overflow-hidden px-1">
+                  <div className="absolute inset-x-3 top-1/2 -translate-y-1/2 border-t-2 border-dashed border-[#FFF19A]/45" />
+                  <div className="relative z-10 flex-1 pr-6 overflow-hidden">
+                    <div className="w-full uppa-vehicle-approach-track">
+                      <span className="text-sm leading-none inline-block" aria-hidden="true">
+                        {passengerTrajectoryInfo.solicitud.tipoVehiculoRequerido === 'moto' ? '🛵' : '🚗'}
+                      </span>
+                    </div>
+                  </div>
+                  <span className="relative z-10 text-sm leading-none shrink-0" aria-hidden="true">
+                    📍
+                  </span>
+                </div>
+              </div>
+
+              <div className="space-y-2 text-xs bg-[#101114]/70 p-3 rounded-xl border border-white/10">
                 <div className="flex items-center justify-between pb-1.5 mb-1 border-b border-white/10">
                   <div className="flex items-center gap-2">
                     <span className="w-6 h-6 rounded-lg bg-[#202329] border border-white/15 text-white flex items-center justify-center font-bold text-xs">

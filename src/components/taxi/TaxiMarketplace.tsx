@@ -24,6 +24,8 @@ import {
 } from '../../services/realtimeFirebaseService';
 import { getDistanceKm, UserLocation } from '../../utils/geolocation';
 import { calculateDriverSafetyIndex } from '../../utils/driverSafety';
+import { playMicroSound } from '../../utils/soundEffects';
+import { ActiveRideGlassWidget } from '../common/ActiveRideGlassWidget';
 import {
   Car,
   Bike,
@@ -259,6 +261,7 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
         );
       }
 
+      playMicroSound('ride_accepted');
       setRideSuccessNotice('¡Aceptaste el viaje! Ubicación del pasajero habilitada en GPS y ruta trazada.');
       setTimeout(() => setRideSuccessNotice(null), 5000);
 
@@ -347,6 +350,7 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
           [solId]: res.error || 'Código de seguridad incorrecto.',
         }));
       } else {
+        playMicroSound('payment_done');
         setCodeSuccesses((prev) => ({
           ...prev,
           [solId]: '¡Código validado con éxito! Viaje habilitado en curso.',
@@ -1103,33 +1107,52 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                     const secs = remainingSec % 60;
                     const formattedTimer = `${mins}:${secs.toString().padStart(2, '0')}`;
 
+                    const matchedDriverObj =
+                      taxis.find(
+                        (t) =>
+                          (sol.choferId && (t.userId === sol.choferId || t.id === sol.choferId)) ||
+                          (sol.choferNombre &&
+                            t.driverName.trim().toLowerCase() === sol.choferNombre.trim().toLowerCase())
+                      ) || null;
+
                     return (
-                      <div
-                        key={sol.id}
-                        className={`p-3.5 rounded-2xl border-2 text-xs bg-[#101114] ${
-                          sol.estado === 'aceptado'
-                            ? 'border-[#B7F36B]'
-                            : 'border-[#FFF19A]/40'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between gap-1 mb-1.5 flex-wrap">
-                          <span className="font-black text-white flex items-center gap-1.5">
-                            {sol.tipoVehiculoRequerido === 'moto' ? <Bike className="w-4 h-4 text-[#FFF19A]" /> : <Car className="w-4 h-4 text-[#B7F36B]" />}
-                            <span>{sol.tipoVehiculoRequerido === 'moto' ? 'Moto Taxi' : 'Auto Taxi'}</span>
-                          </span>
-                          {sol.estado === 'pendiente' && (
-                            <span className="px-2 py-0.5 rounded text-[10px] font-mono font-black bg-[#FFF19A] text-[#101114]">
-                              Buscando chofer ({formattedTimer})
+                      <div key={sol.id} className="space-y-2.5">
+                        <ActiveRideGlassWidget
+                          solicitud={sol}
+                          matchedDriver={matchedDriverObj}
+                          userLocation={userLocation}
+                          onLocateOnMap={
+                            matchedDriverObj && onSelectTaxiOnMap
+                              ? () => onSelectTaxiOnMap(matchedDriverObj)
+                              : undefined
+                          }
+                        />
+
+                        <div
+                          className={`p-3.5 rounded-2xl border-2 text-xs bg-[#101114] ${
+                            sol.estado === 'aceptado'
+                              ? 'border-[#B7F36B]'
+                              : 'border-[#FFF19A]/40'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-1 mb-1.5 flex-wrap">
+                            <span className="font-black text-white flex items-center gap-1.5">
+                              {sol.tipoVehiculoRequerido === 'moto' ? <Bike className="w-4 h-4 text-[#FFF19A]" /> : <Car className="w-4 h-4 text-[#B7F36B]" />}
+                              <span>{sol.tipoVehiculoRequerido === 'moto' ? 'Moto Taxi' : 'Auto Taxi'}</span>
                             </span>
-                          )}
-                          {(sol.estado === 'aceptado' || sol.estado === 'en_camino') && (
-                            <span className="px-2 py-0.5 rounded text-[10px] font-black bg-[#B7F36B] text-[#101114]">
-                              ✓ Chofer: {sol.choferNombre || 'En camino'}
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-[11px] text-white">📍 Origen: {sol.origen}</p>
-                        <p className="text-[11px] text-[#9299A5]">🏁 Destino: {sol.destino}</p>
+                            {sol.estado === 'pendiente' && (
+                              <span className="px-2 py-0.5 rounded text-[10px] font-mono font-black bg-[#FFF19A] text-[#101114]">
+                                Buscando chofer ({formattedTimer})
+                              </span>
+                            )}
+                            {(sol.estado === 'aceptado' || sol.estado === 'en_camino') && (
+                              <span className="px-2 py-0.5 rounded text-[10px] font-black bg-[#B7F36B] text-[#101114]">
+                                ✓ Chofer: {sol.choferNombre || 'En camino'}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-white">📍 Origen: {sol.origen}</p>
+                          <p className="text-[11px] text-[#9299A5]">🏁 Destino: {sol.destino}</p>
 
                         {/* Código de Seguridad Confidencial para el Pasajero */}
                         {(sol.estado === 'aceptado' || sol.estado === 'en_camino') && (
@@ -1186,6 +1209,7 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                             )}
                           </>
                         )}
+                        </div>
                       </div>
                     );
                   })}

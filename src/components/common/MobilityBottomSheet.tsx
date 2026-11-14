@@ -18,7 +18,6 @@ import {
   Activity,
   Layers,
   Minimize2,
-  Maximize2,
   X,
 } from 'lucide-react';
 import { LINEA_228_STOPS, Linea228Stop } from '../../data/linea228Stops';
@@ -135,22 +134,23 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
 
   if (isMinimized) {
     return (
-      <div className="w-full max-w-sm mx-auto px-4 pointer-events-auto flex justify-center pb-1 animate-in fade-in slide-in-from-bottom-2 duration-200">
+      <div className="w-full max-w-sm mx-auto px-4 pointer-events-auto flex justify-center pb-1 uppa-card-enter">
         <button
           type="button"
           onClick={() => {
             setIsMinimized(false);
             setDragOffsetY(0);
           }}
-          className="min-h-[44px] px-4 py-2.5 rounded-2xl bg-[#202329] hover:bg-[#101114] border-2 border-[#FFF19A]/60 text-white shadow-[4px_4px_0px_rgba(0,0,0,0.65)] flex items-center gap-2.5 text-xs font-black transition-all cursor-pointer active:scale-95 group"
-          title="Abrir panel de opciones de transporte"
+          className="relative w-11 h-11 rounded-2xl uppa-glass-ios hover:border-[#FFF19A] hover:shadow-[0_0_12px_rgba(255,241,154,0.45)] border-[#FFF19A]/60 text-white flex items-center justify-center cursor-pointer group transition-all"
+          title="Opciones de transporte"
+          aria-label="Opciones de transporte"
         >
-          <div className="w-6 h-6 rounded-lg bg-[#FFF19A] text-[#101114] flex items-center justify-center shrink-0">
-            <Maximize2 className="w-3.5 h-3.5" />
+          <div className="flex items-center -space-x-1">
+            <Bus className="w-4 h-4 text-[#FFF19A]" />
+            <Car className="w-4 h-4 text-[#B7F36B]" />
           </div>
-          <span>Opciones de Transporte</span>
-          <span className="text-[10px] text-[#101114] font-black bg-[#B7F36B] px-2 py-0.5 rounded-md">
-            Abrir
+          <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-[#FFF19A] text-[#101114] border border-[#101114] flex items-center justify-center shadow">
+            <ChevronUp className="w-2.5 h-2.5 stroke-[3]" />
           </span>
         </button>
       </div>
@@ -165,7 +165,7 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
         transition: dragOffsetY === 0 ? 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)' : 'none',
       }}
     >
-      <div className="bg-[#202329]/95 backdrop-blur-xl border-2 border-white/15 rounded-t-3xl sm:rounded-3xl shadow-[0_-4px_24px_rgba(0,0,0,0.6)] overflow-hidden transition-all duration-300">
+      <div className="uppa-glass-ios rounded-t-3xl sm:rounded-3xl overflow-hidden transition-all duration-300">
         {/* Barra superior de agarre */}
         <div
           onPointerDown={handlePointerDown}

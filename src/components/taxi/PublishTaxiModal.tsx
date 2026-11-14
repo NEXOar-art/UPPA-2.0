@@ -12,6 +12,7 @@ import {
   marcarSolicitudWhatsappEnviada,
 } from '../../services/realtimeFirebaseService';
 import { calculateDriverSafetyIndex } from '../../utils/driverSafety';
+import { playMicroSound } from '../../utils/soundEffects';
 import {
   X,
   Copy,
@@ -238,6 +239,7 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
     );
 
     // Show generated code and direct WhatsApp anchor to user
+    playMicroSound('payment_done');
     setGeneratedCodeResult(generatedCodeObj.code);
   };
 
