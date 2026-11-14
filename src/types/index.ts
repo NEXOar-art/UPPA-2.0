@@ -186,6 +186,7 @@ export interface HabilitacionChofer {
   indiceSeguridad?: number;
   rating?: number;
   completedRides?: number;
+  whatsappEnviadoEn?: number;
 }
 
 export interface TaxiListing {

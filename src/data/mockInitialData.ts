@@ -1,4 +1,5 @@
 import { TransitRoute, MapEvent, TaxiListing, PaymentProof, ChatMessage, AdListing, LiveBus, User } from '../types';
+import cvAtsBadgeImg from '../assets/images/cv_ats_badge_1794631754333.jpg';
 import {
   LINEA_228_STOPS,
   LINEA_228_COORDINATES,
@@ -291,6 +292,20 @@ export const MOCK_ADS: AdListing[] = [
     imageUrl: 'https://images.unsplash.com/photo-1626785774573-4b799315345d?auto=format&fit=crop&w=400&q=80',
     zone: 'Zárate ↔ Campana',
     discountBadge: '🎨 15% OFF Vecinos',
+    isActive: true,
+  },
+  {
+    id: 'ad-cv-ats',
+    businessName: 'CV-ATS',
+    category: 'Empleo & Desarrollo Profesional',
+    title: 'Hacemos tu CV y carta de presentación',
+    description: 'Redacción profesional de currículum vitae optimizado para filtros ATS y carta de presentación personalizada.',
+    phone: '+54 9 3489 68-6939',
+    linkUrl: 'https://nexoar-art.github.io/CV-ATS/',
+    whatsappUrl: 'https://wa.me/5493489686939?text=Hola%20CV-ATS,%20vengo%20desde%20la%20app%20UPPA',
+    imageUrl: cvAtsBadgeImg,
+    zone: 'Zárate ↔ Campana · Online',
+    discountBadge: '📄 CV + Carta',
     isActive: true,
   },
 ];

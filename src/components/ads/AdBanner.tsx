@@ -64,7 +64,7 @@ export const AdBanner: React.FC<AdBannerProps> = ({ ads, onOpenContactModal }) =
 
   if (activeAds.length === 0) return null;
 
-  const marqueeItems = [...activeAds, ...activeAds, ...activeAds];
+  const marqueeItems = [...activeAds, ...activeAds, ...activeAds, ...activeAds];
 
   return (
     <div
@@ -97,20 +97,20 @@ export const AdBanner: React.FC<AdBannerProps> = ({ ads, onOpenContactModal }) =
 
         {/* Infinite Moving Marquee Track */}
         <div className="flex-1 overflow-hidden relative">
-          <div className="animate-marquee-infinite flex items-center gap-3">
+          <div className="animate-marquee-infinite flex items-center gap-0">
             {marqueeItems.map((ad, idx) => {
               const safeWebUrl = isSafeExternalUrl(ad.linkUrl);
               const safeWaUrl = isSafeExternalUrl(ad.whatsappUrl);
               return (
                 <div
                   key={`${ad.id}-${idx}`}
-                  className="flex items-center gap-2.5 px-3 py-1 rounded-xl bg-[#202329] hover:border-[#FFF19A]/50 border border-white/10 transition-all shrink-0 group"
+                  className="flex items-center gap-2.5 px-3 py-1 rounded-none bg-[#202329] hover:bg-[#272B33] hover:border-[#FFF19A]/50 border-y border-r border-white/15 first:border-l transition-all shrink-0 group"
                 >
                   <a
                     href={safeWebUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="relative w-8 h-8 rounded-lg overflow-hidden shrink-0 border border-white/15"
+                    className="relative w-8 h-8 rounded-none overflow-hidden shrink-0 border border-white/15"
                     title={`Visitar ${ad.businessName}`}
                   >
                     <img
@@ -134,7 +134,7 @@ export const AdBanner: React.FC<AdBannerProps> = ({ ads, onOpenContactModal }) =
                           {ad.businessName}
                         </strong>
                         {ad.discountBadge && (
-                          <span className="text-[9.5px] font-mono font-black text-[#101114] bg-[#FFF19A] px-1.5 py-0.2 rounded shrink-0">
+                          <span className="text-[9.5px] font-mono font-black text-[#101114] bg-[#FFF19A] px-1.5 py-0.2 rounded-none shrink-0">
                             {ad.discountBadge}
                           </span>
                         )}
@@ -150,7 +150,7 @@ export const AdBanner: React.FC<AdBannerProps> = ({ ads, onOpenContactModal }) =
                       href={safeWebUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="h-7 px-2.5 rounded-lg bg-[#101114] hover:bg-white/5 border border-white/15 text-white text-[11px] font-bold flex items-center gap-1 transition-all"
+                      className="h-7 px-2.5 rounded-none bg-[#101114] hover:bg-white/5 border border-white/15 text-white text-[11px] font-bold flex items-center gap-1 transition-all"
                       title={`Abrir sitio web oficial de ${ad.businessName}`}
                     >
                       <span>Web</span>
@@ -162,7 +162,7 @@ export const AdBanner: React.FC<AdBannerProps> = ({ ads, onOpenContactModal }) =
                         href={safeWaUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="h-7 px-2.5 rounded-lg bg-[#B7F36B] hover:bg-[#c5f784] text-[#101114] text-[11px] font-black flex items-center gap-1 transition-all"
+                        className="h-7 px-2.5 rounded-none bg-[#B7F36B] hover:bg-[#c5f784] text-[#101114] text-[11px] font-black flex items-center gap-1 transition-all"
                         title={`Contactar o pedir a ${ad.businessName} por WhatsApp`}
                       >
                         <MessageCircle className="w-3 h-3" />

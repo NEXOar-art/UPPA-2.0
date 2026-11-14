@@ -9,6 +9,7 @@ import {
 } from '../../services/driverActivationService';
 import {
   solicitarHabilitacionChofer,
+  marcarSolicitudWhatsappEnviada,
 } from '../../services/realtimeFirebaseService';
 import { calculateDriverSafetyIndex } from '../../utils/driverSafety';
 import {
@@ -83,11 +84,13 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
 
   // Generated code presentation state
   const [generatedCodeResult, setGeneratedCodeResult] = useState<string | null>(null);
+  const [createdHabId, setCreatedHabId] = useState<string | null>(null);
   const [codeSuccessMsg, setCodeSuccessMsg] = useState<string | null>(null);
 
   useEffect(() => {
     if (isOpen) {
       setGeneratedCodeResult(null);
+      setCreatedHabId(null);
       setErrorMsg('');
       setCodeSuccessMsg(null);
       setDriverName('');
@@ -175,7 +178,7 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
 
     // 2. Register driver request in Firestore and notify Administración UPPA immediately
     try {
-      await solicitarHabilitacionChofer({
+      const createdHab = await solicitarHabilitacionChofer({
         driverId: currentUserId || `usr-driver-${Date.now()}`,
         driverName: driverName.trim(),
         vehicleType,
@@ -192,6 +195,7 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
         cascoExtra: vehicleType === 'moto' ? cascoExtra : false,
         indiceSeguridad: currentSafetyIndex,
       });
+      if (createdHab?.id) setCreatedHabId(createdHab.id);
     } catch (err) {
       console.warn('Sync driver request warning:', err);
     }
@@ -358,6 +362,11 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
                   )}`}
                   target="_blank"
                   rel="noopener noreferrer"
+                  onClick={() => {
+                    if (createdHabId) {
+                      marcarSolicitudWhatsappEnviada(createdHabId);
+                    }
+                  }}
                   title="Enviar comprobante de transferencia al WhatsApp del Administrador"
                   className="w-full min-h-[46px] py-3 px-3 rounded-xl uppa-cta-green text-xs font-black flex items-center justify-center gap-2 cursor-pointer"
                 >

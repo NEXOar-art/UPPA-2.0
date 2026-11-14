@@ -219,6 +219,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       setIsAdminUnlocked(true);
       try {
         sessionStorage.setItem('uppa_admin_unlocked', 'true');
+        window.dispatchEvent(new CustomEvent('uppa-admin-unlock-changed', { detail: true }));
       } catch {}
       setPinError(null);
       showSuccessBanner('¡Acceso administrativo habilitado con éxito!');
@@ -240,6 +241,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       sessionStorage.removeItem('uppa_admin_unlocked');
       localStorage.removeItem('uppa_admin_unlocked');
       sessionStorage.setItem('uppa_admin_unlocked', 'false');
+      window.dispatchEvent(new CustomEvent('uppa-admin-unlock-changed', { detail: false }));
     } catch {}
     setIsAdminUnlocked(false);
     setPinInput('');

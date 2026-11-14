@@ -1531,6 +1531,8 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
       return;
     }
 
+    resetHideTimerRef.current();
+
     // Driver location (or fallback to Campana Centro)
     const driverLat = userLocation?.lat || -34.1683;
     const driverLng = userLocation?.lng || -58.9592;

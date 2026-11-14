@@ -44,6 +44,7 @@ import { DriverConnectionBar } from './components/driver/DriverConnectionBar';
 import { SplashScreen } from './components/splash/SplashScreen';
 import { PedirTransporteModal } from './components/common/PedirTransporteModal';
 import { MobilityBottomSheet } from './components/common/MobilityBottomSheet';
+import { TicketConsultaModal } from './components/common/TicketConsultaModal';
 import { RankingPrestadoresDropdown } from './components/taxi/RankingPrestadoresDropdown';
 import { Linea228Stop } from './data/linea228Stops';
 import { useAuth } from './context/AuthContext';
@@ -92,13 +93,15 @@ import {
   ChevronDown,
   ChevronUp,
   Maximize2,
+  Ticket,
 } from 'lucide-react';
 
 function GlobalHoverTooltip() {
   const [tooltip, setTooltip] = useState<{ text: string; x: number; y: number; placeBelow: boolean } | null>(null);
 
   useEffect(() => {
-    if (typeof window === 'undefined' || !window.matchMedia('(hover: hover)').matches) return;
+    if (typeof window === 'undefined') return;
+    const canHover = window.matchMedia('(hover: hover)').matches;
 
     let currentEl: HTMLElement | null = null;
 
@@ -127,7 +130,9 @@ function GlobalHoverTooltip() {
       setTooltip(null);
     };
 
-    document.addEventListener('mouseover', (e) => showForElement(e.target), { passive: true });
+    document.addEventListener('mouseover', (e) => {
+      if (canHover) showForElement(e.target);
+    }, { passive: true });
     document.addEventListener('focusin', (e) => showForElement(e.target), { passive: true });
     document.addEventListener('mouseout', (e) => {
       if (!currentEl) return;
@@ -209,6 +214,7 @@ export default function App() {
   });
 
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+  const [isTicketModalOpen, setIsTicketModalOpen] = useState(false);
   const [showSplash, setShowSplash] = useState(true);
 
   // Driver Activation Session with paid countdown timer
@@ -275,9 +281,14 @@ export default function App() {
   const [taxis, setTaxis] = useState<TaxiListing[]>([]);
   const [payments, setPayments] = useState<PaymentProof[]>(MOCK_PAYMENTS);
   const [messages, setMessages] = useState<ChatMessage[]>(MOCK_CHAT_MESSAGES);
-  // Publicidades estrictamente reales en el banner (Rotisería Malvinas y Nexo Art)
+  // Publicidades reales en el banner (Rotisería Malvinas, Nexo Art y CV-ATS)
   const [ads, setAds] = useState<AdListing[]>(() =>
-    MOCK_ADS.filter((a) => a.id === 'ad-rotiseria-malvinas' || a.id === 'ad-nexo-art')
+    MOCK_ADS.filter(
+      (a) =>
+        a.id === 'ad-rotiseria-malvinas' ||
+        a.id === 'ad-nexo-art' ||
+        a.id === 'ad-cv-ats'
+    )
   );
 
   // User & Driver Geolocation state
@@ -296,6 +307,67 @@ export default function App() {
     });
     return () => unsub();
   }, []);
+
+  // Control estricto de vista exclusiva de Administrador (Rol admin o sesión desbloqueada por PIN)
+  const [isAdminPinUnlocked, setIsAdminPinUnlocked] = useState<boolean>(() => {
+    try {
+      return sessionStorage.getItem('uppa_admin_unlocked') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    const syncAdminUnlock = () => {
+      try {
+        setIsAdminPinUnlocked(sessionStorage.getItem('uppa_admin_unlocked') === 'true');
+      } catch {
+        setIsAdminPinUnlocked(false);
+      }
+    };
+    window.addEventListener('uppa-admin-unlock-changed', syncAdminUnlock);
+    window.addEventListener('storage', syncAdminUnlock);
+    return () => {
+      window.removeEventListener('uppa-admin-unlock-changed', syncAdminUnlock);
+      window.removeEventListener('storage', syncAdminUnlock);
+    };
+  }, []);
+
+  const isAdminViewer = Boolean(
+    currentUser.role === 'admin' ||
+    isFirebaseAdmin ||
+    currentUser.rol === 'administrador' ||
+    isAdminPinUnlocked
+  );
+  const isAdminViewerRef = useRef(isAdminViewer);
+  isAdminViewerRef.current = isAdminViewer;
+
+  const [adminNowTick, setAdminNowTick] = useState<number>(() => Date.now());
+  useEffect(() => {
+    if (!isAdminViewer) return;
+    setAdminNowTick(Date.now());
+    const timer = setInterval(() => setAdminNowTick(Date.now()), 5000);
+    return () => clearInterval(timer);
+  }, [isAdminViewer]);
+
+  // Solicitudes pendientes de habilitación por WhatsApp (visibles EXCLUSIVAMENTE para el Administrador)
+  const pendingAdminHabilitaciones = useMemo(() => {
+    if (!isAdminViewer) return [];
+    const HABILITACION_TIMEOUT_MS = 25 * 60 * 1000;
+    return habilitacionesList.filter((h) => {
+      if (h.estado !== 'pendiente' || h.id === 'hab-2' || h.driverId === 'drv-carlos') return false;
+      const createdMs =
+        typeof h.createdAt === 'number'
+          ? h.createdAt
+          : h.createdAt?.toMillis
+          ? h.createdAt.toMillis()
+          : h.createdAt
+          ? new Date(h.createdAt).getTime()
+          : 0;
+      if (createdMs > 0 && adminNowTick - createdMs > HABILITACION_TIMEOUT_MS) return false;
+      return true;
+    });
+  }, [isAdminViewer, habilitacionesList, adminNowTick]);
 
   // Habilitación específica del usuario actual (validación estricta por UID cuando existe)
   const userHabilitacionRecord = useMemo(() => {
@@ -545,8 +617,33 @@ export default function App() {
   const [communityChatList, setCommunityChatList] = useState<MensajeChatFirestore[]>([]);
   const [dismissedChatMsgId, setDismissedChatMsgId] = useState<string | null>(null);
 
-  // Eventos Push en Pantalla (Deduplicación & Exposición de 15 Minutos)
+  // Eventos Push en Pantalla (Exposición de 7 segundos para mantener el mapa despejado)
   const [screenPushEvents, setScreenPushEvents] = useState<PushNotificationPayload[]>([]);
+  const selectedEventAutoCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearSelectedEventAutoClose = () => {
+    if (selectedEventAutoCloseTimerRef.current) {
+      clearTimeout(selectedEventAutoCloseTimerRef.current);
+      selectedEventAutoCloseTimerRef.current = null;
+    }
+  };
+
+  const openAutoDismissEvent = (ev: MapEvent) => {
+    clearSelectedEventAutoClose();
+    setSelectedEvent(ev);
+    selectedEventAutoCloseTimerRef.current = setTimeout(() => {
+      setSelectedEvent((prev) => (prev?.id === ev.id ? null : prev));
+      selectedEventAutoCloseTimerRef.current = null;
+    }, 7000);
+  };
+
+  useEffect(() => {
+    return () => {
+      clearSelectedEventAutoClose();
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    };
+  }, []);
 
   // Cerrar menú de 3 puntos y desplegable de perfil al hacer clic afuera
   useEffect(() => {
@@ -564,12 +661,12 @@ export default function App() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isHeaderMenuOpen, isProfileDropdownOpen]);
 
-  // Limpieza periódica de eventos push en pantalla tras 20 segundos de exposición (no 15 minutos)
+  // Limpieza periódica de eventos push en pantalla tras 7 segundos de exposición
   useEffect(() => {
     const cleaner = setInterval(() => {
       const now = Date.now();
       setScreenPushEvents((prev) => prev.filter((ev) => (ev.exposureExpiresAt || 0) > now));
-    }, 1000);
+    }, 500);
     return () => clearInterval(cleaner);
   }, []);
 
@@ -684,6 +781,7 @@ export default function App() {
     const unsubNotif = onPushNotification((notif) => {
       if (!notif) return;
       if (!isRealCommunityReport(notif)) return;
+      if (notif.type === 'admin' && !isAdminViewerRef.current) return;
       showToast(`${notif.title}: ${notif.body}`);
 
       setScreenPushEvents((prev) => {
@@ -701,8 +799,11 @@ export default function App() {
           return prev; // No duplicar en pantalla
         }
 
-        // De lo contrario, se publica con tiempo de exposición en pantalla de 20 segundos (no 15 minutos)
-        const exposureExpiresAt = notif.exposureExpiresAt || Date.now() + 20 * 1000;
+        // Se publica con tiempo de exposición en pantalla de 7 segundos para despejar rápidamente el mapa
+        const maxExpiresAt = Date.now() + 7 * 1000;
+        const exposureExpiresAt = notif.exposureExpiresAt
+          ? Math.min(notif.exposureExpiresAt, maxExpiresAt)
+          : maxExpiresAt;
         return [{ ...notif, exposureExpiresAt }, ...prev];
       });
     });
@@ -722,11 +823,34 @@ export default function App() {
   const watchIdRef = useRef<number | null>(null);
 
   const showToast = (msg: string) => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3000);
+    toastTimerRef.current = setTimeout(() => {
+      setToastMessage(null);
+      toastTimerRef.current = null;
+    }, 3000);
   };
 
   const latestCommunityMessage = communityChatList.length > 0 ? communityChatList[communityChatList.length - 1] : null;
+
+  // Auto-ocultar el contenedor flotante "Ver Chat" tras 7 segundos para despejar el mapa
+  useEffect(() => {
+    if (!latestCommunityMessage?.id) return;
+    if (activeTab === 'chat') {
+      if (dismissedChatMsgId !== latestCommunityMessage.id) {
+        setDismissedChatMsgId(latestCommunityMessage.id);
+      }
+      return;
+    }
+    if (latestCommunityMessage.id === dismissedChatMsgId) return;
+
+    const msgId = latestCommunityMessage.id;
+    const hideChatTimer = setTimeout(() => {
+      setDismissedChatMsgId(msgId);
+    }, 7000);
+
+    return () => clearTimeout(hideChatTimer);
+  }, [latestCommunityMessage?.id, dismissedChatMsgId, activeTab]);
 
   const sentiment = computeLineSentiment(messages, events);
 
@@ -877,6 +1001,7 @@ export default function App() {
   };
 
   const handleReportFalseEvent = (eventId: string) => {
+    clearSelectedEventAutoClose();
     setEvents((prev) => prev.filter((ev) => ev.id !== eventId));
     setSelectedEvent(null);
     showToast('Reporte ocultado');
@@ -894,7 +1019,7 @@ export default function App() {
       expiresAtMs: newEventData.type === 'bus_location' ? now + 60000 : newEventData.expiresAtMs,
     };
     setEvents((prev) => [created, ...prev]);
-    setSelectedEvent(created);
+    openAutoDismissEvent(created);
     setActiveTab('map');
 
     if (newEventData.type === 'bus_location') {
@@ -1132,7 +1257,7 @@ export default function App() {
       isVerified: true,
     };
     setEvents([broadcastEvent, ...events]);
-    setSelectedEvent(broadcastEvent);
+    openAutoDismissEvent(broadcastEvent);
     showToast('Alerta transmitida');
   };
 
@@ -1343,6 +1468,28 @@ export default function App() {
               </div>
             )}
           </div>
+
+          {/* Indicador Azul Titilante Exclusivo del Administrador al lado del Perfil Superior */}
+          {isAdminViewer && pendingAdminHabilitaciones.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setActiveTab('admin')}
+              title={`Habilitación pendiente (${pendingAdminHabilitaciones.length}): El prestador envió solicitud por WhatsApp. Tocá para ir a Administración UPPA y habilitar el servicio`}
+              aria-label="Indicador de habilitación pendiente para Administrador"
+              className="relative min-h-[44px] px-2.5 py-1.5 rounded-xl bg-[#202329] border-2 border-blue-400 text-blue-200 hover:bg-blue-500/15 flex items-center gap-2 cursor-pointer transition-all shrink-0"
+            >
+              <span className="relative flex h-3 w-3 shrink-0">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-90" />
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-blue-500 shadow-[0_0_10px_#3b82f6]" />
+              </span>
+              <span className="text-[11px] font-black text-blue-200 hidden sm:inline whitespace-nowrap">
+                Habilitar ({pendingAdminHabilitaciones.length})
+              </span>
+              <span className="text-[11px] font-black text-blue-200 sm:hidden font-mono">
+                {pendingAdminHabilitaciones.length}
+              </span>
+            </button>
+          )}
 
           {isLoggedIn ? (
             <div className="relative" ref={profileDropdownRef}>
@@ -1597,8 +1744,10 @@ export default function App() {
                         setIsProfileDropdownOpen(false);
                         await firebaseLogout();
                         setIsLoggedIn(false);
+                        setIsAdminPinUnlocked(false);
                         try {
                           localStorage.removeItem('uppa_session_user');
+                          sessionStorage.removeItem('uppa_admin_unlocked');
                         } catch {}
                         showToast('Sesión cerrada');
                       }}
@@ -1657,7 +1806,10 @@ export default function App() {
                 liveBuses={liveBuses}
                 taxis={marketplaceTaxis}
                 selectedEvent={selectedEvent}
-                onSelectEvent={(ev) => setSelectedEvent(ev)}
+                onSelectEvent={(ev) => {
+                  clearSelectedEventAutoClose();
+                  setSelectedEvent(ev);
+                }}
                 onSelectTaxi={(tx) => {
                   setActiveTrackingTaxi(tx);
                   showToast(`Trayectoria con ${tx.driverName}`);
@@ -1703,7 +1855,10 @@ export default function App() {
             <EventBottomSheet
               event={selectedEvent}
               currentUserId={currentUser.id}
-              onClose={() => setSelectedEvent(null)}
+              onClose={() => {
+                clearSelectedEventAutoClose();
+                setSelectedEvent(null);
+              }}
               onConfirm={handleConfirmEvent}
               onReportFalse={handleReportFalseEvent}
               onOpenContextualChat={handleOpenContextualChat}
@@ -1808,8 +1963,8 @@ export default function App() {
       <AdBanner ads={ads} onOpenContactModal={() => setIsContactAdOpen(true)} />
 
       {/* Barra de Navegación Inferior — Android-First Tap Targets */}
-      <nav className="shrink-0 bg-[#101114] border-t-2 border-white/15 px-1.5 py-1.5 z-40 safe-area-pb">
-        <div className="max-w-xl mx-auto grid grid-cols-6 gap-1">
+      <nav className="shrink-0 bg-[#101114] border-t-2 border-white/15 px-1 py-1.5 z-40 safe-area-pb">
+        <div className="max-w-2xl mx-auto grid grid-cols-7 gap-0.5 sm:gap-1">
           {/* Tab 1: Mapa */}
           <button
             onClick={() => setActiveTab('map')}
@@ -1934,11 +2089,35 @@ export default function App() {
             <span className="text-[10px] tracking-tight mt-0.5 font-bold">Chat</span>
           </button>
 
-          {/* Tab 6: Admin */}
+          {/* Tab 6: Ticket de consulta */}
+          <button
+            type="button"
+            onClick={() => setIsTicketModalOpen(true)}
+            title="Ticket de consulta"
+            aria-label="Ticket de consulta"
+            className={`min-h-[48px] py-1 px-0.5 rounded-xl flex flex-col items-center justify-center transition-all cursor-pointer ${
+              isTicketModalOpen
+                ? 'text-[#FFF19A] font-black'
+                : 'text-[#9299A5] hover:text-white'
+            }`}
+          >
+            <div
+              className={`p-1.5 rounded-lg transition-all ${
+                isTicketModalOpen
+                  ? 'bg-[#FFF19A] border border-[#101114] text-[#101114]'
+                  : 'bg-transparent text-[#9299A5]'
+              }`}
+            >
+              <Ticket className="w-4 h-4" />
+            </div>
+            <span className="text-[10px] tracking-tight mt-0.5 font-bold whitespace-nowrap">Ticket</span>
+          </button>
+
+          {/* Tab 7: Admin */}
           <button
             onClick={() => setActiveTab('admin')}
             title="Abrir el panel de Administración UPPA"
-            className={`min-h-[48px] py-1 px-1 rounded-xl flex flex-col items-center justify-center transition-all cursor-pointer ${
+            className={`min-h-[48px] py-1 px-0.5 rounded-xl flex flex-col items-center justify-center transition-all cursor-pointer ${
               activeTab === 'admin'
                 ? 'text-[#FFF19A] font-black'
                 : 'text-[#9299A5] hover:text-white'
@@ -1953,7 +2132,7 @@ export default function App() {
             >
               <Shield className="w-4 h-4" />
             </div>
-            <span className="text-[10px] tracking-tight mt-0.5 font-bold">Admin</span>
+            <span className="text-[10px] tracking-tight mt-0.5 font-bold whitespace-nowrap">Admin</span>
           </button>
         </div>
       </nav>
@@ -2027,6 +2206,17 @@ export default function App() {
         routes={routes}
         events={events}
         taxis={taxis}
+      />
+
+      <TicketConsultaModal
+        isOpen={isTicketModalOpen}
+        onClose={() => setIsTicketModalOpen(false)}
+        currentUserName={currentUser.name}
+        currentUserEmail={currentUser.email}
+        currentUserRole={currentUser.rol || currentUser.role}
+        onSubmitted={() =>
+          showToast('Ticket listo para enviar a uppatransportecolaborativo@gmail.com')
+        }
       />
 
       <AuthModal

@@ -16,7 +16,6 @@ import {
   Flag,
   Reply,
   AtSign,
-  Sparkles,
   Clock,
   Shield,
   Car,
@@ -608,19 +607,25 @@ export const CommunityChat: React.FC<CommunityChatProps> = ({
       {/* Message Stream */}
       <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3.5">
         {filteredMessages.length === 0 ? (
-          <div className="text-center text-xs text-[#9299A5] py-16 space-y-3 max-w-sm mx-auto">
-            <div className="w-12 h-12 rounded-2xl bg-[#202329] border-2 border-[#FFF19A]/40 flex items-center justify-center mx-auto text-[#FFF19A]">
-              <Sparkles className="w-6 h-6 animate-pulse" />
+          searchQuery ? (
+            <div className="text-center text-xs text-[#9299A5] py-16 space-y-3 max-w-sm mx-auto">
+              <div className="w-12 h-12 rounded-2xl bg-[#202329] border-2 border-[#FFF19A]/40 flex items-center justify-center mx-auto text-[#FFF19A]">
+                <MessageSquare className="w-6 h-6" />
+              </div>
+              <h3 className="font-black text-sm text-white uppercase tracking-tight">
+                No hay mensajes que coincidan
+              </h3>
+              <p className="text-[11.5px] leading-relaxed text-[#9299A5]">
+                Probá buscando con otra palabra o limpiando el filtro.
+              </p>
             </div>
-            <h3 className="font-black text-sm text-white uppercase tracking-tight">
-              {searchQuery ? 'No hay mensajes que coincidan' : 'Chat Comunitario en Vivo (100% Real)'}
-            </h3>
-            <p className="text-[11.5px] leading-relaxed text-[#9299A5]">
-              {searchQuery
-                ? 'Probá buscando con otra palabra o limpiando el filtro.'
-                : 'Sin bots ni mensajes simulados. Todo lo publicado aquí proviene de vecinos y choferes reales de Campana y Zárate. ¡Escribí el primer mensaje para consultar el estado del micro o pedir transporte!'}
-            </p>
-          </div>
+          ) : (
+            <div className="h-full min-h-[160px] flex items-center justify-center">
+              <div className="w-12 h-12 rounded-2xl bg-[#202329] border border-white/10 flex items-center justify-center text-[#9299A5]/60">
+                <MessageSquare className="w-5 h-5" />
+              </div>
+            </div>
+          )
         ) : (
           filteredMessages.map((msg) => {
             const isMe = Boolean(

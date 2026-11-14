@@ -46,8 +46,8 @@ export const COL_ANALYTICS = 'analytics';
 // Master Admin Security PIN
 export const ADMIN_MASTER_PIN = '0608';
 
-// Tiempo de exposición en pantalla de eventos push y diagnósticos: 20 segundos exactos (no 15 minutos)
-export const PUSH_EVENT_EXPOSURE_TIME_MS = 20 * 1000;
+// Tiempo de exposición en pantalla de eventos push (reporte, chat): 7 segundos exactos para mantener el mapa despejado
+export const PUSH_EVENT_EXPOSURE_TIME_MS = 7 * 1000;
 
 // Registro de eventos activos para deduplicación: si se repiten, solo se toma 1
 const activePushEventsMap = new Map<string, number>();
@@ -103,7 +103,7 @@ export function triggerInAppPushNotification(
   cleanExpiredPushDeduplicationCache();
   const now = Date.now();
 
-  // Clave de deduplicación: si se repiten eventos idénticos en la ventana de 15 minutos, solo se toma 1
+  // Clave de deduplicación: si se repiten eventos idénticos durante la ventana de exposición, solo se toma 1
   const dedupeKey = `${title.trim().toLowerCase()}::${body.trim().toLowerCase()}::${type}`;
   if (activePushEventsMap.has(dedupeKey)) {
     const previousTime = activePushEventsMap.get(dedupeKey)!;
@@ -113,7 +113,7 @@ export function triggerInAppPushNotification(
     }
   }
 
-  // Registrar momento de publicación con tiempo de exposición de 15 minutos
+  // Registrar momento de publicación con tiempo de exposición de 7 segundos
   activePushEventsMap.set(dedupeKey, now);
 
   const notif: PushNotificationPayload = {
@@ -2022,6 +2022,24 @@ export async function solicitarHabilitacionChofer(data: {
   }
 
   return newHab;
+}
+
+export async function marcarSolicitudWhatsappEnviada(habId: string): Promise<void> {
+  if (!habId) return;
+  const now = Date.now();
+  const current = getCached<HabilitacionChofer[]>('habilitaciones', MOCK_INITIAL_HABILITACIONES);
+  const updated = current.map((h) =>
+    h.id === habId ? { ...h, whatsappEnviadoEn: now } : h
+  );
+  setCached('habilitaciones', updated);
+  notifyHabilitacionesListeners(updated);
+
+  try {
+    const docRef = doc(db, COL_HABILITACIONES, habId);
+    await updateDoc(docRef, { whatsappEnviadoEn: now });
+  } catch (err) {
+    console.warn('Firestore marcarSolicitudWhatsappEnviada notice:', err);
+  }
 }
 
 /**
