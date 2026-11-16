@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAnalytics, isSupported } from 'firebase/analytics';
-import { getAuth, GoogleAuthProvider } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, onAuthStateChanged, signInAnonymously } from 'firebase/auth';
 import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
 
 // Your web app's Firebase configuration
@@ -45,6 +45,116 @@ export async function testFirestoreConnection() {
   }
 }
 
+if (typeof window !== 'undefined') {
+  testFirestoreConnection().catch(() => {});
+}
+
+let pendingAuthReadyPromise: Promise<string | null> | null = null;
+let lastAnonymousAuthErrorCode: string | null = null;
+
+export function getLastAnonymousAuthErrorCode(): string | null {
+  return lastAnonymousAuthErrorCode;
+}
+
+/**
+ * Espera a que Firebase Auth termine de restaurar la sesión y, si no existe un usuario
+ * autenticado, intenta obtener una sesión anónima para que las reglas con `request.auth != null`
+ * permitan leer y escribir en Firestore sin bloquear a usuarios de WhatsApp o acceso rápido.
+ */
+export async function ensureFirebaseAuthSession(): Promise<string | null> {
+  if (auth.currentUser) {
+    return auth.currentUser.uid;
+  }
+
+  if (pendingAuthReadyPromise) {
+    return pendingAuthReadyPromise;
+  }
+
+  pendingAuthReadyPromise = (async () => {
+    try {
+      await new Promise<void>((resolve) => {
+        let settled = false;
+        const timer = setTimeout(() => {
+          if (!settled) {
+            settled = true;
+            unsub();
+            resolve();
+          }
+        }, 1400);
+
+        const unsub = onAuthStateChanged(auth, () => {
+          if (!settled) {
+            settled = true;
+            clearTimeout(timer);
+            unsub();
+            resolve();
+          }
+        });
+      });
+
+      if (auth.currentUser) {
+        return auth.currentUser.uid;
+      }
+
+      if (lastAnonymousAuthErrorCode === 'auth/operation-not-allowed' || lastAnonymousAuthErrorCode === 'auth/admin-restricted-operation') {
+        return null;
+      }
+
+      const cred = await signInAnonymously(auth);
+      lastAnonymousAuthErrorCode = null;
+      return cred.user?.uid || null;
+    } catch (err: any) {
+      const code = err?.code || err?.message || 'unknown';
+      lastAnonymousAuthErrorCode = String(code);
+      console.warn('[UPPA Auth] No se pudo iniciar sesión anónima en Firebase:', code);
+      return auth.currentUser?.uid || null;
+    } finally {
+      pendingAuthReadyPromise = null;
+    }
+  })();
+
+  return pendingAuthReadyPromise;
+}
+
+export function reportFirestorePermissionIssue(error: unknown, operationType: OperationType, path: string | null): void {
+  const rawMsg = error instanceof Error ? error.message : String(error);
+  const code = (error as any)?.code || '';
+  const isPerm =
+    code === 'permission-denied' ||
+    rawMsg.toLowerCase().includes('permission-denied') ||
+    rawMsg.toLowerCase().includes('missing or insufficient permissions');
+
+  if (!isPerm) return;
+
+  const detail = {
+    error: rawMsg,
+    code: code || 'permission-denied',
+    operationType,
+    path,
+    hasAuthUser: Boolean(auth.currentUser),
+    isAnonymous: Boolean(auth.currentUser?.isAnonymous),
+    anonymousAuthBlocked:
+      lastAnonymousAuthErrorCode === 'auth/operation-not-allowed' ||
+      lastAnonymousAuthErrorCode === 'auth/admin-restricted-operation',
+    timestamp: Date.now(),
+  };
+
+  console.warn('[UPPA Firestore Permission Denied]', JSON.stringify(detail));
+  if (typeof window !== 'undefined') {
+    try {
+      window.dispatchEvent(new CustomEvent('uppa-firestore-permission-error', { detail }));
+    } catch {}
+  }
+}
+
+export function notifyFirestoreSyncHealthy(path: string): void {
+  if (typeof window !== 'undefined') {
+    try {
+      window.dispatchEvent(new CustomEvent('uppa-firestore-sync-ok', { detail: { path, timestamp: Date.now() } }));
+    } catch {}
+  }
+}
+
 // Standardized error handler according to security standards
 export enum OperationType {
   CREATE = 'create',
@@ -73,6 +183,7 @@ export interface FirestoreErrorInfo {
 }
 
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null): never {
+  reportFirestorePermissionIssue(error, operationType, path);
   const errInfo: FirestoreErrorInfo = {
     error: error instanceof Error ? error.message : String(error),
     authInfo: {

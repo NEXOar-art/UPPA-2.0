@@ -9,6 +9,7 @@ import {
   getMessageTimestampMs,
   isRealChatMessage,
 } from '../../services/realtimeFirebaseService';
+import { auth, ensureFirebaseAuthSession } from '../../config/firebase';
 import {
   Send,
   MessageSquare,
@@ -33,6 +34,7 @@ import {
   ChevronDown,
   RotateCcw,
   Info,
+  AlertTriangle,
 } from 'lucide-react';
 
 interface CommunityChatProps {
@@ -78,6 +80,11 @@ export const CommunityChat: React.FC<CommunityChatProps> = ({
   const [isSending, setIsSending] = useState<boolean>(false);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [showReactionPickerForId, setShowReactionPickerForId] = useState<string | null>(null);
+  const [firestoreSyncIssue, setFirestoreSyncIssue] = useState<{
+    path?: string | null;
+    anonymousAuthBlocked?: boolean;
+    hasAuthUser?: boolean;
+  } | null>(null);
 
   const [isChannelDropdownOpen, setIsChannelDropdownOpen] = useState(false);
   const [isRoleDropdownOpen, setIsRoleDropdownOpen] = useState(false);
@@ -136,12 +143,38 @@ export const CommunityChat: React.FC<CommunityChatProps> = ({
   }, []);
 
   useEffect(() => {
-    const unsubscribe = subscribeToChat(selectedChannel, (roomMessages) => {
-      setMessages(roomMessages);
-      setTimeout(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-      }, 70);
-    });
+    const onPermError = (ev: Event) => {
+      const detail = (ev as CustomEvent)?.detail;
+      setFirestoreSyncIssue({
+        path: detail?.path,
+        anonymousAuthBlocked: detail?.anonymousAuthBlocked,
+        hasAuthUser: detail?.hasAuthUser,
+      });
+    };
+    const onSyncOk = () => {
+      setFirestoreSyncIssue(null);
+    };
+    window.addEventListener('uppa-firestore-permission-error', onPermError);
+    window.addEventListener('uppa-firestore-sync-ok', onSyncOk);
+    return () => {
+      window.removeEventListener('uppa-firestore-permission-error', onPermError);
+      window.removeEventListener('uppa-firestore-sync-ok', onSyncOk);
+    };
+  }, []);
+
+  useEffect(() => {
+    const unsubscribe = subscribeToChat(
+      selectedChannel,
+      (roomMessages) => {
+        setMessages(roomMessages);
+        setTimeout(() => {
+          messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        }, 70);
+      },
+      () => {
+        // El diagnóstico detallado se propaga por evento `uppa-firestore-permission-error`
+      }
+    );
 
     return () => unsubscribe();
   }, [selectedChannel]);
@@ -292,13 +325,15 @@ export const CommunityChat: React.FC<CommunityChatProps> = ({
     }
   };
 
-  const handleManualRefresh = () => {
+  const handleManualRefresh = async () => {
     setIsRefreshing(true);
-    subscribeToChat(selectedChannel, (roomMessages) => {
-      setMessages(roomMessages);
-      setIsRefreshing(false);
+    try {
+      await ensureFirebaseAuthSession();
+      window.dispatchEvent(new CustomEvent('uppa-firestore-retry-sync'));
       showNotice('Chat sincronizado');
-    });
+    } finally {
+      setTimeout(() => setIsRefreshing(false), 600);
+    }
   };
 
   const getRoleBadge = (rol?: string) => {
@@ -596,6 +631,32 @@ export const CommunityChat: React.FC<CommunityChatProps> = ({
         </div>
       </div>
 
+      {/* Firestore Permission / Sync Notice */}
+      {firestoreSyncIssue && (
+        <div className="px-3 py-2.5 sm:px-4 bg-amber-500/15 border-b border-amber-400/40 flex items-center justify-between gap-3 text-xs text-amber-100 shrink-0">
+          <div className="flex items-start gap-2 min-w-0">
+            <AlertTriangle className="w-4 h-4 text-amber-300 shrink-0 mt-0.5" />
+            <div className="min-w-0 leading-snug">
+              <p className="font-black text-[11px] text-amber-200">
+                Sincronización bloqueada por reglas de Firestore
+              </p>
+              <p className="text-[10.5px] text-amber-100/90">
+                {firestoreSyncIssue.anonymousAuthBlocked
+                  ? 'Habilitá el acceso Anónimo en Firebase Authentication o ingresá con Google/Correo, y verificá las reglas en Firestore.'
+                  : 'Las reglas actuales de Firestore están bloqueando la lectura/escritura comunitaria de mensajes.'}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={handleManualRefresh}
+            className="px-2.5 py-1.5 rounded-lg bg-amber-400 text-[#101114] font-black text-[10.5px] shrink-0 cursor-pointer hover:brightness-95 active:scale-95 transition-all"
+          >
+            Reintentar
+          </button>
+        </div>
+      )}
+
       {/* Context Event Pin Banner */}
       {activeContextEvent && (
         <div className="p-2.5 bg-[#202329] border-b border-[#FFF19A]/30 px-4 flex items-center justify-between text-xs text-white">
@@ -642,8 +703,13 @@ export const CommunityChat: React.FC<CommunityChatProps> = ({
           )
         ) : (
           filteredMessages.map((msg) => {
+            const firebaseAuthUid = auth.currentUser?.uid;
             const isMe = Boolean(
-              myUid ? msg.usuarioId === myUid : msg.nombreUsuario === currentUser.name
+              myUid
+                ? msg.usuarioId === myUid ||
+                  msg.authUid === myUid ||
+                  (firebaseAuthUid && msg.authUid === firebaseAuthUid)
+                : msg.nombreUsuario === currentUser.name
             );
             const roleInfo = getRoleBadge(msg.rol);
             const RoleIcon = roleInfo.icon;

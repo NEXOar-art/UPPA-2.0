@@ -10,18 +10,19 @@
         "email": { "type": "string", "format": "email", "description": "Correo electrónico" },
         "rol": {
           "type": "string",
-          "enum": ["pasajero", "chofer_micro", "chofer_moto", "chofer_auto", "administrador"],
+          "enum": ["pasajero", "chofer_micro", "chofer_moto", "chofer_auto", "administrador", "cliente"],
           "description": "Rol del usuario en la plataforma"
         },
         "esChofer": { "type": "boolean", "description": "Si está prestando servicio como chofer" },
         "tipoVehiculo": { "type": "string", "enum": ["moto", "auto", "micro", null] },
         "activo": { "type": "boolean", "description": "Estado de la cuenta" },
+        "emailVerificado": { "type": "boolean", "description": "Si verificó su correo" },
         "fotoPerfil": { "type": "string", "description": "URL de foto de perfil" },
         "telefono": { "type": "string", "description": "Teléfono de contacto o WhatsApp" },
         "barrio": { "type": "string", "description": "Barrio de Zárate o Campana" },
         "fechaRegistro": { "type": "string", "description": "Fecha de registro ISO" }
       },
-      "required": ["nombre", "email", "rol", "activo"]
+      "required": ["nombre", "email", "rol"]
     },
     "Reporte": {
       "title": "Reporte",
@@ -30,10 +31,11 @@
       "properties": {
         "id": { "type": "string", "description": "ID del reporte" },
         "usuarioId": { "type": "string", "description": "UID del autor" },
+        "authUid": { "type": "string", "description": "UID de sesión Firebase Auth" },
         "nombreUsuario": { "type": "string", "description": "Nombre del usuario desnormalizado" },
         "tipo": {
           "type": "string",
-          "enum": ["demora", "accidente", "corte", "control", "congestion", "alerta"],
+          "enum": ["demora", "accidente", "corte", "control", "congestion", "alerta", "ubicacion_colectivo"],
           "description": "Tipo de evento de tránsito"
         },
         "descripcion": { "type": "string", "description": "Detalle del incidente" },
@@ -46,9 +48,23 @@
           "required": ["lat", "lng"]
         },
         "ruta": { "type": "string", "description": "Ruta asociada (ej: campana-zarate)" },
-        "estado": { "type": "string", "enum": ["activo", "resuelto", "oculto"] }
+        "sentido": { "type": "string", "enum": ["hacia_malvinas", "hacia_zarate"] },
+        "velocidadKmH": { "type": "number" },
+        "estado": { "type": "string", "enum": ["activo", "resuelto", "oculto"] },
+        "confirmaciones": { "type": "number" }
       },
       "required": ["usuarioId", "nombreUsuario", "tipo", "descripcion", "ubicacion", "estado"]
+    },
+    "SalaChat": {
+      "title": "SalaChat",
+      "description": "Sala de chat comunitaria en tiempo real",
+      "type": "object",
+      "properties": {
+        "salaId": { "type": "string" },
+        "activa": { "type": "boolean" },
+        "ultimoMensajeEn": { "type": "number" }
+      },
+      "required": ["salaId"]
     },
     "MensajeChat": {
       "title": "MensajeChat",
@@ -56,12 +72,17 @@
       "type": "object",
       "properties": {
         "id": { "type": "string" },
+        "salaId": { "type": "string" },
         "usuarioId": { "type": "string" },
+        "authUid": { "type": "string" },
         "nombreUsuario": { "type": "string" },
         "texto": { "type": "string" },
         "rol": { "type": "string" },
-        "fotoPerfil": { "type": "string" },
-        "replyTo": { "type": "object" }
+        "avatarUrl": { "type": "string" },
+        "enviadoEn": { "type": "number" },
+        "replyTo": { "type": "object" },
+        "reportado": { "type": "boolean" },
+        "reacciones": { "type": "object" }
       },
       "required": ["usuarioId", "nombreUsuario", "texto"]
     },
@@ -72,15 +93,20 @@
       "properties": {
         "id": { "type": "string" },
         "pasajeroId": { "type": "string" },
+        "authUid": { "type": "string" },
         "nombrePasajero": { "type": "string" },
         "origen": { "type": "string" },
         "destino": { "type": "string" },
         "estado": {
           "type": "string",
-          "enum": ["pendiente", "aceptado", "en_camino", "completado", "cancelado"]
+          "enum": ["pendiente", "aceptado", "en_camino", "completado", "cancelado", "expirada", "anulado"]
         },
         "tipoVehiculoRequerido": { "type": "string", "enum": ["moto", "auto"] },
-        "choferId": { "type": "string" }
+        "choferId": { "type": "string" },
+        "choferNombre": { "type": "string" },
+        "codigoSeguridad": { "type": "string" },
+        "codigoValidado": { "type": "boolean" },
+        "gpsActivadoChofer": { "type": "boolean" }
       },
       "required": ["pasajeroId", "nombrePasajero", "origen", "destino", "estado", "tipoVehiculoRequerido"]
     },
@@ -91,6 +117,7 @@
       "properties": {
         "id": { "type": "string" },
         "driverId": { "type": "string" },
+        "authUid": { "type": "string" },
         "driverName": { "type": "string" },
         "vehicleType": { "type": "string", "enum": ["moto", "auto"] },
         "vehicleModel": { "type": "string" },
@@ -98,6 +125,7 @@
         "zone": { "type": "string" },
         "horas": { "type": "number" },
         "estado": { "type": "string", "enum": ["pendiente", "activo", "expirado", "revocado"] },
+        "disponibilidad": { "type": "string", "enum": ["desocupado", "ocupado"] },
         "activadoConClaveAdmin": { "type": "boolean" },
         "activationCode": { "type": "string" },
         "startsAt": { "type": "number" },
@@ -117,6 +145,104 @@
         "usadoPor": { "type": "string" }
       },
       "required": ["usado", "tipoVehiculo", "creadoEn"]
+    },
+    "CalificacionChofer": {
+      "title": "CalificacionChofer",
+      "description": "Calificación de servicio al finalizar un viaje (ventana de 3 horas para ranking)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "driverId": { "type": "string" },
+        "driverName": { "type": "string" },
+        "pasajeroId": { "type": "string" },
+        "pasajeroNombre": { "type": "string" },
+        "puntuacion": { "type": "number" },
+        "comentario": { "type": "string" },
+        "timestamp": { "type": "number" },
+        "expiresAt": { "type": "number" }
+      },
+      "required": ["driverId", "driverName", "pasajeroId", "puntuacion", "timestamp"]
+    },
+    "Product": {
+      "title": "Product",
+      "description": "Producto o pase UPPA",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "price": { "type": "number" },
+        "category": { "type": "string" },
+        "stock": { "type": "number" },
+        "isActive": { "type": "boolean" }
+      },
+      "required": ["name", "price"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "Orden de compra asociada a un usuario",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "userEmail": { "type": "string" },
+        "userName": { "type": "string" },
+        "items": { "type": "array" },
+        "total": { "type": "number" },
+        "status": { "type": "string", "enum": ["pendiente", "completado", "cancelado"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["userId", "items", "total", "status"]
+    }
+  },
+  "firestore": {
+    "/usuarios/{uid}": {
+      "schema": { "$ref": "#/entities/Usuario" },
+      "description": "Perfiles privados de usuarios UPPA"
+    },
+    "/users/{uid}": {
+      "schema": { "$ref": "#/entities/Usuario" },
+      "description": "Espejo de perfiles de usuarios"
+    },
+    "/reportes/{reporteId}": {
+      "schema": { "$ref": "#/entities/Reporte" },
+      "description": "Reportes comunitarios en tiempo real visibles para todos los usuarios"
+    },
+    "/salas_chat/{salaId}": {
+      "schema": { "$ref": "#/entities/SalaChat" },
+      "description": "Salas de chat comunitario"
+    },
+    "/salas_chat/{salaId}/mensajes/{mensajeId}": {
+      "schema": { "$ref": "#/entities/MensajeChat" },
+      "description": "Mensajes de chat comunitario visibles para todos los usuarios"
+    },
+    "/mensajes_comunitarios/{mensajeId}": {
+      "schema": { "$ref": "#/entities/MensajeChat" },
+      "description": "Canal unificado comunitario visible para todos los usuarios"
+    },
+    "/solicitudes_transporte/{solicitudId}": {
+      "schema": { "$ref": "#/entities/SolicitudTransporte" },
+      "description": "Solicitudes de transporte compartido en vivo"
+    },
+    "/habilitaciones_chofer/{habilitacionId}": {
+      "schema": { "$ref": "#/entities/HabilitacionChofer" },
+      "description": "Habilitaciones de choferes activos y su disponibilidad"
+    },
+    "/codigos_habilitacion/{codigo}": {
+      "schema": { "$ref": "#/entities/CodigoHabilitacion" },
+      "description": "Códigos únicos de activación de chofer"
+    },
+    "/calificaciones_chofer/{calId}": {
+      "schema": { "$ref": "#/entities/CalificacionChofer" },
+      "description": "Calificaciones del ranking de prestadores de las últimas 3 horas"
+    },
+    "/products/{productId}": {
+      "schema": { "$ref": "#/entities/Product" },
+      "description": "Catálogo de pases y servicios UPPA"
+    },
+    "/orders/{orderId}": {
+      "schema": { "$ref": "#/entities/Order" },
+      "description": "Pedidos privados de usuarios"
     }
   }
 }

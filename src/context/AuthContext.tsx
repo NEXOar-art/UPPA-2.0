@@ -14,7 +14,7 @@ import {
   GoogleAuthProvider,
   User as FirebaseUser,
 } from 'firebase/auth';
-import { auth, googleProvider } from '../config/firebase';
+import { auth, ensureFirebaseAuthSession, googleProvider } from '../config/firebase';
 import { createUserDocument, getUserDocument, updateUserDocument } from '../services/firestoreService';
 
 interface RegisterExtraData {
@@ -289,6 +289,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         esChofer: isChofer,
       });
 
+      if (!fbUid) {
+        fbUid = (await ensureFirebaseAuthSession()) || '';
+      }
+
       const effectiveUid = fbUid || registered.uid || registered.id;
       const finalUser: User = {
         ...registered,
@@ -303,7 +307,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         barrio: extraData?.barrio || registered.barrio,
       };
 
-      // Guardar también en Firestore collection 'usuarios'
+      // Guardar también en Firestore collection 'usuarios' bajo el UID autenticado
       createUserDocument(effectiveUid, {
         nombre: cleanName,
         email: cleanEmail,
@@ -372,6 +376,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       // 2. Autenticar con el servicio para asegurar perfil completo
+      if (!fbUid) {
+        fbUid = (await ensureFirebaseAuthSession()) || '';
+      }
       const logged = await authService.login(cleanEmail, cleanPass);
       const effectiveUid = fbUid || logged.uid || logged.id;
 
@@ -516,21 +523,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } catch {}
 
       let existingProfile: User | null = storedWaProfiles[digits] || null;
-      let fbUid = waDocUid;
+      let fbUid = '';
 
       try {
-        if (!auth.currentUser) {
-          const anonCred = await signInAnonymously(auth);
-          if (anonCred?.user?.uid) {
-            fbUid = anonCred.user.uid;
-          }
-        } else {
-          fbUid = auth.currentUser.uid;
-        }
+        fbUid = (await ensureFirebaseAuthSession()) || '';
       } catch {}
 
       try {
-        const fsByWa = await getUserDocument(waDocUid);
+        const lookupUid = fbUid || waDocUid;
+        const fsByWa = await getUserDocument(lookupUid);
         if (fsByWa) {
           existingProfile = {
             id: fsByWa.uid || waDocUid,
@@ -593,7 +594,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       const registroFecha = finalUser.fechaRegistro || new Date().toISOString();
       try {
-        await createUserDocument(waDocUid, {
+        const targetUid = fbUid || waDocUid;
+        await createUserDocument(targetUid, {
           nombre: finalUser.nombre || finalUser.name,
           email: finalUser.email,
           rol: selectedRol,
@@ -606,21 +608,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           estado: 'activo',
           fechaRegistro: registroFecha,
         });
-        if (fbUid && fbUid !== waDocUid) {
-          await createUserDocument(fbUid, {
-            nombre: finalUser.nombre || finalUser.name,
-            email: finalUser.email,
-            rol: selectedRol,
-            esChofer: finalUser.esChofer,
-            tipoVehiculo: finalUser.tipoVehiculo ?? null,
-            phone: finalUser.phone,
-            barrio: finalUser.barrio,
-            avatarUrl: finalUser.avatarUrl,
-            emailVerificado: true,
-            estado: 'activo',
-            fechaRegistro: registroFecha,
-          });
-        }
       } catch {}
 
       try {

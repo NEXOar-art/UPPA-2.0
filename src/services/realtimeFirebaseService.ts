@@ -15,7 +15,16 @@ import {
   Timestamp,
   increment,
 } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from '../config/firebase';
+import { onAuthStateChanged } from 'firebase/auth';
+import {
+  auth,
+  db,
+  ensureFirebaseAuthSession,
+  handleFirestoreError,
+  notifyFirestoreSyncHealthy,
+  OperationType,
+  reportFirestorePermissionIssue,
+} from '../config/firebase';
 import {
   UsuarioFirestore,
   ReporteFirestore,
@@ -79,6 +88,89 @@ function setCached<T>(key: string, data: T) {
   } catch (e) {
     console.warn('LocalStorage cache write error:', e);
   }
+}
+
+/**
+ * Envuelve suscripciones onSnapshot para que:
+ * 1) Esperen a la inicialización de Firebase Auth (incluyendo acceso anónimo si aplica).
+ * 2) Se re-suscriban automáticamente cuando cambie el usuario autenticado (ej: al iniciar sesión con Google/Email/WhatsApp).
+ * 3) Permitan reintento manual global vía evento `uppa-firestore-retry-sync`.
+ */
+function subscribeWithAuthResync(
+  attachFirestoreListener: () => () => void,
+  pathLabel: string
+): () => void {
+  let disposed = false;
+  let activeUnsub: (() => void) | null = null;
+  let currentUid: string | undefined = auth.currentUser?.uid;
+
+  const reattach = () => {
+    if (disposed) return;
+    if (activeUnsub) {
+      try {
+        activeUnsub();
+      } catch {}
+      activeUnsub = null;
+    }
+    try {
+      activeUnsub = attachFirestoreListener();
+    } catch (err) {
+      reportFirestorePermissionIssue(err, OperationType.LIST, pathLabel);
+    }
+  };
+
+  // Adjuntar inicialmente tras asegurar sesión Firebase Auth
+  ensureFirebaseAuthSession()
+    .then((uid) => {
+      if (disposed) return;
+      currentUid = uid || auth.currentUser?.uid;
+      reattach();
+    })
+    .catch(() => {
+      if (!disposed) reattach();
+    });
+
+  // Re-suscribir automáticamente si cambia la sesión Firebase (login/logout)
+  const unsubAuth = onAuthStateChanged(auth, (fbUser) => {
+    if (disposed) return;
+    const nextUid = fbUser?.uid;
+    if (nextUid && nextUid !== currentUid) {
+      currentUid = nextUid;
+      reattach();
+    }
+  });
+
+  // Re-suscribir ante reintento manual del usuario
+  const handleManualRetry = () => {
+    if (disposed) return;
+    ensureFirebaseAuthSession()
+      .then((uid) => {
+        if (disposed) return;
+        currentUid = uid || auth.currentUser?.uid;
+        reattach();
+      })
+      .catch(() => {
+        if (!disposed) reattach();
+      });
+  };
+
+  if (typeof window !== 'undefined') {
+    window.addEventListener('uppa-firestore-retry-sync', handleManualRetry);
+  }
+
+  return () => {
+    disposed = true;
+    unsubAuth();
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('uppa-firestore-retry-sync', handleManualRetry);
+    }
+    if (activeUnsub) {
+      try {
+        activeUnsub();
+      } catch {}
+      activeUnsub = null;
+    }
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -195,21 +287,27 @@ export function subscribeToUsuarios(
   onError?: (error: any) => void
 ) {
   const colRef = collection(db, COL_USUARIOS);
-  return onSnapshot(
-    colRef,
-    (snapshot) => {
-      const list: UsuarioFirestore[] = snapshot.docs.map((d) => ({
-        uid: d.id,
-        ...(d.data() as Omit<UsuarioFirestore, 'uid'>),
-      }));
-      setCached('usuarios', list);
-      callback(list);
-    },
-    (err) => {
-      console.warn('Firestore usuarios subscription offline/error:', err);
-      if (onError) onError(err);
-      callback(getCached<UsuarioFirestore[]>('usuarios', []));
-    }
+  return subscribeWithAuthResync(
+    () =>
+      onSnapshot(
+        colRef,
+        (snapshot) => {
+          notifyFirestoreSyncHealthy(COL_USUARIOS);
+          const list: UsuarioFirestore[] = snapshot.docs.map((d) => ({
+            uid: d.id,
+            ...(d.data() as Omit<UsuarioFirestore, 'uid'>),
+          }));
+          setCached('usuarios', list);
+          callback(list);
+        },
+        (err) => {
+          console.warn('Firestore usuarios subscription offline/error:', err);
+          reportFirestorePermissionIssue(err, OperationType.LIST, COL_USUARIOS);
+          if (onError) onError(err);
+          callback(getCached<UsuarioFirestore[]>('usuarios', []));
+        }
+      ),
+    COL_USUARIOS
   );
 }
 
@@ -434,35 +532,41 @@ export function subscribeToReportes(
   const colRef = collection(db, COL_REPORTES);
   const q = query(colRef, orderBy('creadoEn', 'desc'));
 
-  return onSnapshot(
-    q,
-    (snapshot) => {
-      const realReports: ReporteFirestore[] = [];
-      snapshot.docs.forEach((d) => {
-        const data = {
-          id: d.id,
-          ...(d.data() as Omit<ReporteFirestore, 'id'>),
-        };
-        if (isRealCommunityReport(data)) {
-          realReports.push(data);
-        } else {
-          // Si existe un documento simulado en Firestore, eliminarlo definitivamente
-          try {
-            deleteDoc(doc(db, COL_REPORTES, d.id)).catch(() => {});
-          } catch {}
-        }
-      });
+  return subscribeWithAuthResync(
+    () =>
+      onSnapshot(
+        q,
+        (snapshot) => {
+          notifyFirestoreSyncHealthy(COL_REPORTES);
+          const realReports: ReporteFirestore[] = [];
+          snapshot.docs.forEach((d) => {
+            const data = {
+              id: d.id,
+              ...(d.data() as Omit<ReporteFirestore, 'id'>),
+            };
+            if (isRealCommunityReport(data)) {
+              realReports.push(data);
+            } else {
+              // Si existe un documento simulado en Firestore, eliminarlo definitivamente
+              try {
+                deleteDoc(doc(db, COL_REPORTES, d.id)).catch(() => {});
+              } catch {}
+            }
+          });
 
-      setCached('reportes', realReports);
-      callback(realReports);
-    },
-    (err) => {
-      console.warn('Firestore reportes onSnapshot error/offline fallback:', err);
-      if (onError) onError(err);
-      const cached = getCached<ReporteFirestore[]>('reportes', []);
-      const realOnly = (cached || []).filter(isRealCommunityReport);
-      callback(realOnly);
-    }
+          setCached('reportes', realReports);
+          callback(realReports);
+        },
+        (err) => {
+          console.warn('Firestore reportes onSnapshot error/offline fallback:', err);
+          reportFirestorePermissionIssue(err, OperationType.LIST, COL_REPORTES);
+          if (onError) onError(err);
+          const cached = getCached<ReporteFirestore[]>('reportes', []);
+          const realOnly = (cached || []).filter(isRealCommunityReport);
+          callback(realOnly);
+        }
+      ),
+    COL_REPORTES
   );
 }
 
@@ -479,11 +583,13 @@ export async function crearReporte(data: {
   const path = COL_REPORTES;
   const now = Date.now();
   try {
+    await ensureFirebaseAuthSession();
     const colRef = collection(db, COL_REPORTES);
     const newDoc = doc(colRef);
 
     const nuevoReporte: any = {
       usuarioId: data.usuarioId,
+      authUid: auth.currentUser?.uid || null,
       nombreUsuario: data.nombreUsuario,
       tipo: data.tipo,
       descripcion: data.descripcion,
@@ -499,6 +605,7 @@ export async function crearReporte(data: {
     };
 
     await setDoc(newDoc, nuevoReporte);
+    notifyFirestoreSyncHealthy(path);
 
     // Trigger instant FCM / in-app push notification
     const typeLabel =
@@ -524,6 +631,7 @@ export async function crearReporte(data: {
     return { id: newDoc.id, ...nuevoReporte, creadoEn: now };
   } catch (error) {
     console.warn('Firestore crearReporte notice (fallback local):', error);
+    reportFirestorePermissionIssue(error, OperationType.CREATE, path);
     const localId = `rep-local-${now}`;
     const fallbackReport: ReporteFirestore = {
       id: localId,
@@ -772,98 +880,114 @@ export function subscribeToChat(
   }
   emitActiveMessages(initialCache);
 
-  // 1. Suscripción a la subcolección principal
-  const unsubFirestore = onSnapshot(
-    q,
-    (snapshot) => {
-      const remoteList: MensajeChatFirestore[] = snapshot.docs
-        .map((d) => {
-          const dData = d.data();
-          return {
-            id: d.id,
-            salaId: dData.salaId || safeSala,
-            usuarioId: dData.usuarioId || 'usr',
-            nombreUsuario: dData.nombreUsuario || 'Vecino UPPA',
-            texto: dData.texto || '',
-            rol: dData.rol || 'pasajero',
-            avatarUrl: dData.avatarUrl,
-            enviadoEn: getMessageTimestampMs(dData.enviadoEn || dData.timestampMs),
-            replyTo: dData.replyTo,
-            reportado: dData.reportado,
-            reacciones: dData.reacciones || {},
-          };
-        })
-        .filter((m) => isRealChatMessage(m));
+  // 1 y 2. Suscripciones a Firestore envueltas con resincronización automática tras Auth
+  const unsubFirestoreSynced = subscribeWithAuthResync(() => {
+    const unsubRoom = onSnapshot(
+      q,
+      (snapshot) => {
+        notifyFirestoreSyncHealthy(`${COL_SALAS_CHAT}/${safeSala}/${COL_MENSAJES}`);
+        const remoteList: MensajeChatFirestore[] = snapshot.docs
+          .map((d) => {
+            const dData = d.data();
+            return {
+              id: d.id,
+              salaId: dData.salaId || safeSala,
+              usuarioId: dData.usuarioId || 'usr',
+              authUid: dData.authUid,
+              nombreUsuario: dData.nombreUsuario || 'Vecino UPPA',
+              texto: dData.texto || '',
+              rol: dData.rol || 'pasajero',
+              avatarUrl: dData.avatarUrl,
+              enviadoEn: getMessageTimestampMs(dData.enviadoEn || dData.timestampMs),
+              replyTo: dData.replyTo,
+              reportado: dData.reportado,
+              reacciones: dData.reacciones || {},
+            };
+          })
+          .filter((m) => isRealChatMessage(m));
 
-      // Fusionar mensajes de Firestore con locales sin perder nada
-      const mergedMap = new Map<string, MensajeChatFirestore>();
-      for (const m of currentMessages) {
-        if (isRealChatMessage(m) && isChatMessageValid(m.enviadoEn)) {
-          mergedMap.set(m.id, m);
+        // Fusionar mensajes de Firestore con locales sin perder nada
+        const mergedMap = new Map<string, MensajeChatFirestore>();
+        for (const m of currentMessages) {
+          if (isRealChatMessage(m) && isChatMessageValid(m.enviadoEn)) {
+            mergedMap.set(m.id, m);
+          }
         }
-      }
-      for (const m of remoteList) {
-        if (isRealChatMessage(m) && isChatMessageValid(m.enviadoEn)) {
-          mergedMap.set(m.id, m);
+        for (const m of remoteList) {
+          if (isRealChatMessage(m) && isChatMessageValid(m.enviadoEn)) {
+            mergedMap.set(m.id, m);
+          }
         }
-      }
 
-      emitActiveMessages(Array.from(mergedMap.values()));
-    },
-    (err) => {
-      console.warn(`Firestore chat sala ${safeSala} onSnapshot notice:`, err);
-      if (onError) onError(err);
-      emitActiveMessages(getCached<MensajeChatFirestore[]>(`chat_${safeSala}`, currentMessages));
+        emitActiveMessages(Array.from(mergedMap.values()));
+      },
+      (err) => {
+        console.warn(`Firestore chat sala ${safeSala} onSnapshot notice:`, err);
+        reportFirestorePermissionIssue(err, OperationType.LIST, `${COL_SALAS_CHAT}/${safeSala}/${COL_MENSAJES}`);
+        if (onError) onError(err);
+        emitActiveMessages(getCached<MensajeChatFirestore[]>(`chat_${safeSala}`, currentMessages));
+      }
+    );
+
+    let unsubGlobal = () => {};
+    if (safeSala === 'todos') {
+      try {
+        const globalColRef = collection(db, COL_MENSAJES_GLOBAL);
+        const qGlobal = query(globalColRef, orderBy('enviadoEn', 'asc'), limitToLast(250));
+        unsubGlobal = onSnapshot(
+          qGlobal,
+          (snap) => {
+            notifyFirestoreSyncHealthy(COL_MENSAJES_GLOBAL);
+            const list: MensajeChatFirestore[] = snap.docs
+              .map((d) => {
+                const data = d.data();
+                return {
+                  id: d.id,
+                  salaId: data.salaId || 'todos',
+                  usuarioId: data.usuarioId || 'usr',
+                  authUid: data.authUid,
+                  nombreUsuario: data.nombreUsuario || 'Vecino UPPA',
+                  texto: data.texto || '',
+                  rol: data.rol || 'pasajero',
+                  avatarUrl: data.avatarUrl,
+                  enviadoEn: getMessageTimestampMs(data.enviadoEn || data.timestampMs),
+                  replyTo: data.replyTo,
+                  reportado: data.reportado,
+                  reacciones: data.reacciones || {},
+                };
+              })
+              .filter((m) => isRealChatMessage(m));
+            const mergedMap = new Map<string, MensajeChatFirestore>();
+            for (const m of currentMessages) {
+              if (isRealChatMessage(m) && isChatMessageValid(m.enviadoEn)) mergedMap.set(m.id, m);
+            }
+            for (const m of list) {
+              if (isRealChatMessage(m) && isChatMessageValid(m.enviadoEn)) mergedMap.set(m.id, m);
+            }
+            emitActiveMessages(Array.from(mergedMap.values()));
+          },
+          (globalErr) => {
+            console.warn(`Firestore ${COL_MENSAJES_GLOBAL} onSnapshot notice:`, globalErr);
+            reportFirestorePermissionIssue(globalErr, OperationType.LIST, COL_MENSAJES_GLOBAL);
+            if (onError) onError(globalErr);
+          }
+        );
+      } catch (e) {
+        reportFirestorePermissionIssue(e, OperationType.LIST, COL_MENSAJES_GLOBAL);
+      }
     }
-  );
 
-  // 2. Si estamos en 'todos', también nos suscribimos a la colección unificada comunitaria
-  let unsubGlobal = () => {};
-  if (safeSala === 'todos') {
-    try {
-      const globalColRef = collection(db, COL_MENSAJES_GLOBAL);
-      const qGlobal = query(globalColRef, orderBy('enviadoEn', 'asc'), limitToLast(250));
-      unsubGlobal = onSnapshot(
-        qGlobal,
-        (snap) => {
-          const list: MensajeChatFirestore[] = snap.docs
-            .map((d) => {
-              const data = d.data();
-              return {
-                id: d.id,
-                salaId: data.salaId || 'todos',
-                usuarioId: data.usuarioId || 'usr',
-                nombreUsuario: data.nombreUsuario || 'Vecino UPPA',
-                texto: data.texto || '',
-                rol: data.rol || 'pasajero',
-                avatarUrl: data.avatarUrl,
-                enviadoEn: getMessageTimestampMs(data.enviadoEn || data.timestampMs),
-                replyTo: data.replyTo,
-                reportado: data.reportado,
-                reacciones: data.reacciones || {},
-              };
-            })
-            .filter((m) => isRealChatMessage(m));
-          const mergedMap = new Map<string, MensajeChatFirestore>();
-          for (const m of currentMessages) {
-            if (isRealChatMessage(m) && isChatMessageValid(m.enviadoEn)) mergedMap.set(m.id, m);
-          }
-          for (const m of list) {
-            if (isRealChatMessage(m) && isChatMessageValid(m.enviadoEn)) mergedMap.set(m.id, m);
-          }
-          emitActiveMessages(Array.from(mergedMap.values()));
-        },
-        () => {}
-      );
-    } catch {}
-  }
+    return () => {
+      unsubRoom();
+      unsubGlobal();
+    };
+  }, `${COL_SALAS_CHAT}/${safeSala}/${COL_MENSAJES}`);
 
   return () => {
     if (chatBroadcastChannel) {
       chatBroadcastChannel.removeEventListener('message', handleBroadcast);
     }
-    unsubFirestore();
-    unsubGlobal();
+    unsubFirestoreSynced();
   };
 }
 
@@ -887,6 +1011,7 @@ export async function enviarMensajeChat(
     id: generatedId,
     salaId: safeSala,
     usuarioId: data.usuarioId,
+    authUid: auth.currentUser?.uid || undefined,
     nombreUsuario: data.nombreUsuario || 'Vecino UPPA',
     texto: cleanText,
     rol: (data.rol as any) || 'pasajero',
@@ -930,12 +1055,14 @@ export async function enviarMensajeChat(
     );
   } catch (e) {}
 
-  // 4. Guardar en Firestore: en 'todos', en la sala específica y en la colección raíz 'mensajes_comunitarios'
+  // 4. Guardar en Firestore asegurando sesión Firebase Auth y existencia del documento padre salas_chat/{salaId}
   try {
+    const authUid = await ensureFirebaseAuthSession();
     const firestorePayload: any = {
       id: generatedId,
       salaId: safeSala,
       usuarioId: data.usuarioId,
+      authUid: authUid || null,
       nombreUsuario: data.nombreUsuario || 'Vecino UPPA',
       texto: cleanText,
       rol: data.rol || 'pasajero',
@@ -949,24 +1076,54 @@ export async function enviarMensajeChat(
       firestorePayload.replyTo = data.replyTo;
     }
 
-    // Colección global en salas_chat
+    // Asegurar documentos padre en salas_chat para cumplir reglas con exists()
+    const todosRoomRef = doc(db, COL_SALAS_CHAT, 'todos');
+    await setDoc(todosRoomRef, { salaId: 'todos', activa: true, ultimoMensajeEn: now }, { merge: true }).catch(() => {});
+
+    if (safeSala !== 'todos') {
+      const specificRoomRef = doc(db, COL_SALAS_CHAT, safeSala);
+      await setDoc(specificRoomRef, { salaId: safeSala, activa: true, ultimoMensajeEn: now }, { merge: true }).catch(() => {});
+    }
+
+    const writes: Promise<void>[] = [];
+
     const globalRef = doc(db, COL_SALAS_CHAT, 'todos', COL_MENSAJES, generatedId);
-    setDoc(globalRef, firestorePayload).catch((fsErr) => {
-      console.warn('Firestore setDoc global chat notice:', fsErr);
-    });
+    writes.push(
+      setDoc(globalRef, firestorePayload)
+        .then(() => notifyFirestoreSyncHealthy(`${COL_SALAS_CHAT}/todos/${COL_MENSAJES}/${generatedId}`))
+        .catch((fsErr) => {
+          console.warn('Firestore setDoc global chat notice:', fsErr);
+          reportFirestorePermissionIssue(fsErr, OperationType.CREATE, `${COL_SALAS_CHAT}/todos/${COL_MENSAJES}/${generatedId}`);
+        })
+    );
 
     if (safeSala !== 'todos') {
       const specificRef = doc(db, COL_SALAS_CHAT, safeSala, COL_MENSAJES, generatedId);
-      setDoc(specificRef, firestorePayload).catch((fsErr) => {
-        console.warn('Firestore setDoc specific chat notice:', fsErr);
-      });
+      writes.push(
+        setDoc(specificRef, firestorePayload)
+          .then(() => notifyFirestoreSyncHealthy(`${COL_SALAS_CHAT}/${safeSala}/${COL_MENSAJES}/${generatedId}`))
+          .catch((fsErr) => {
+            console.warn('Firestore setDoc specific chat notice:', fsErr);
+            reportFirestorePermissionIssue(fsErr, OperationType.CREATE, `${COL_SALAS_CHAT}/${safeSala}/${COL_MENSAJES}/${generatedId}`);
+          })
+      );
     }
 
     // Colección raíz para acceso de toda la comunidad sin filtros
     const rootRef = doc(db, COL_MENSAJES_GLOBAL, generatedId);
-    setDoc(rootRef, firestorePayload).catch(() => {});
+    writes.push(
+      setDoc(rootRef, firestorePayload)
+        .then(() => notifyFirestoreSyncHealthy(`${COL_MENSAJES_GLOBAL}/${generatedId}`))
+        .catch((fsErr) => {
+          console.warn('Firestore setDoc mensajes_comunitarios notice:', fsErr);
+          reportFirestorePermissionIssue(fsErr, OperationType.CREATE, `${COL_MENSAJES_GLOBAL}/${generatedId}`);
+        })
+    );
+
+    await Promise.allSettled(writes);
   } catch (fsErr) {
     console.warn('Firestore setDoc notice:', fsErr);
+    reportFirestorePermissionIssue(fsErr, OperationType.CREATE, `${COL_SALAS_CHAT}/${safeSala}/${COL_MENSAJES}`);
   }
 
   return localMessage;
@@ -1006,35 +1163,58 @@ export async function reaccionarMensajeChat(
 
   // Actualizar en Firestore en las tres colecciones
   try {
+    await ensureFirebaseAuthSession();
     const fieldKey = `reacciones.${emoji}`;
     const todosDocRef = doc(db, COL_SALAS_CHAT, 'todos', COL_MENSAJES, mensajeId);
-    updateDoc(todosDocRef, { [fieldKey]: increment(1) }).catch(() => {});
+    updateDoc(todosDocRef, { [fieldKey]: increment(1) }).catch((e) => {
+      reportFirestorePermissionIssue(e, OperationType.UPDATE, `${COL_SALAS_CHAT}/todos/${COL_MENSAJES}/${mensajeId}`);
+    });
 
     if (safeSala !== 'todos') {
       const specificDocRef = doc(db, COL_SALAS_CHAT, safeSala, COL_MENSAJES, mensajeId);
-      updateDoc(specificDocRef, { [fieldKey]: increment(1) }).catch(() => {});
+      updateDoc(specificDocRef, { [fieldKey]: increment(1) }).catch((e) => {
+        reportFirestorePermissionIssue(e, OperationType.UPDATE, `${COL_SALAS_CHAT}/${safeSala}/${COL_MENSAJES}/${mensajeId}`);
+      });
     }
 
     const rootDocRef = doc(db, COL_MENSAJES_GLOBAL, mensajeId);
-    updateDoc(rootDocRef, { [fieldKey]: increment(1) }).catch(() => {});
+    updateDoc(rootDocRef, { [fieldKey]: increment(1) }).catch((e) => {
+      reportFirestorePermissionIssue(e, OperationType.UPDATE, `${COL_MENSAJES_GLOBAL}/${mensajeId}`);
+    });
   } catch {}
 }
 
 export async function eliminarMensajeChat(salaId: string, mensajeId: string): Promise<void> {
-  const path = `${COL_SALAS_CHAT}/${salaId}/${COL_MENSAJES}/${mensajeId}`;
+  const safeSala = salaId || 'todos';
+  const path = `${COL_SALAS_CHAT}/${safeSala}/${COL_MENSAJES}/${mensajeId}`;
   try {
-    const docRef = doc(db, COL_SALAS_CHAT, salaId, COL_MENSAJES, mensajeId);
-    await deleteDoc(docRef);
+    chatBroadcastChannel?.postMessage({
+      type: 'DELETE_CHAT_MESSAGE',
+      messageId: mensajeId,
+    });
+  } catch {}
+
+  try {
+    await ensureFirebaseAuthSession();
+    const writes: Promise<void>[] = [
+      deleteDoc(doc(db, COL_SALAS_CHAT, safeSala, COL_MENSAJES, mensajeId)).catch(() => {}),
+      deleteDoc(doc(db, COL_SALAS_CHAT, 'todos', COL_MENSAJES, mensajeId)).catch(() => {}),
+      deleteDoc(doc(db, COL_MENSAJES_GLOBAL, mensajeId)).catch(() => {}),
+    ];
+    await Promise.allSettled(writes);
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, path);
   }
 }
 
 export async function reportarMensajeChat(salaId: string, mensajeId: string): Promise<void> {
-  const path = `${COL_SALAS_CHAT}/${salaId}/${COL_MENSAJES}/${mensajeId}`;
+  const safeSala = salaId || 'todos';
+  const path = `${COL_SALAS_CHAT}/${safeSala}/${COL_MENSAJES}/${mensajeId}`;
   try {
-    const docRef = doc(db, COL_SALAS_CHAT, salaId, COL_MENSAJES, mensajeId);
+    await ensureFirebaseAuthSession();
+    const docRef = doc(db, COL_SALAS_CHAT, safeSala, COL_MENSAJES, mensajeId);
     await updateDoc(docRef, { reportado: true });
+    updateDoc(doc(db, COL_MENSAJES_GLOBAL, mensajeId), { reportado: true }).catch(() => {});
     triggerInAppPushNotification(
       '⚠️ Mensaje reportado por la comunidad',
       'El mensaje ha sido marcado para moderación administrativa.',
@@ -1225,22 +1405,28 @@ export function subscribeToSolicitudesTransporte(
   const colRef = collection(db, COL_SOLICITUDES);
   const q = query(colRef, orderBy('fechaSolicitud', 'desc'));
 
-  const unsubFirestore = onSnapshot(
-    q,
-    (snapshot) => {
-      const list: SolicitudTransporteFirestore[] = snapshot.docs.map((d) => ({
-        id: d.id,
-        ...(d.data() as Omit<SolicitudTransporteFirestore, 'id'>),
-      }));
-      currentSolicitudes = list;
-      setCached('solicitudes', list);
-      callback(list);
-    },
-    (err) => {
-      console.warn('Firestore solicitudes onSnapshot error/offline fallback:', err);
-      if (onError) onError(err);
-      callback(getCached<SolicitudTransporteFirestore[]>('solicitudes', currentSolicitudes));
-    }
+  const unsubFirestore = subscribeWithAuthResync(
+    () =>
+      onSnapshot(
+        q,
+        (snapshot) => {
+          notifyFirestoreSyncHealthy(COL_SOLICITUDES);
+          const list: SolicitudTransporteFirestore[] = snapshot.docs.map((d) => ({
+            id: d.id,
+            ...(d.data() as Omit<SolicitudTransporteFirestore, 'id'>),
+          }));
+          currentSolicitudes = list;
+          setCached('solicitudes', list);
+          callback(list);
+        },
+        (err) => {
+          console.warn('Firestore solicitudes onSnapshot error/offline fallback:', err);
+          reportFirestorePermissionIssue(err, OperationType.LIST, COL_SOLICITUDES);
+          if (onError) onError(err);
+          callback(getCached<SolicitudTransporteFirestore[]>('solicitudes', currentSolicitudes));
+        }
+      ),
+    COL_SOLICITUDES
   );
 
   return () => {
@@ -1316,14 +1502,18 @@ export async function crearSolicitudTransporte(data: {
 
   // 4. Escribir en Firestore
   try {
+    const authUid = await ensureFirebaseAuthSession();
     const docRef = doc(db, COL_SOLICITUDES, localId);
     await setDoc(docRef, {
       ...nuevaSolicitud,
+      authUid: authUid || null,
       fechaSolicitud: serverTimestamp(),
       expiresAt,
     });
+    notifyFirestoreSyncHealthy(`${COL_SOLICITUDES}/${localId}`);
   } catch (error) {
     console.warn('Firestore crearSolicitudTransporte notice (resilient write active):', error);
+    reportFirestorePermissionIssue(error, OperationType.CREATE, `${COL_SOLICITUDES}/${localId}`);
   }
 
   return nuevaSolicitud;
@@ -1414,13 +1604,16 @@ export async function aceptarSolicitudTransporte(
   if (choferTelefono) setDriverDisponibilidad(choferTelefono, 'ocupado');
 
   try {
+    await ensureFirebaseAuthSession();
     const docRef = doc(db, COL_SOLICITUDES, solicitudId);
     await updateDoc(docRef, {
       ...patch,
       actualizadoEn: serverTimestamp(),
     });
+    notifyFirestoreSyncHealthy(`${COL_SOLICITUDES}/${solicitudId}`);
   } catch (error) {
     console.warn('Firestore aceptarSolicitud notice (resilient mode active):', error);
+    reportFirestorePermissionIssue(error, OperationType.UPDATE, `${COL_SOLICITUDES}/${solicitudId}`);
   }
 
   return existing ? { ...existing, ...patch } : null;
@@ -1463,13 +1656,16 @@ export async function activarGpsHaciaPasajero(solicitudId: string): Promise<void
   }
 
   try {
+    await ensureFirebaseAuthSession();
     const docRef = doc(db, COL_SOLICITUDES, solicitudId);
     await updateDoc(docRef, {
       ...patch,
       actualizadoEn: serverTimestamp(),
     });
+    notifyFirestoreSyncHealthy(`${COL_SOLICITUDES}/${solicitudId}`);
   } catch (err) {
     console.warn('Firestore activarGpsHaciaPasajero notice (resilient mode):', err);
+    reportFirestorePermissionIssue(err, OperationType.UPDATE, `${COL_SOLICITUDES}/${solicitudId}`);
   }
 }
 
@@ -1537,13 +1733,16 @@ export async function validarCodigoSeguridadViaje(
     );
 
     try {
+      await ensureFirebaseAuthSession();
       const docRef = doc(db, COL_SOLICITUDES, solicitudId);
       await updateDoc(docRef, {
         ...patch,
         actualizadoEn: serverTimestamp(),
       });
+      notifyFirestoreSyncHealthy(`${COL_SOLICITUDES}/${solicitudId}`);
     } catch (err) {
       console.warn('Firestore validarCodigoSeguridadViaje:', err);
+      reportFirestorePermissionIssue(err, OperationType.UPDATE, `${COL_SOLICITUDES}/${solicitudId}`);
     }
 
     return { success: true, codigoValidado: true };
@@ -1577,12 +1776,15 @@ export async function validarCodigoSeguridadViaje(
   } catch {}
 
   try {
+    await ensureFirebaseAuthSession();
     const docRef = doc(db, COL_SOLICITUDES, solicitudId);
     await updateDoc(docRef, {
       intentosFallidosCodigo: intentos,
       actualizadoEn: serverTimestamp(),
     });
-  } catch {}
+  } catch (err) {
+    reportFirestorePermissionIssue(err, OperationType.UPDATE, `${COL_SOLICITUDES}/${solicitudId}`);
+  }
 
   return {
     success: false,
@@ -1644,13 +1846,16 @@ export async function anularViajePorCodigo(
   }
 
   try {
+    await ensureFirebaseAuthSession();
     const docRef = doc(db, COL_SOLICITUDES, solicitudId);
     await updateDoc(docRef, {
       ...patch,
       actualizadoEn: serverTimestamp(),
     });
+    notifyFirestoreSyncHealthy(`${COL_SOLICITUDES}/${solicitudId}`);
   } catch (err) {
     console.warn('Firestore anularViajePorCodigo notice:', err);
+    reportFirestorePermissionIssue(err, OperationType.UPDATE, `${COL_SOLICITUDES}/${solicitudId}`);
   }
 }
 
@@ -1779,6 +1984,7 @@ export async function anunciarVehiculoDesocupado(
       setCached('habilitaciones', updatedHabs);
       notifyHabilitacionesListeners(updatedHabs);
 
+      await ensureFirebaseAuthSession();
       for (const m of matchingHabs) {
         try {
           const docRef = doc(db, COL_HABILITACIONES, m.id);
@@ -1786,8 +1992,10 @@ export async function anunciarVehiculoDesocupado(
             disponibilidad: 'desocupado',
             ultimoDesocupadoAt: now,
           });
+          notifyFirestoreSyncHealthy(`${COL_HABILITACIONES}/${m.id}`);
         } catch (err) {
           console.warn('Firestore anunciarVehiculoDesocupado resilient mode:', err);
+          reportFirestorePermissionIssue(err, OperationType.UPDATE, `${COL_HABILITACIONES}/${m.id}`);
         }
       }
     }
@@ -1893,13 +2101,16 @@ export async function finalizarViajeDeChofer(
     );
 
     try {
+      await ensureFirebaseAuthSession();
       const docRef = doc(db, COL_SOLICITUDES, item.id);
       await updateDoc(docRef, {
         ...patch,
         actualizadoEn: serverTimestamp(),
       });
+      notifyFirestoreSyncHealthy(`${COL_SOLICITUDES}/${item.id}`);
     } catch (err) {
       console.warn('Firestore finalizarViajeDeChofer resilient mode:', err);
+      reportFirestorePermissionIssue(err, OperationType.UPDATE, `${COL_SOLICITUDES}/${item.id}`);
     }
   }
 
@@ -2017,42 +2228,48 @@ export function subscribeToHabilitacionesChofer(
     window.addEventListener('uppa_habilitaciones_change', windowHandler);
   }
 
-  // 4. Suscripción en tiempo real a Firestore
+  // 4. Suscripción en tiempo real a Firestore con resincronización tras Auth
   const colRef = collection(db, COL_HABILITACIONES);
   const q = query(colRef, orderBy('createdAt', 'desc'));
 
-  const unsubFirestore = onSnapshot(
-    q,
-    (snapshot) => {
-      const firestoreList: HabilitacionChofer[] = snapshot.docs.map((d) => {
-        const data = d.data();
-        const createdMs = typeof data.createdAt === 'number'
-          ? data.createdAt
-          : typeof data.createdAt?.seconds === 'number'
-          ? data.createdAt.seconds * 1000
-          : Date.now();
-        return {
-          id: d.id,
-          ...(data as Omit<HabilitacionChofer, 'id'>),
-          createdAt: createdMs,
-        };
-      });
+  const unsubFirestore = subscribeWithAuthResync(
+    () =>
+      onSnapshot(
+        q,
+        (snapshot) => {
+          notifyFirestoreSyncHealthy(COL_HABILITACIONES);
+          const firestoreList: HabilitacionChofer[] = snapshot.docs.map((d) => {
+            const data = d.data();
+            const createdMs = typeof data.createdAt === 'number'
+              ? data.createdAt
+              : typeof data.createdAt?.seconds === 'number'
+              ? data.createdAt.seconds * 1000
+              : Date.now();
+            return {
+              id: d.id,
+              ...(data as Omit<HabilitacionChofer, 'id'>),
+              createdAt: createdMs,
+            };
+          });
 
-      // Fusionar inteligentemente con solicitudes pendientes locales
-      const currentCache = getCached<HabilitacionChofer[]>('habilitaciones', MOCK_INITIAL_HABILITACIONES);
-      const mergedMap = new Map<string, HabilitacionChofer>();
-      currentCache.forEach((h) => mergedMap.set(h.id, h));
-      firestoreList.forEach((h) => mergedMap.set(h.id, h));
-      const merged = Array.from(mergedMap.values()).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+          // Fusionar inteligentemente con solicitudes pendientes locales
+          const currentCache = getCached<HabilitacionChofer[]>('habilitaciones', MOCK_INITIAL_HABILITACIONES);
+          const mergedMap = new Map<string, HabilitacionChofer>();
+          currentCache.forEach((h) => mergedMap.set(h.id, h));
+          firestoreList.forEach((h) => mergedMap.set(h.id, h));
+          const merged = Array.from(mergedMap.values()).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 
-      setCached('habilitaciones', merged);
-      notifyHabilitacionesListeners(merged);
-    },
-    (err) => {
-      console.warn('Firestore habilitaciones onSnapshot offline fallback:', err);
-      if (onError) onError(err);
-      callback(getCached<HabilitacionChofer[]>('habilitaciones', MOCK_INITIAL_HABILITACIONES));
-    }
+          setCached('habilitaciones', merged);
+          notifyHabilitacionesListeners(merged);
+        },
+        (err) => {
+          console.warn('Firestore habilitaciones onSnapshot offline fallback:', err);
+          reportFirestorePermissionIssue(err, OperationType.LIST, COL_HABILITACIONES);
+          if (onError) onError(err);
+          callback(getCached<HabilitacionChofer[]>('habilitaciones', MOCK_INITIAL_HABILITACIONES));
+        }
+      ),
+    COL_HABILITACIONES
   );
 
   return () => {
@@ -2153,14 +2370,18 @@ export async function solicitarHabilitacionChofer(data: {
 
   // 3. Escribir en Firestore de forma resiliente
   try {
+    const authUid = await ensureFirebaseAuthSession();
     const colRef = collection(db, COL_HABILITACIONES);
     const docRef = doc(colRef, localId);
     await setDoc(docRef, {
       ...newHab,
+      authUid: authUid || null,
       createdAt: serverTimestamp(),
     });
+    notifyFirestoreSyncHealthy(`${COL_HABILITACIONES}/${localId}`);
   } catch (err) {
     console.warn('Firestore solicitarHabilitacionChofer notice (persisted in local cache):', err);
+    reportFirestorePermissionIssue(err, OperationType.CREATE, `${COL_HABILITACIONES}/${localId}`);
   }
 
   return newHab;
@@ -2413,6 +2634,7 @@ export function generarCodigoAleatorio(): string {
  * El ID del documento es el propio código garantizando que nunca se repita.
  */
 export async function crearCodigoHabilitacion(tipoVehiculo: 'moto' | 'auto'): Promise<string> {
+  await ensureFirebaseAuthSession();
   let codigoUnico = false;
   let codigo = '';
 
@@ -2433,8 +2655,10 @@ export async function crearCodigoHabilitacion(tipoVehiculo: 'moto' | 'auto'): Pr
           usadoPor: null,
           fechaCreacion: serverTimestamp(),
         });
+        notifyFirestoreSyncHealthy(`${COL_CODIGOS_HABILITACION}/${codigo}`);
       }
     } catch (e) {
+      reportFirestorePermissionIssue(e, OperationType.CREATE, `${COL_CODIGOS_HABILITACION}/${codigo}`);
       // Fallback offline resiliente
       codigoUnico = true;
       try {
@@ -2471,6 +2695,8 @@ export async function habilitarChofer(codigoIngresado: string, choferUid: string
     throw new Error('El código ingresado es demasiado corto o inválido.');
   }
 
+  const activeAuthUid = (await ensureFirebaseAuthSession()) || choferUid;
+
   const codigoRef = doc(db, COL_CODIGOS_HABILITACION, cleanCode);
   const codigoSnap = await getDoc(codigoRef);
 
@@ -2487,7 +2713,7 @@ export async function habilitarChofer(codigoIngresado: string, choferUid: string
   // 1. Marcamos el código como usado para que nadie más lo use
   await updateDoc(codigoRef, {
     usado: true,
-    usadoPor: choferUid,
+    usadoPor: activeAuthUid,
     actualizadoEn: serverTimestamp(),
   });
 
@@ -2555,15 +2781,21 @@ export function suscribirCodigosHabilitacion(
 ): () => void {
   const colRef = collection(db, COL_CODIGOS_HABILITACION);
   const q = query(colRef, orderBy('creadoEn', 'desc'));
-  return onSnapshot(
-    q,
-    (snap) => {
-      const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      callback(list);
-    },
-    (err) => {
-      console.warn('Error onSnapshot codigos_habilitacion:', err);
-    }
+  return subscribeWithAuthResync(
+    () =>
+      onSnapshot(
+        q,
+        (snap) => {
+          notifyFirestoreSyncHealthy(COL_CODIGOS_HABILITACION);
+          const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+          callback(list);
+        },
+        (err) => {
+          console.warn('Error onSnapshot codigos_habilitacion:', err);
+          reportFirestorePermissionIssue(err, OperationType.LIST, COL_CODIGOS_HABILITACION);
+        }
+      ),
+    COL_CODIGOS_HABILITACION
   );
 }
 
@@ -2667,13 +2899,17 @@ export async function calificarChofer(data: {
 
   // Guardar en Firestore
   try {
+    const authUid = await ensureFirebaseAuthSession();
     const docRef = doc(db, COL_CALIFICACIONES, id);
     await setDoc(docRef, {
       ...calificacion,
+      authUid: authUid || null,
       fechaCreacion: serverTimestamp(),
     });
+    notifyFirestoreSyncHealthy(`${COL_CALIFICACIONES}/${id}`);
   } catch (e) {
     console.warn('Firestore calificarChofer notice (resilient write active):', e);
+    reportFirestorePermissionIssue(e, OperationType.CREATE, `${COL_CALIFICACIONES}/${id}`);
   }
 
   // Notificar
@@ -2733,22 +2969,28 @@ export function subscribeToRankingChoferes(
   const colRef = collection(db, COL_CALIFICACIONES);
   const q = query(colRef, orderBy('timestamp', 'desc'));
 
-  const unsub = onSnapshot(
-    q,
-    (snap) => {
-      const list = snap.docs.map((d) => ({
-        id: d.id,
-        ...(d.data() as Omit<CalificacionChoferFirestore, 'id'>),
-      }));
-      currentList = list;
-      setCached('calificaciones_chofer', list);
-      filterAndDeliver(list);
-    },
-    (err) => {
-      console.warn('Firestore calificaciones subscription offline/notice:', err);
-      if (onError) onError(err);
-      filterAndDeliver(currentList);
-    }
+  const unsub = subscribeWithAuthResync(
+    () =>
+      onSnapshot(
+        q,
+        (snap) => {
+          notifyFirestoreSyncHealthy(COL_CALIFICACIONES);
+          const list = snap.docs.map((d) => ({
+            id: d.id,
+            ...(d.data() as Omit<CalificacionChoferFirestore, 'id'>),
+          }));
+          currentList = list;
+          setCached('calificaciones_chofer', list);
+          filterAndDeliver(list);
+        },
+        (err) => {
+          console.warn('Firestore calificaciones subscription offline/notice:', err);
+          reportFirestorePermissionIssue(err, OperationType.LIST, COL_CALIFICACIONES);
+          if (onError) onError(err);
+          filterAndDeliver(currentList);
+        }
+      ),
+    COL_CALIFICACIONES
   );
 
   return () => {

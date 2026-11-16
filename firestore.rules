@@ -1,0 +1,262 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // UPPA - Comunidad de Transporte (Campana <-> Zárate)
+    // Reglas de Seguridad Cloud Firestore (Producción Multiusuario)
+    // ===============================================================
+    // Notas clave:
+    // 1. Los datos privados (PII en usuarios / users / orders) están aislados por dueño o administrador.
+    // 2. Las funciones comunitarias compartidas (chat, reportes, solicitudes de viaje, choferes
+    //    habilitados y calificaciones) son legibles para todos los usuarios autenticados
+    //    (Google, Correo/Contraseña o Sesión Anónima automática usada por WhatsApp/acceso rápido).
+    // ===============================================================
+
+    // --- Helper Functions ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        (
+          request.auth.token.email == 'gastonrobertogimenez@gmail.com' &&
+          request.auth.token.email_verified == true
+        ) ||
+        (
+          exists(/databases/$(database)/documents/usuarios/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.rol == 'administrador'
+        )
+      );
+    }
+
+    function isValidString(val, minLen, maxLen) {
+      return val is string && val.size() >= minLen && val.size() <= maxLen;
+    }
+
+    function isNonNegNumber(val) {
+      return (val is int || val is float) && val >= 0;
+    }
+
+    // --- 1. Perfiles de Usuario (PII Aislada) ---
+    match /usuarios/{uid} {
+      allow get: if isValidId(uid) && (isOwner(uid) || isAdmin());
+      allow list: if isAdmin();
+
+      allow create: if isValidId(uid) && isSignedIn() && (
+        isAdmin() || (
+          isOwner(uid) &&
+          request.resource.data.rol != 'administrador'
+        )
+      );
+
+      allow update: if isValidId(uid) && isSignedIn() && (
+        isAdmin() || (
+          isOwner(uid) &&
+          (
+            !('rol' in request.resource.data) ||
+            request.resource.data.rol != 'administrador' ||
+            resource.data.rol == 'administrador'
+          )
+        )
+      );
+
+      allow delete: if isAdmin();
+
+      match /tokens/{tokenId} {
+        allow read, write: if isValidId(uid) && isValidId(tokenId) && (isOwner(uid) || isAdmin());
+      }
+    }
+
+    match /users/{uid} {
+      allow get: if isValidId(uid) && (isOwner(uid) || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isValidId(uid) && isSignedIn() && (
+        isAdmin() || (isOwner(uid) && request.resource.data.rol != 'administrador')
+      );
+      allow update: if isValidId(uid) && isSignedIn() && (
+        isAdmin() || (isOwner(uid) && request.resource.data.rol != 'administrador')
+      );
+      allow delete: if isAdmin();
+    }
+
+    // --- 2. Chat Comunitario en Tiempo Real (Compartido para Todos los Usuarios) ---
+    function isValidMensajeCreate() {
+      let d = request.resource.data;
+      return isValidString(d.texto, 1, 1500) &&
+             isValidString(d.nombreUsuario, 1, 100) &&
+             isValidString(d.usuarioId, 1, 128);
+    }
+
+    function isValidMensajeUpdate() {
+      let d = request.resource.data;
+      return d.texto == resource.data.texto &&
+             d.usuarioId == resource.data.usuarioId &&
+             d.diff(resource.data).affectedKeys().hasOnly(['reacciones', 'reportado']);
+    }
+
+    function isMensajeOwner() {
+      return isSignedIn() && (
+        resource.data.authUid == request.auth.uid ||
+        resource.data.usuarioId == request.auth.uid
+      );
+    }
+
+    match /salas_chat/{salaId} {
+      allow read: if isSignedIn();
+      allow create, update: if isValidId(salaId) && isSignedIn();
+      allow delete: if isAdmin();
+
+      match /mensajes/{mensajeId} {
+        allow read: if isSignedIn();
+        allow create: if isValidId(salaId) && isValidId(mensajeId) && isSignedIn() && isValidMensajeCreate();
+        allow update: if isValidId(salaId) && isValidId(mensajeId) && isSignedIn() && isValidMensajeUpdate();
+        allow delete: if isAdmin() || isMensajeOwner();
+      }
+    }
+
+    match /mensajes_comunitarios/{mensajeId} {
+      allow read: if isSignedIn();
+      allow create: if isValidId(mensajeId) && isSignedIn() && isValidMensajeCreate();
+      allow update: if isValidId(mensajeId) && isSignedIn() && isValidMensajeUpdate();
+      allow delete: if isAdmin() || isMensajeOwner();
+    }
+
+    // --- 3. Reportes de Tránsito y Colectivos en Vivo ---
+    function isValidReporteCreate() {
+      let d = request.resource.data;
+      return isValidString(d.nombreUsuario, 1, 100) &&
+             isValidString(d.descripcion, 1, 600) &&
+             isValidString(d.tipo, 1, 40) &&
+             d.estado == 'activo' &&
+             d.ubicacion is map &&
+             (d.ubicacion.lat is int || d.ubicacion.lat is float) &&
+             (d.ubicacion.lng is int || d.ubicacion.lng is float);
+    }
+
+    function isReporteOwner() {
+      return isSignedIn() && (
+        resource.data.authUid == request.auth.uid ||
+        resource.data.usuarioId == request.auth.uid
+      );
+    }
+
+    match /reportes/{reporteId} {
+      allow read: if isSignedIn();
+      allow create: if isValidId(reporteId) && isSignedIn() && isValidReporteCreate();
+      allow update: if isValidId(reporteId) && isSignedIn() && (
+        isAdmin() ||
+        isReporteOwner() ||
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['confirmaciones', 'estado'])
+      );
+      allow delete: if isAdmin() || isReporteOwner();
+    }
+
+    // --- 4. Solicitudes de Transporte Colaborativo (Taxis & Motos) ---
+    function isValidSolicitudCreate() {
+      let d = request.resource.data;
+      return isValidString(d.nombrePasajero, 1, 100) &&
+             isValidString(d.origen, 1, 250) &&
+             isValidString(d.destino, 1, 250) &&
+             d.tipoVehiculoRequerido in ['moto', 'auto'] &&
+             d.estado == 'pendiente';
+    }
+
+    function isValidSolicitudUpdate() {
+      let d = request.resource.data;
+      return d.pasajeroId == resource.data.pasajeroId &&
+             d.origen == resource.data.origen &&
+             d.destino == resource.data.destino &&
+             d.estado in ['pendiente', 'aceptado', 'en_camino', 'completado', 'cancelado', 'expirada', 'anulado'];
+    }
+
+    match /solicitudes_transporte/{solicitudId} {
+      allow read: if isSignedIn();
+      allow create: if isValidId(solicitudId) && isSignedIn() && isValidSolicitudCreate();
+      allow update: if isValidId(solicitudId) && isSignedIn() && (isAdmin() || isValidSolicitudUpdate());
+      allow delete: if isAdmin() || (
+        isSignedIn() && (
+          resource.data.authUid == request.auth.uid ||
+          resource.data.pasajeroId == request.auth.uid
+        )
+      );
+    }
+
+    // --- 5. Prestadores / Choferes Habilitados ---
+    function isValidHabilitacionCreate() {
+      let d = request.resource.data;
+      return isValidString(d.driverName, 1, 100) &&
+             d.vehicleType in ['moto', 'auto'] &&
+             isValidString(d.whatsapp, 6, 30) &&
+             d.estado in ['pendiente', 'activo'];
+    }
+
+    match /habilitaciones_chofer/{habilitacionId} {
+      allow read: if isSignedIn();
+      allow create: if isValidId(habilitacionId) && isSignedIn() && isValidHabilitacionCreate();
+      allow update: if isValidId(habilitacionId) && isSignedIn() && (
+        isAdmin() ||
+        request.resource.data.driverName == resource.data.driverName
+      );
+      allow delete: if isAdmin();
+    }
+
+    // --- 6. Códigos Únicos de Habilitación ---
+    match /codigos_habilitacion/{codigo} {
+      allow read: if isSignedIn();
+      allow create: if isValidId(codigo) && isSignedIn() &&
+        request.resource.data.usado == false &&
+        request.resource.data.tipoVehiculo in ['moto', 'auto'];
+      allow update: if isValidId(codigo) && isSignedIn() &&
+        resource.data.usado == false &&
+        request.resource.data.usado == true &&
+        request.resource.data.usadoPor == request.auth.uid;
+      allow delete: if isAdmin();
+    }
+
+    // --- 7. Calificaciones y Ranking en Vivo (Ventana 3h) ---
+    match /calificaciones_chofer/{calId} {
+      allow read: if isSignedIn();
+      allow create: if isValidId(calId) && isSignedIn() &&
+        isValidString(request.resource.data.driverName, 1, 100) &&
+        request.resource.data.puntuacion is int &&
+        request.resource.data.puntuacion >= 1 &&
+        request.resource.data.puntuacion <= 5 &&
+        isNonNegNumber(request.resource.data.timestamp);
+      allow update, delete: if isAdmin();
+    }
+
+    // --- 8. Catálogo y Órdenes ---
+    match /products/{productId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /orders/{orderId} {
+      allow read: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow create: if isValidId(orderId) && isSignedIn() &&
+        request.resource.data.userId == request.auth.uid &&
+        isNonNegNumber(request.resource.data.total);
+      allow update, delete: if isAdmin();
+    }
+
+    // --- 9. Health Check Inicial ---
+    match /test/connection {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // --- Default-Deny Catch-All ---
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

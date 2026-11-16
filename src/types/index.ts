@@ -307,6 +307,7 @@ export interface MensajeChatFirestore {
   id: string;
   salaId: string;
   usuarioId: string;
+  authUid?: string;
   nombreUsuario: string;
   texto: string;
   rol: string;

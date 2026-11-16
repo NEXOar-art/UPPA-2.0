@@ -74,6 +74,7 @@ import {
   isRealCommunityReport,
   enviarMensajeChat,
 } from './services/realtimeFirebaseService';
+import { ensureFirebaseAuthSession } from './config/firebase';
 
 import {
   MapPin,
@@ -103,6 +104,7 @@ import {
   Maximize2,
   Ticket,
   Info,
+  AlertTriangle,
 } from 'lucide-react';
 
 function GlobalHoverTooltip() {
@@ -226,6 +228,29 @@ export default function App() {
   const [isTicketModalOpen, setIsTicketModalOpen] = useState(false);
   const [sectionInfoModal, setSectionInfoModal] = useState<AppSectionId | null>(null);
   const [showSplash, setShowSplash] = useState(true);
+  const [firestorePermissionAlert, setFirestorePermissionAlert] = useState<{
+    path?: string | null;
+    anonymousAuthBlocked?: boolean;
+  } | null>(null);
+
+  useEffect(() => {
+    const handlePermErr = (ev: Event) => {
+      const detail = (ev as CustomEvent)?.detail;
+      setFirestorePermissionAlert({
+        path: detail?.path,
+        anonymousAuthBlocked: detail?.anonymousAuthBlocked,
+      });
+    };
+    const handleSyncOk = () => {
+      setFirestorePermissionAlert(null);
+    };
+    window.addEventListener('uppa-firestore-permission-error', handlePermErr);
+    window.addEventListener('uppa-firestore-sync-ok', handleSyncOk);
+    return () => {
+      window.removeEventListener('uppa-firestore-permission-error', handlePermErr);
+      window.removeEventListener('uppa-firestore-sync-ok', handleSyncOk);
+    };
+  }, []);
 
   // Driver Activation Session with paid countdown timer
   const [driverSession, setDriverSession] = useState<ActiveDriverSession | null>(() => getActiveDriverSession());
@@ -2115,6 +2140,40 @@ export default function App() {
 
       {/* Main View Area (Full screen map dominance) */}
       <main className="flex-1 relative overflow-hidden flex flex-col">
+        {firestorePermissionAlert && activeTab !== 'chat' && (
+          <div className="bg-amber-500/15 border-b border-amber-400/40 px-3 py-2 flex items-center justify-between gap-2.5 text-xs text-amber-100 shrink-0 z-30">
+            <div className="flex items-center gap-2 min-w-0">
+              <AlertTriangle className="w-4 h-4 text-amber-300 shrink-0" />
+              <p className="text-[11px] leading-snug truncate">
+                <strong className="text-amber-200 font-black">Permisos de Firestore bloqueados:</strong>{' '}
+                {firestorePermissionAlert.anonymousAuthBlocked
+                  ? 'Habilitá el inicio Anónimo en Firebase Auth o ingresá con Google/Correo.'
+                  : 'Revisá las reglas de Firestore para habilitar reportes, chat y viajes para todos.'}
+              </p>
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                type="button"
+                onClick={async () => {
+                  await ensureFirebaseAuthSession();
+                  window.dispatchEvent(new CustomEvent('uppa-firestore-retry-sync'));
+                  showToast('Reintentando conexión con Firestore...');
+                }}
+                className="px-2.5 py-1 rounded-lg bg-amber-400 text-[#101114] font-black text-[10.5px] cursor-pointer hover:brightness-95 active:scale-95 transition-all"
+              >
+                Reintentar
+              </button>
+              <button
+                type="button"
+                onClick={() => setFirestorePermissionAlert(null)}
+                aria-label="Cerrar aviso de Firestore"
+                className="p-1 rounded-lg text-amber-200 hover:bg-white/10 cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
         {activeTab === 'map' && (
           <div className="relative w-full h-full flex flex-col">
             <div className="flex-1 w-full h-full">
