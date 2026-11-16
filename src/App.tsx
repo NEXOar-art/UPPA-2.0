@@ -192,13 +192,7 @@ export default function App() {
       const stored = localStorage.getItem('uppa_session_user');
       if (stored) {
         const parsed = JSON.parse(stored);
-        if (parsed && parsed.email === 'gastonrobertogimenez@gmail.com') {
-          // Limpiar cuenta privada previa para conectar exclusivamente cuentas personales
-          localStorage.removeItem('uppa_session_user');
-          localStorage.removeItem('UPPA_AUTH_USER');
-          return false;
-        }
-        if (parsed && (parsed.email || parsed.phone) && !(parsed.email || '').includes('guest')) {
+        if (parsed && (parsed.email || parsed.phone) && !(parsed.email || '').includes('guest') && parsed.id !== 'usr-comunidad') {
           return true;
         }
       }
@@ -211,12 +205,7 @@ export default function App() {
       const stored = localStorage.getItem('uppa_session_user');
       if (stored) {
         const parsed = JSON.parse(stored);
-        if (parsed && parsed.email === 'gastonrobertogimenez@gmail.com') {
-          localStorage.removeItem('uppa_session_user');
-          localStorage.removeItem('UPPA_AUTH_USER');
-          return INITIAL_USER;
-        }
-        if (parsed && (parsed.email || parsed.phone) && !(parsed.email || '').includes('guest')) {
+        if (parsed && (parsed.email || parsed.phone) && !(parsed.email || '').includes('guest') && parsed.id !== 'usr-comunidad') {
           return parsed;
         }
       }
@@ -267,11 +256,11 @@ export default function App() {
   // Sync Firebase Auth session with App state
   useEffect(() => {
     if (authUser) {
-      const isDriverMode = driverSession && driverSession.endsAt > Date.now();
-      const computedRole = mapFirestoreRolToAppRole(authUser.rol, authUser.esChofer || isDriverMode || currentUser.role === 'driver');
+      const isDriverMode = Boolean(driverSession && driverSession.endsAt > Date.now());
+      const computedRole = mapFirestoreRolToAppRole(authUser.rol, Boolean(authUser.esChofer || isDriverMode));
       const synchedUser: User = {
         ...currentUser,
-        id: authUser.uid || authUser.id || currentUser.id,
+        id: authUser.id || authUser.uid || currentUser.id,
         uid: authUser.uid || authUser.id || currentUser.uid,
         name: authUser.nombre || authUser.name || currentUser.name,
         nombre: authUser.nombre || authUser.name || currentUser.nombre,
@@ -297,13 +286,14 @@ export default function App() {
         const stored = localStorage.getItem('uppa_session_user');
         if (stored) {
           const parsed = JSON.parse(stored);
-          if (parsed && (parsed.email || parsed.phone) && !(parsed.email || '').includes('guest')) {
+          if (parsed && (parsed.email || parsed.phone) && !(parsed.email || '').includes('guest') && parsed.id !== 'usr-comunidad') {
             setCurrentUser(parsed);
             setIsLoggedIn(true);
             return;
           }
         }
       } catch {}
+      setCurrentUser(INITIAL_USER);
       setIsLoggedIn(false);
     }
   }, [authUser, isAuthLoading, isEmailVerified]);
@@ -1727,7 +1717,10 @@ export default function App() {
       )}
 
       {/* Alerta / Recordatorio de email pendiente de autenticar */}
-      {isLoggedIn && !isEmailVerified && authUser?.email && !authUser.email.includes('guest') && (
+      {isLoggedIn &&
+        !isEmailVerified &&
+        authUser?.email &&
+        !authUser.email.includes('guest') && (
         <div className="bg-[#202329] border-b border-[#FFF19A]/40 px-3 py-1.5 flex items-center justify-between text-xs text-white z-40">
           <div className="flex items-center gap-2 truncate">
             <Mail className="w-3.5 h-3.5 text-[#FFF19A] shrink-0" />
@@ -2086,6 +2079,7 @@ export default function App() {
                       onClick={async () => {
                         setIsProfileDropdownOpen(false);
                         await firebaseLogout();
+                        setCurrentUser(INITIAL_USER);
                         setIsLoggedIn(false);
                         setIsAdminPinUnlocked(false);
                         try {

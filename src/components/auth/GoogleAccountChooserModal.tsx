@@ -17,6 +17,7 @@ interface GoogleAccountChooserModalProps {
 }
 
 const STORAGE_SAVED_ACCOUNTS_KEY = 'uppa_google_saved_accounts';
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export const GoogleAccountChooserModal: React.FC<GoogleAccountChooserModalProps> = ({
   isOpen,
@@ -39,16 +40,18 @@ export const GoogleAccountChooserModal: React.FC<GoogleAccountChooserModalProps>
     setErrorMessage(null);
     setPopupNotice(null);
     setIsLoading(false);
+    setNewEmail('');
+    setNewName('');
 
     try {
       const stored = localStorage.getItem(STORAGE_SAVED_ACCOUNTS_KEY);
       if (stored) {
         const parsed: SavedGoogleAccount[] = JSON.parse(stored);
-        const filtered = parsed.filter(
-          (a) => a.email && a.email !== 'gastonrobertogimenez@gmail.com'
-        );
-        setSavedAccounts(filtered);
-        setIsAddingNew(filtered.length === 0);
+        const valid = Array.isArray(parsed)
+          ? parsed.filter((a) => a && a.email && EMAIL_REGEX.test(a.email))
+          : [];
+        setSavedAccounts(valid);
+        setIsAddingNew(valid.length === 0);
       } else {
         setSavedAccounts([]);
         setIsAddingNew(true);
@@ -105,15 +108,19 @@ export const GoogleAccountChooserModal: React.FC<GoogleAccountChooserModalProps>
       }
     } catch (err: any) {
       console.warn('Google popup error:', err);
-      const msg = err.message || '';
+      const msg = err?.message || '';
       if (
-        msg.includes('popup-blocked') ||
+        msg.includes('popup') ||
         msg.includes('blocked') ||
         msg.includes('unauthorized-domain') ||
-        msg.includes('cancelled')
+        msg.includes('operation-not-allowed') ||
+        msg.includes('web-storage-unsupported') ||
+        msg.includes('internal-error') ||
+        msg.includes('cancelled') ||
+        msg.includes('cancelado')
       ) {
         setPopupNotice(
-          'La ventana emergente no se pudo abrir o fue bloqueada por el navegador. Podés escribir o elegir tu cuenta de Google acá abajo para acceder directamente.'
+          'El navegador o entorno bloqueó la ventana emergente de Google. Podés escribir tu correo de Google acá abajo para conectarte directamente.'
         );
         setIsAddingNew(true);
       } else {
@@ -127,13 +134,18 @@ export const GoogleAccountChooserModal: React.FC<GoogleAccountChooserModalProps>
   const handleSelectAccount = async (account: SavedGoogleAccount) => {
     setIsLoading(true);
     setErrorMessage(null);
+    setPopupNotice(null);
     try {
       const user = await loginWithGoogle(undefined, account.email, account.name);
-      saveAccountToHistory(account);
+      saveAccountToHistory({
+        ...account,
+        name: user.name || account.name,
+        avatarUrl: user.avatarUrl || account.avatarUrl,
+      });
       onSuccess(user);
       onClose();
     } catch (err: any) {
-      setErrorMessage(err.message || 'Error al autenticar con la cuenta seleccionada.');
+      setErrorMessage(err?.message || 'Error al autenticar con la cuenta seleccionada.');
     } finally {
       setIsLoading(false);
     }
@@ -142,11 +154,12 @@ export const GoogleAccountChooserModal: React.FC<GoogleAccountChooserModalProps>
   const handleAddNewAccountSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
+    setPopupNotice(null);
 
     const cleanEmail = newEmail.trim().toLowerCase();
     const cleanName = newName.trim() || cleanEmail.split('@')[0] || 'Usuario Google';
 
-    if (!cleanEmail || !cleanEmail.includes('@')) {
+    if (!EMAIL_REGEX.test(cleanEmail)) {
       setErrorMessage('Por favor ingresá una dirección de correo válida de Google.');
       return;
     }
@@ -156,12 +169,13 @@ export const GoogleAccountChooserModal: React.FC<GoogleAccountChooserModalProps>
       const user = await loginWithGoogle(undefined, cleanEmail, cleanName);
       saveAccountToHistory({
         email: cleanEmail,
-        name: cleanName,
+        name: user.name || cleanName,
+        avatarUrl: user.avatarUrl,
       });
       onSuccess(user);
       onClose();
     } catch (err: any) {
-      setErrorMessage(err.message || 'Error al ingresar con la cuenta de Google.');
+      setErrorMessage(err?.message || 'Error al ingresar con la cuenta de Google.');
     } finally {
       setIsLoading(false);
     }
@@ -200,6 +214,18 @@ export const GoogleAccountChooserModal: React.FC<GoogleAccountChooserModalProps>
 
         {/* Body */}
         <div className="p-6 overflow-y-auto space-y-4">
+          {/* Acceso principal con Google OAuth oficial */}
+          <button
+            type="button"
+            onClick={handleOfficialGooglePopup}
+            disabled={isLoading}
+            title="Iniciar sesión con el selector oficial de Google OAuth"
+            className="w-full min-h-[46px] px-3 rounded-xl uppa-cta-yellow text-xs font-black flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+          >
+            {isLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Globe className="w-4 h-4" />}
+            <span>Continuar con Selector Oficial de Google</span>
+          </button>
+
           {errorMessage && (
             <div className="p-3 rounded-xl bg-rose-950/50 border border-rose-400/50 text-rose-200 text-xs flex items-start gap-2 animate-in fade-in">
               <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
@@ -259,52 +285,43 @@ export const GoogleAccountChooserModal: React.FC<GoogleAccountChooserModalProps>
                 ))}
               </div>
 
-              <div className="pt-2 flex flex-col gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsAddingNew(true);
-                    setErrorMessage(null);
-                  }}
-                  title="Escribir otro correo de Google para acceder"
-                  className="w-full min-h-[44px] px-3 rounded-xl bg-[#101114] hover:bg-white/10 border-2 border-white/15 text-xs font-bold text-white flex items-center justify-center gap-2 transition-all cursor-pointer"
-                >
-                  <Plus className="w-4 h-4 text-[#FFF19A]" />
-                  <span>Usar otra cuenta de Google</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleOfficialGooglePopup}
-                  disabled={isLoading}
-                  title="Abrir selector oficial de cuentas de Google"
-                  className="w-full min-h-[44px] px-3 rounded-xl uppa-cta-yellow text-xs font-black flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50"
-                >
-                  {isLoading ? (
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Globe className="w-4 h-4" />
-                  )}
-                  <span>Abrir selector oficial de Google</span>
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsAddingNew(true);
+                  setErrorMessage(null);
+                }}
+                title="Escribir otro correo de Google para acceder"
+                className="w-full min-h-[42px] px-3 rounded-xl bg-[#101114] hover:bg-white/10 border-2 border-white/15 text-xs font-bold text-white flex items-center justify-center gap-2 transition-all cursor-pointer"
+              >
+                <Plus className="w-4 h-4 text-[#FFF19A]" />
+                <span>Usar otra cuenta de Google</span>
+              </button>
             </div>
           )}
 
           {(isAddingNew || savedAccounts.length === 0) && (
-            <form onSubmit={handleAddNewAccountSubmit} className="space-y-3.5 animate-in fade-in">
+            <form onSubmit={handleAddNewAccountSubmit} noValidate className="space-y-3 pt-2 border-t border-white/10 animate-in fade-in">
+              <div className="text-[10.5px] font-bold text-[#9299A5]">
+                Acceso directo con tu correo de Google (si el navegador bloquea ventanas emergentes):
+              </div>
+
               <div>
                 <label className="block text-[11px] font-bold text-white mb-1 uppercase tracking-wider">
                   Tu correo electrónico de Google (@gmail.com) *
                 </label>
                 <input
                   type="email"
+                  name="googleEmail"
+                  autoComplete="email"
                   required
                   placeholder="ejemplo@gmail.com"
                   value={newEmail}
-                  onChange={(e) => setNewEmail(e.target.value)}
+                  onChange={(e) => {
+                    setNewEmail(e.target.value);
+                    if (errorMessage) setErrorMessage(null);
+                  }}
                   className="w-full min-h-[42px] bg-[#101114] border-2 border-white/15 rounded-xl px-3.5 py-2 text-xs text-white placeholder:text-[#9299A5] focus:outline-none focus:border-[#FFF19A] font-mono"
-                  autoFocus
                 />
               </div>
 
@@ -314,6 +331,8 @@ export const GoogleAccountChooserModal: React.FC<GoogleAccountChooserModalProps>
                 </label>
                 <input
                   type="text"
+                  name="googleName"
+                  autoComplete="name"
                   placeholder="Tu nombre y apellido"
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
@@ -321,45 +340,33 @@ export const GoogleAccountChooserModal: React.FC<GoogleAccountChooserModalProps>
                 />
               </div>
 
-              <div className="pt-2 flex flex-col gap-2">
+              <div className="pt-1 flex flex-col gap-2">
                 <button
                   type="submit"
                   disabled={isLoading}
-                  title="Ingresar a UPPA con esta cuenta de Google"
-                  className="w-full min-h-[46px] uppa-cta-yellow font-black text-xs rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+                  title="Ingresar a UPPA con este correo de Google"
+                  className="w-full min-h-[44px] bg-[#101114] hover:bg-white/10 border-2 border-[#FFF19A]/50 text-[#FFF19A] font-black text-xs rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50"
                 >
                   {isLoading ? (
                     <RefreshCw className="w-4 h-4 animate-spin" />
                   ) : (
                     <>
-                      <span>Ingresar con esta cuenta de Google</span>
+                      <span>Ingresar con este correo</span>
                       <ArrowRight className="w-4 h-4" />
                     </>
                   )}
                 </button>
 
-                <div className="flex items-center gap-2">
-                  {savedAccounts.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => setIsAddingNew(false)}
-                      title="Volver al listado de cuentas guardadas"
-                      className="flex-1 min-h-[40px] px-3 rounded-xl bg-[#101114] hover:bg-white/10 border border-white/15 text-[11px] text-white font-bold transition-colors cursor-pointer"
-                    >
-                      ← Volver a mis cuentas
-                    </button>
-                  )}
-
+                {savedAccounts.length > 0 && (
                   <button
                     type="button"
-                    onClick={handleOfficialGooglePopup}
-                    disabled={isLoading}
-                    title="Abrir ventana emergente de Google Auth"
-                    className="flex-1 min-h-[40px] px-3 rounded-xl bg-[#101114] hover:bg-white/10 border border-[#FFF19A]/40 text-[11px] text-[#FFF19A] font-bold transition-colors cursor-pointer"
+                    onClick={() => setIsAddingNew(false)}
+                    title="Volver al listado de cuentas guardadas"
+                    className="w-full min-h-[38px] px-3 rounded-xl bg-[#101114] hover:bg-white/10 border border-white/15 text-[11px] text-white font-bold transition-colors cursor-pointer"
                   >
-                    Abrir selector Google
+                    ← Volver a mis cuentas guardadas
                   </button>
-                </div>
+                )}
               </div>
             </form>
           )}

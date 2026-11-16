@@ -1,21 +1,25 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { User, UserRole, mapRoleToAppRole, mapFirestoreRolToAppRole } from '../types';
-import { authService, RegisterPayload } from '../services/authService';
-import { getStoredSessionToken } from '../services/api';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import { User, mapFirestoreRolToAppRole } from '../types';
+import { authService } from '../services/authService';
 import {
   onAuthStateChanged,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
-  signInAnonymously,
   signInWithPopup,
   signOut,
   sendPasswordResetEmail,
   sendEmailVerification,
+  updateProfile,
   GoogleAuthProvider,
   User as FirebaseUser,
 } from 'firebase/auth';
-import { auth, ensureFirebaseAuthSession, googleProvider } from '../config/firebase';
-import { createUserDocument, getUserDocument, updateUserDocument } from '../services/firestoreService';
+import { auth, ensureFirebaseAuthSession } from '../config/firebase';
+import {
+  createUserDocument,
+  getUserDocument,
+  updateUserDocument,
+  marcarEmailVerificadoEnFirestore,
+} from '../services/firestoreService';
 
 interface RegisterExtraData {
   phone?: string;
@@ -46,12 +50,6 @@ interface AuthContextType {
   ) => Promise<User>;
   loginWithEmail: (email: string, pass?: string) => Promise<User>;
   loginWithGoogle: (credential?: string, email?: string, name?: string) => Promise<User>;
-  loginWithWhatsApp: (
-    phone: string,
-    name?: string,
-    requestedRole?: string,
-    barrio?: string
-  ) => Promise<User>;
   logout: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   sendVerificationEmail: () => Promise<boolean>;
@@ -62,43 +60,116 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const LOCAL_SESSION_KEY = 'uppa_session_user';
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const OFFICIAL_ADMIN_EMAIL = 'gastonrobertogimenez@gmail.com';
+
+function isValidStoredSessionUser(parsed: any): parsed is User {
+  if (!parsed || typeof parsed !== 'object') return false;
+  const email = String(parsed.email || '').trim().toLowerCase();
+  const id = String(parsed.id || parsed.uid || '').trim();
+  if (!id || id === 'usr-comunidad' || id.startsWith('wa_')) return false;
+  if (email.includes('guest') || email.endsWith('@whatsapp.uppa.app')) return false;
+  return Boolean(email);
+}
+
+function readStoredSessionUser(): User | null {
+  try {
+    const stored = localStorage.getItem(LOCAL_SESSION_KEY);
+    if (!stored) return null;
+    const parsed = JSON.parse(stored);
+    return isValidStoredSessionUser(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveStoredSessionUser(user: User | null): void {
+  try {
+    if (user) {
+      localStorage.setItem(LOCAL_SESSION_KEY, JSON.stringify(user));
+    } else {
+      localStorage.removeItem(LOCAL_SESSION_KEY);
+    }
+  } catch {}
+}
+
+function translateFirebaseAuthError(code?: string, fallback?: string): string {
+  switch (code) {
+    case 'auth/invalid-email':
+      return 'El formato del correo electrónico ingresado no es válido.';
+    case 'auth/user-not-found':
+      return 'No encontramos una cuenta registrada con este correo electrónico. Registrate primero en la pestaña Registro.';
+    case 'auth/wrong-password':
+    case 'auth/invalid-credential':
+    case 'auth/invalid-login-credentials':
+      return 'Correo o contraseña incorrectos. Verificá tus datos o usá "¿Olvidaste tu contraseña?".';
+    case 'auth/email-already-in-use':
+      return 'Este correo electrónico ya está registrado en UPPA. Podés iniciar sesión con tu contraseña.';
+    case 'auth/weak-password':
+      return 'La contraseña debe tener al menos 6 caracteres.';
+    case 'auth/too-many-requests':
+      return 'Demasiados intentos fallidos. Por seguridad, esperá unos minutos antes de volver a intentar.';
+    case 'auth/user-disabled':
+      return 'Esta cuenta ha sido deshabilitada.';
+    case 'auth/network-request-failed':
+      return 'Sin conexión con Firebase. Verificá tu acceso a internet e intentá nuevamente.';
+    case 'auth/account-exists-with-different-credential':
+      return 'Ya existe una cuenta registrada con este correo usando otro método de ingreso.';
+    default:
+      return fallback || 'No se pudo completar la autenticación.';
+  }
+}
+
+function isProviderUnavailableCode(code?: string): boolean {
+  return (
+    code === 'auth/operation-not-allowed' ||
+    code === 'auth/configuration-not-found' ||
+    code === 'auth/admin-restricted-operation'
+  );
+}
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(() => {
-    try {
-      const stored = localStorage.getItem(LOCAL_SESSION_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (parsed && parsed.email) return parsed;
-      }
-    } catch {}
-    return null;
-  });
-
-  const [firebaseUser, setFirebaseUser] = useState<{ email?: string; uid?: string; displayName?: string; emailVerified?: boolean } | null>(null);
+  const [user, setUser] = useState<User | null>(() => readStoredSessionUser());
+  const [firebaseUser, setFirebaseUser] = useState<{
+    email?: string;
+    uid?: string;
+    displayName?: string;
+    emailVerified?: boolean;
+  } | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [authError, setAuthError] = useState<string | null>(null);
   const [authNotice, setAuthNotice] = useState<string | null>(null);
-  const [isResilientMode, setIsResilientMode] = useState<boolean>(true);
+  const [isResilientMode] = useState<boolean>(true);
   const [emailVerificationSent, setEmailVerificationSent] = useState<boolean>(false);
+
+  // Evita que un signOut o cambio de sesión anónimo dispare restauraciones accidentales
+  const isLoggingOutRef = useRef(false);
+  // Evita carrera entre onAuthStateChanged y creación explícita de perfil (rol chofer/pasajero)
+  const isManualAuthFlowRef = useRef(false);
 
   // Sincronización continua de Firebase Auth y sesión local
   useEffect(() => {
     let isMounted = true;
 
-    // Timeout de seguridad de 1200ms para evitar bloqueos por conexión lenta
     const safetyTimer = setTimeout(() => {
-      if (isMounted && isLoading) {
+      if (isMounted) {
         setIsLoading(false);
       }
-    }, 1200);
+    }, 1400);
 
     const unsubscribe = onAuthStateChanged(
       auth,
       async (fbUser: FirebaseUser | null) => {
         if (!isMounted) return;
+        if (isManualAuthFlowRef.current) {
+          setIsLoading(false);
+          clearTimeout(safetyTimer);
+          return;
+        }
 
-        if (fbUser) {
+        // 1. Usuario real autenticado (Google o Email/Password, NO anónimo)
+        if (fbUser && !fbUser.isAnonymous) {
+          isLoggingOutRef.current = false;
           setFirebaseUser({
             uid: fbUser.uid,
             email: fbUser.email || undefined,
@@ -107,44 +178,78 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           });
 
           try {
-            // Intentar recuperar el perfil oficial desde Firestore
             const fsDoc = await getUserDocument(fbUser.uid);
             if (fsDoc && isMounted) {
-              const computedRole = mapFirestoreRolToAppRole(fsDoc.rol, fsDoc.esChofer);
+              const isOfficialAdmin =
+                fbUser.email?.toLowerCase() === OFFICIAL_ADMIN_EMAIL && fbUser.emailVerified;
+              const effectiveRol = isOfficialAdmin ? 'administrador' : fsDoc.rol || 'pasajero';
+              const computedRole = mapFirestoreRolToAppRole(effectiveRol, fsDoc.esChofer);
               const mappedUser: User = {
                 id: fbUser.uid,
                 uid: fbUser.uid,
                 name: fsDoc.nombre || fbUser.displayName || fbUser.email?.split('@')[0] || 'Usuario UPPA',
                 nombre: fsDoc.nombre || fbUser.displayName || fbUser.email?.split('@')[0] || 'Usuario UPPA',
-                email: fbUser.email || fsDoc.email,
+                email: fbUser.email || fsDoc.email || '',
                 role: computedRole,
-                rol: fsDoc.rol,
-                esChofer: fsDoc.esChofer,
-                tipoVehiculo: fsDoc.tipoVehiculo,
-                phone: fsDoc.phone,
-                barrio: fsDoc.barrio,
-                avatarUrl: fsDoc.avatarUrl || `https://api.dicebear.com/7.x/bottts/svg?seed=${fbUser.uid}&backgroundColor=12141c`,
-                emailVerificado: fbUser.emailVerified || fsDoc.emailVerificado,
-                estado: fsDoc.estado,
-                fechaRegistro: fsDoc.fechaRegistro,
+                rol: effectiveRol,
+                esChofer: Boolean(fsDoc.esChofer),
+                tipoVehiculo: fsDoc.tipoVehiculo ?? null,
+                phone: fsDoc.phone || '',
+                barrio: fsDoc.barrio || 'Campana Centro',
+                avatarUrl:
+                  fsDoc.avatarUrl ||
+                  fbUser.photoURL ||
+                  `https://api.dicebear.com/7.x/bottts/svg?seed=${fbUser.uid}&backgroundColor=12141c`,
+                emailVerificado: Boolean(fbUser.emailVerified || fsDoc.emailVerificado),
+                estado: fsDoc.estado || 'activo',
+                fechaRegistro: fsDoc.fechaRegistro || new Date().toISOString(),
               };
 
               setUser(mappedUser);
-              localStorage.setItem(LOCAL_SESSION_KEY, JSON.stringify(mappedUser));
+              saveStoredSessionUser(mappedUser);
             } else if (isMounted) {
-              const isAdmin = Boolean(fbUser.email?.includes('admin'));
+              const stored = readStoredSessionUser();
+              const isMatchingStored =
+                stored &&
+                stored.email &&
+                fbUser.email &&
+                stored.email.toLowerCase() === fbUser.email.toLowerCase();
+              const isOfficialAdmin =
+                fbUser.email?.toLowerCase() === OFFICIAL_ADMIN_EMAIL && fbUser.emailVerified;
+              const defaultRol = isOfficialAdmin
+                ? 'administrador'
+                : (isMatchingStored ? stored.rol : undefined) || 'pasajero';
+              const isChofer = Boolean(
+                isMatchingStored &&
+                  (stored.esChofer ||
+                    defaultRol === 'chofer_moto' ||
+                    defaultRol === 'chofer_auto' ||
+                    defaultRol === 'chofer_micro')
+              );
+
               const defaultUser: User = {
                 id: fbUser.uid,
                 uid: fbUser.uid,
-                name: fbUser.displayName || fbUser.email?.split('@')[0] || 'Usuario UPPA',
-                nombre: fbUser.displayName || fbUser.email?.split('@')[0] || 'Usuario UPPA',
+                name:
+                  fbUser.displayName ||
+                  (isMatchingStored ? stored.nombre || stored.name : '') ||
+                  fbUser.email?.split('@')[0] ||
+                  'Usuario UPPA',
+                nombre:
+                  fbUser.displayName ||
+                  (isMatchingStored ? stored.nombre || stored.name : '') ||
+                  fbUser.email?.split('@')[0] ||
+                  'Usuario UPPA',
                 email: fbUser.email || '',
-                role: isAdmin ? 'admin' : 'passenger',
-                rol: isAdmin ? 'administrador' : 'pasajero',
-                esChofer: false,
-                tipoVehiculo: null,
-                barrio: 'Campana Centro',
-                avatarUrl: `https://api.dicebear.com/7.x/bottts/svg?seed=${fbUser.uid}&backgroundColor=12141c`,
+                role: mapFirestoreRolToAppRole(defaultRol, isChofer),
+                rol: defaultRol,
+                esChofer: isChofer,
+                tipoVehiculo: isMatchingStored ? stored.tipoVehiculo ?? null : null,
+                phone: isMatchingStored ? stored.phone || '' : '',
+                barrio: (isMatchingStored ? stored.barrio : '') || 'Campana Centro',
+                avatarUrl:
+                  fbUser.photoURL ||
+                  `https://api.dicebear.com/7.x/bottts/svg?seed=${fbUser.uid}&backgroundColor=12141c`,
                 emailVerificado: fbUser.emailVerified,
                 estado: 'activo',
                 fechaRegistro: new Date().toISOString(),
@@ -154,37 +259,46 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 nombre: defaultUser.name,
                 email: defaultUser.email,
                 rol: defaultUser.rol || 'pasajero',
+                esChofer: defaultUser.esChofer,
+                tipoVehiculo: defaultUser.tipoVehiculo ?? null,
+                phone: defaultUser.phone,
+                barrio: defaultUser.barrio,
+                emailVerificado: fbUser.emailVerified,
                 estado: 'activo',
                 fechaRegistro: defaultUser.fechaRegistro,
               }).catch(() => {});
 
               setUser(defaultUser);
-              localStorage.setItem(LOCAL_SESSION_KEY, JSON.stringify(defaultUser));
+              saveStoredSessionUser(defaultUser);
             }
           } catch (e) {
             console.warn('[UPPA Auth] Firestore sync warning:', e);
           }
         } else {
-          // No hay usuario activo en Firebase Auth: verificar si hay sesión local
-          setFirebaseUser(null);
-          try {
-            const stored = localStorage.getItem(LOCAL_SESSION_KEY);
-            if (stored) {
-              const parsed = JSON.parse(stored);
-              if (parsed && parsed.email) {
-                setUser(parsed);
-              }
-            }
-          } catch {}
+          // 2. Sesión anónima (para reglas Firestore) o sin sesión Firebase:
+          // NUNCA auto-crear un perfil "Usuario UPPA" ni omitir el LoginPage.
+          // Solo conservamos la sesión explícita si el usuario ingresó en modo resiliente.
+          if (fbUser?.isAnonymous) {
+            setFirebaseUser({
+              uid: fbUser.uid,
+              emailVerified: false,
+            });
+          } else {
+            setFirebaseUser(null);
+          }
 
-          // Conexión anónima en segundo plano para habilitar permisos de Firestore sin credenciales
-          try {
-            if (!auth.currentUser) {
-              signInAnonymously(auth).catch((anonErr) => {
-                console.warn('[UPPA Auth] Anonymous connection notice:', anonErr.message);
-              });
+          if (!isLoggingOutRef.current) {
+            const stored = readStoredSessionUser();
+            if (stored) {
+              setUser(stored);
+              // Si hay sesión explícita y aún no hay auth en Firebase, conectar anónimamente en background para Firestore
+              if (!fbUser) {
+                ensureFirebaseAuthSession().catch(() => {});
+              }
+            } else {
+              setUser(null);
             }
-          } catch {}
+          }
         }
 
         if (isMounted) {
@@ -218,6 +332,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setAuthError(null);
     setAuthNotice(null);
 
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanPass = pass.trim();
+    const cleanName = name.trim() || cleanEmail.split('@')[0];
+
+    if (!EMAIL_REGEX.test(cleanEmail)) {
+      const msg = 'Por favor ingresá un correo electrónico válido.';
+      setAuthError(msg);
+      throw new Error(msg);
+    }
+    if (cleanPass.length < 6) {
+      const msg = 'La contraseña debe tener al menos 6 caracteres.';
+      setAuthError(msg);
+      throw new Error(msg);
+    }
+
     const isChofer =
       extraData?.esChofer ||
       requestedRole === 'chofer_moto' ||
@@ -235,98 +364,153 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         ? 'micro'
         : null);
 
-    const cleanEmail = email.trim().toLowerCase();
-    const cleanPass = pass.trim();
-    const cleanName = name.trim() || cleanEmail.split('@')[0];
-
     try {
-      // 1. Intentar registrar en Firebase Auth real
+      isLoggingOutRef.current = false;
+      isManualAuthFlowRef.current = true;
       let fbUid = '';
+      let fbVerified = false;
+      let usedResilientFallback = false;
+
       try {
         const cred = await createUserWithEmailAndPassword(auth, cleanEmail, cleanPass);
         fbUid = cred.user.uid;
+        fbVerified = cred.user.emailVerified;
+        updateProfile(cred.user, { displayName: cleanName }).catch(() => {});
         setFirebaseUser({
           uid: cred.user.uid,
           email: cred.user.email || cleanEmail,
           displayName: cleanName,
-          emailVerified: false,
+          emailVerified: cred.user.emailVerified,
         });
-        // Disparar email de verificación de Firebase Auth
         sendEmailVerification(cred.user).catch(() => {});
         setEmailVerificationSent(true);
       } catch (fbErr: any) {
-        console.warn('Firebase Auth createUser notice:', fbErr.code, fbErr.message);
-        if (fbErr.code === 'auth/email-already-in-use') {
-          // Intentar iniciar sesión automáticamente con esa contraseña
+        console.warn('Firebase Auth createUser notice:', fbErr?.code, fbErr?.message);
+        if (fbErr?.code === 'auth/email-already-in-use') {
           try {
             const loginCred = await signInWithEmailAndPassword(auth, cleanEmail, cleanPass);
             fbUid = loginCred.user.uid;
+            fbVerified = loginCred.user.emailVerified;
             setFirebaseUser({
               uid: loginCred.user.uid,
               email: loginCred.user.email || cleanEmail,
               displayName: loginCred.user.displayName || cleanName,
               emailVerified: loginCred.user.emailVerified,
             });
-          } catch (loginErr) {
-            throw new Error('El correo electrónico ya está registrado en UPPA. Podés iniciar sesión con tu contraseña.');
+          } catch {
+            throw new Error(translateFirebaseAuthError('auth/email-already-in-use'));
           }
-        } else if (fbErr.code === 'auth/weak-password') {
-          throw new Error('La contraseña debe tener al menos 6 caracteres.');
-        } else if (fbErr.code === 'auth/invalid-email') {
-          throw new Error('El formato del correo electrónico ingresado no es válido.');
+        } else if (isProviderUnavailableCode(fbErr?.code)) {
+          usedResilientFallback = true;
+        } else {
+          throw new Error(translateFirebaseAuthError(fbErr?.code, fbErr?.message));
         }
       }
 
-      // 2. Registrar usuario en Firestore / Base de datos centralizada
-      const registered = await authService.register({
-        email: cleanEmail,
-        password: cleanPass,
-        nombre: cleanName,
-        rol: (requestedRole as any) || 'pasajero',
-        phone: extraData?.phone,
-        barrio: extraData?.barrio,
-        tipoVehiculo,
-        esChofer: isChofer,
-      });
+      const selectedRol = (requestedRole as any) || 'pasajero';
 
-      if (!fbUid) {
-        fbUid = (await ensureFirebaseAuthSession()) || '';
+      if (usedResilientFallback) {
+        // Fallback local cuando Email/Password no está habilitado en consola Firebase
+        const registered = await authService.register({
+          email: cleanEmail,
+          password: cleanPass,
+          nombre: cleanName,
+          rol: selectedRol,
+          phone: extraData?.phone,
+          barrio: extraData?.barrio,
+          tipoVehiculo,
+          esChofer: isChofer,
+        });
+        const anonUid = (await ensureFirebaseAuthSession()) || '';
+        const effectiveUid = anonUid || registered.uid || registered.id;
+        const finalUser: User = {
+          ...registered,
+          id: effectiveUid,
+          uid: effectiveUid,
+          name: cleanName,
+          nombre: cleanName,
+          email: cleanEmail,
+          role: mapFirestoreRolToAppRole(selectedRol, isChofer),
+          rol: selectedRol,
+          esChofer: isChofer,
+          tipoVehiculo,
+          phone: extraData?.phone || registered.phone || '',
+          barrio: extraData?.barrio || registered.barrio || 'Campana Centro',
+          emailVerificado: true,
+        };
+
+        await createUserDocument(effectiveUid, {
+          nombre: cleanName,
+          email: cleanEmail,
+          rol: selectedRol,
+          estado: 'activo',
+          fechaRegistro: new Date().toISOString(),
+          phone: finalUser.phone,
+          barrio: finalUser.barrio,
+          esChofer: isChofer,
+          tipoVehiculo,
+          emailVerificado: true,
+        }).catch(() => {});
+
+        setUser(finalUser);
+        saveStoredSessionUser(finalUser);
+        return finalUser;
       }
 
-      const effectiveUid = fbUid || registered.uid || registered.id;
-      const finalUser: User = {
-        ...registered,
-        id: effectiveUid,
-        uid: effectiveUid,
-        name: cleanName,
-        nombre: cleanName,
-        role: mapFirestoreRolToAppRole(registered.rol, isChofer),
-        esChofer: isChofer,
-        tipoVehiculo,
-        phone: extraData?.phone || registered.phone,
-        barrio: extraData?.barrio || registered.barrio,
-      };
-
-      // Guardar también en Firestore collection 'usuarios' bajo el UID autenticado
-      createUserDocument(effectiveUid, {
-        nombre: cleanName,
+      // Flujo Firebase Auth real: sincronizamos en cache local sin fallar si ya existía
+      await authService.syncUser({
+        uid: fbUid,
         email: cleanEmail,
-        rol: (requestedRole as any) || 'pasajero',
-        estado: 'activo',
-        fechaRegistro: new Date().toISOString(),
+        nombre: cleanName,
+        rol: selectedRol,
         phone: extraData?.phone,
         barrio: extraData?.barrio,
+        tipoVehiculo,
         esChofer: isChofer,
-        tipoVehiculo: tipoVehiculo,
+        emailVerificado: fbVerified,
+      });
+
+      const finalUser: User = {
+        id: fbUid,
+        uid: fbUid,
+        name: cleanName,
+        nombre: cleanName,
+        email: cleanEmail,
+        role: mapFirestoreRolToAppRole(selectedRol, isChofer),
+        rol: selectedRol,
+        esChofer: isChofer,
+        tipoVehiculo,
+        phone: extraData?.phone || '',
+        barrio: extraData?.barrio || 'Campana Centro',
+        avatarUrl: `https://api.dicebear.com/7.x/bottts/svg?seed=${fbUid}&backgroundColor=12141c`,
+        estado: 'activo',
+        activo: true,
+        fechaRegistro: new Date().toISOString(),
+        emailVerificado: fbVerified,
+      };
+
+      await createUserDocument(fbUid, {
+        nombre: cleanName,
+        email: cleanEmail,
+        rol: selectedRol,
+        estado: 'activo',
+        fechaRegistro: finalUser.fechaRegistro,
+        phone: finalUser.phone,
+        barrio: finalUser.barrio,
+        esChofer: isChofer,
+        tipoVehiculo,
+        emailVerificado: fbVerified,
       }).catch(() => {});
 
       setUser(finalUser);
-      localStorage.setItem(LOCAL_SESSION_KEY, JSON.stringify(finalUser));
+      saveStoredSessionUser(finalUser);
       return finalUser;
     } catch (err: any) {
-      const msg = err.message || 'Error al registrar usuario';
+      const msg = err?.message || 'Error al registrar usuario';
       setAuthError(msg);
       throw err;
+    } finally {
+      isManualAuthFlowRef.current = false;
     }
   };
 
@@ -337,79 +521,149 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const cleanEmail = email.trim().toLowerCase();
     const cleanPass = pass?.trim() || '';
 
+    if (!EMAIL_REGEX.test(cleanEmail)) {
+      const msg = 'Por favor ingresá un correo electrónico válido.';
+      setAuthError(msg);
+      throw new Error(msg);
+    }
+    if (!cleanPass) {
+      const msg = 'Por favor ingresá tu contraseña.';
+      setAuthError(msg);
+      throw new Error(msg);
+    }
+
     try {
-      // 1. Intentar inicio de sesión con Firebase Auth
+      isLoggingOutRef.current = false;
+      isManualAuthFlowRef.current = true;
       let fbUid = '';
-      if (cleanPass) {
-        try {
-          const cred = await signInWithEmailAndPassword(auth, cleanEmail, cleanPass);
-          fbUid = cred.user.uid;
-          setFirebaseUser({
-            uid: cred.user.uid,
-            email: cred.user.email || cleanEmail,
-            displayName: cred.user.displayName || undefined,
-            emailVerified: cred.user.emailVerified,
-          });
-        } catch (fbErr: any) {
-          console.warn('Firebase Auth signIn notice:', fbErr.code, fbErr.message);
-          // Si es un error explícito de contraseña o credenciales, informar al usuario
-          if (
-            fbErr.code === 'auth/wrong-password' ||
-            fbErr.code === 'auth/invalid-credential' ||
-            fbErr.code === 'auth/invalid-login-credentials'
-          ) {
-            throw new Error('Contraseña o credenciales incorrectas. Verificá los datos ingresados o utilizá ¿Olvidaste tu contraseña?.');
-          }
-          if (fbErr.code === 'auth/user-not-found') {
-            throw new Error('No encontramos una cuenta registrada con este correo electrónico. Por favor registrate en la pestaña de Registro.');
-          }
-          if (fbErr.code === 'auth/invalid-email') {
-            throw new Error('El formato del correo electrónico ingresado no es válido.');
-          }
-          if (fbErr.code === 'auth/too-many-requests') {
-            throw new Error('Demasiados intentos fallidos. Por seguridad, esperá unos minutos antes de volver a intentar.');
-          }
-          if (fbErr.code === 'auth/user-disabled') {
-            throw new Error('Esta cuenta ha sido deshabilitada.');
-          }
-        }
-      }
+      let fbDisplayName = '';
+      let fbVerified = false;
+      let usedResilientFallback = false;
 
-      // 2. Autenticar con el servicio para asegurar perfil completo
-      if (!fbUid) {
-        fbUid = (await ensureFirebaseAuthSession()) || '';
-      }
-      const logged = await authService.login(cleanEmail, cleanPass);
-      const effectiveUid = fbUid || logged.uid || logged.id;
-
-      // 3. Sincronizar / cargar perfil de Firestore si existe
       try {
-        const fsDoc = await getUserDocument(effectiveUid);
-        if (fsDoc) {
-          logged.rol = fsDoc.rol || logged.rol;
-          logged.esChofer = fsDoc.esChofer ?? logged.esChofer;
-          logged.tipoVehiculo = fsDoc.tipoVehiculo ?? logged.tipoVehiculo;
-          logged.phone = fsDoc.phone || logged.phone;
-          logged.barrio = fsDoc.barrio || logged.barrio;
+        const cred = await signInWithEmailAndPassword(auth, cleanEmail, cleanPass);
+        fbUid = cred.user.uid;
+        fbDisplayName = cred.user.displayName || '';
+        fbVerified = cred.user.emailVerified;
+        setFirebaseUser({
+          uid: cred.user.uid,
+          email: cred.user.email || cleanEmail,
+          displayName: cred.user.displayName || undefined,
+          emailVerified: cred.user.emailVerified,
+        });
+      } catch (fbErr: any) {
+        console.warn('Firebase Auth signIn notice:', fbErr?.code, fbErr?.message);
+        if (isProviderUnavailableCode(fbErr?.code)) {
+          usedResilientFallback = true;
+        } else {
+          throw new Error(translateFirebaseAuthError(fbErr?.code, fbErr?.message));
         }
-      } catch {}
+      }
+
+      if (usedResilientFallback) {
+        const anonUid = (await ensureFirebaseAuthSession()) || '';
+        const logged = await authService.login(cleanEmail, cleanPass);
+        const effectiveUid = anonUid || logged.uid || logged.id;
+
+        try {
+          const fsDoc = await getUserDocument(effectiveUid);
+          if (fsDoc) {
+            logged.rol = fsDoc.rol || logged.rol;
+            logged.esChofer = fsDoc.esChofer ?? logged.esChofer;
+            logged.tipoVehiculo = fsDoc.tipoVehiculo ?? logged.tipoVehiculo;
+            logged.phone = fsDoc.phone || logged.phone;
+            logged.barrio = fsDoc.barrio || logged.barrio;
+            logged.name = fsDoc.nombre || logged.name;
+            logged.nombre = fsDoc.nombre || logged.nombre;
+          }
+        } catch {}
+
+        const finalUser: User = {
+          ...logged,
+          id: effectiveUid,
+          uid: effectiveUid,
+          name: logged.name || logged.nombre || cleanEmail.split('@')[0],
+          nombre: logged.nombre || logged.name || cleanEmail.split('@')[0],
+          email: cleanEmail,
+          role: mapFirestoreRolToAppRole(logged.rol, logged.esChofer),
+        };
+        setUser(finalUser);
+        saveStoredSessionUser(finalUser);
+        return finalUser;
+      }
+
+      // Firebase Auth tuvo éxito: cargamos perfil real de Firestore sin bloquear por cache local vacía en otro dispositivo
+      const fsDoc = await getUserDocument(fbUid);
+      const syncedLocal = await authService.syncUser({
+        uid: fbUid,
+        email: cleanEmail,
+        nombre: fsDoc?.nombre || fbDisplayName || cleanEmail.split('@')[0],
+        rol: (fsDoc?.rol as any) || undefined,
+        tipoVehiculo: fsDoc?.tipoVehiculo ?? undefined,
+        esChofer: fsDoc?.esChofer,
+        phone: fsDoc?.phone,
+        barrio: fsDoc?.barrio,
+        emailVerificado: fbVerified,
+      });
+
+      const isOfficialAdmin = cleanEmail === OFFICIAL_ADMIN_EMAIL && fbVerified;
+      const effectiveRol = isOfficialAdmin ? 'administrador' : fsDoc?.rol || syncedLocal?.rol || 'pasajero';
+      const isChofer = Boolean(
+        fsDoc?.esChofer ??
+          syncedLocal?.esChofer ??
+          (effectiveRol === 'chofer_moto' || effectiveRol === 'chofer_auto' || effectiveRol === 'chofer_micro')
+      );
+      const resolvedName =
+        fsDoc?.nombre || fbDisplayName || syncedLocal?.name || cleanEmail.split('@')[0] || 'Usuario UPPA';
+
+      if (!fsDoc) {
+        createUserDocument(fbUid, {
+          nombre: resolvedName,
+          email: cleanEmail,
+          rol: effectiveRol,
+          esChofer: isChofer,
+          tipoVehiculo: syncedLocal?.tipoVehiculo ?? null,
+          phone: syncedLocal?.phone || '',
+          barrio: syncedLocal?.barrio || 'Campana Centro',
+          emailVerificado: fbVerified,
+          estado: 'activo',
+          fechaRegistro: new Date().toISOString(),
+        }).catch(() => {});
+      } else if (fbVerified && !fsDoc.emailVerificado) {
+        marcarEmailVerificadoEnFirestore(fbUid).catch(() => {});
+      }
 
       const finalUser: User = {
-        ...logged,
-        id: effectiveUid,
-        uid: effectiveUid,
-        name: logged.name || logged.nombre || cleanEmail.split('@')[0],
-        nombre: logged.name || logged.nombre || cleanEmail.split('@')[0],
+        id: fbUid,
+        uid: fbUid,
+        name: resolvedName,
+        nombre: resolvedName,
         email: cleanEmail,
+        role: mapFirestoreRolToAppRole(effectiveRol, isChofer),
+        rol: effectiveRol,
+        esChofer: isChofer,
+        tipoVehiculo: fsDoc?.tipoVehiculo ?? syncedLocal?.tipoVehiculo ?? null,
+        phone: fsDoc?.phone || syncedLocal?.phone || '',
+        barrio: fsDoc?.barrio || syncedLocal?.barrio || 'Campana Centro',
+        avatarUrl:
+          fsDoc?.avatarUrl ||
+          syncedLocal?.avatarUrl ||
+          `https://api.dicebear.com/7.x/bottts/svg?seed=${fbUid}&backgroundColor=12141c`,
+        estado: fsDoc?.estado || 'activo',
+        activo: true,
+        fechaRegistro: fsDoc?.fechaRegistro || syncedLocal?.fechaRegistro || new Date().toISOString(),
+        emailVerificado: Boolean(fbVerified || fsDoc?.emailVerificado),
       };
 
       setUser(finalUser);
-      localStorage.setItem(LOCAL_SESSION_KEY, JSON.stringify(finalUser));
+      saveStoredSessionUser(finalUser);
       return finalUser;
     } catch (err: any) {
-      const msg = err.message || 'Error al iniciar sesión';
+      const msg = err?.message || 'Error al iniciar sesión';
       setAuthError(msg);
       throw err;
+    } finally {
+      isManualAuthFlowRef.current = false;
     }
   };
 
@@ -418,215 +672,149 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setAuthNotice(null);
 
     try {
+      isLoggingOutRef.current = false;
+      isManualAuthFlowRef.current = true;
       let fbUid = '';
       let fbEmail = email?.trim().toLowerCase();
       let fbName = name?.trim();
+      let fbPhoto = '';
+      let isRealGooglePopup = false;
 
-      // Si no viene email directo, intentar ventana emergente con selector explícito de cuenta
       if (!fbEmail) {
         const provider = new GoogleAuthProvider();
         provider.setCustomParameters({ prompt: 'select_account' });
 
         try {
           const cred = await signInWithPopup(auth, provider);
+          isRealGooglePopup = true;
           fbUid = cred.user.uid;
           fbEmail = (cred.user.email || '').trim().toLowerCase();
           fbName = cred.user.displayName || fbEmail.split('@')[0];
+          fbPhoto = cred.user.photoURL || '';
           setFirebaseUser({
             uid: cred.user.uid,
             email: cred.user.email || undefined,
             displayName: cred.user.displayName || undefined,
-            emailVerified: true,
+            emailVerified: cred.user.emailVerified,
           });
         } catch (popupErr: any) {
           console.warn('Google Popup result:', popupErr?.code || popupErr?.message);
-          if (popupErr?.code === 'auth/popup-closed-by-user' || popupErr?.code === 'auth/cancelled-popup-request') {
+          if (
+            popupErr?.code === 'auth/popup-closed-by-user' ||
+            popupErr?.code === 'auth/cancelled-popup-request'
+          ) {
             throw new Error('Inicio de sesión cancelado.');
           }
           if (
             popupErr?.code === 'auth/popup-blocked' ||
             popupErr?.code === 'auth/unauthorized-domain' ||
-            popupErr?.message?.includes('popup')
+            popupErr?.code === 'auth/operation-not-allowed' ||
+            popupErr?.code === 'auth/web-storage-unsupported' ||
+            popupErr?.code === 'auth/internal-error' ||
+            popupErr?.message?.toLowerCase().includes('popup') ||
+            popupErr?.message?.toLowerCase().includes('blocked')
           ) {
-            throw new Error('popup-blocked: La ventana emergente fue bloqueada por el navegador.');
+            throw new Error(`popup-blocked (${popupErr?.code || 'iframe'}): La ventana emergente fue bloqueada por el navegador.`);
           }
-          if (!fbEmail && !credential) {
-            throw new Error(popupErr?.message || 'No se pudo conectar con la cuenta de Google seleccionada.');
+          if (popupErr?.code) {
+            throw new Error(translateFirebaseAuthError(popupErr.code, popupErr.message));
           }
+          throw new Error(popupErr?.message || 'No se pudo conectar con la cuenta de Google seleccionada.');
         }
       }
 
-      if (!fbEmail && !credential) {
-        throw new Error('Por favor seleccioná tu cuenta personal de Google para ingresar.');
+      if (!fbEmail || !EMAIL_REGEX.test(fbEmail)) {
+        throw new Error('Por favor ingresá o seleccioná una cuenta de Google válida.');
+      }
+
+      // Si vino del modo fallback manual/guardado, asegurar sesión Firebase anónima para habilitar Firestore
+      if (!fbUid) {
+        fbUid = (await ensureFirebaseAuthSession()) || '';
       }
 
       const logged = await authService.googleLogin(credential, fbEmail, fbName);
       const effectiveUid = fbUid || logged.uid || logged.id;
 
-      // Sincronizar o crear documento en Firestore
+      // Leer primero Firestore para NO sobrescribir rol/vehículo/barrio de un usuario ya registrado
+      const existingFsDoc = effectiveUid ? await getUserDocument(effectiveUid) : null;
+
+      const isOfficialAdmin = fbEmail === OFFICIAL_ADMIN_EMAIL && isRealGooglePopup;
+      const effectiveRol = isOfficialAdmin
+        ? 'administrador'
+        : existingFsDoc?.rol || logged.rol || 'pasajero';
+      const isChofer = Boolean(
+        existingFsDoc?.esChofer ??
+          logged.esChofer ??
+          (effectiveRol === 'chofer_moto' || effectiveRol === 'chofer_auto' || effectiveRol === 'chofer_micro')
+      );
+      const resolvedName = existingFsDoc?.nombre || fbName || logged.name || fbEmail.split('@')[0] || 'Usuario Google';
+
       try {
-        await createUserDocument(effectiveUid, {
-          nombre: fbName || logged.name || 'Usuario Google',
-          email: fbEmail || logged.email,
-          rol: logged.rol || 'pasajero',
-          estado: 'activo',
-          fechaRegistro: logged.fechaRegistro || new Date().toISOString(),
-          esChofer: logged.esChofer || false,
-        });
+        if (!existingFsDoc) {
+          await createUserDocument(effectiveUid, {
+            nombre: resolvedName,
+            email: fbEmail,
+            rol: effectiveRol,
+            estado: 'activo',
+            fechaRegistro: logged.fechaRegistro || new Date().toISOString(),
+            esChofer: isChofer,
+            tipoVehiculo: logged.tipoVehiculo ?? null,
+            avatarUrl: fbPhoto || logged.avatarUrl,
+            emailVerificado: true,
+          });
+        } else {
+          await updateUserDocument(effectiveUid, {
+            emailVerificado: true,
+            ...(fbPhoto && !existingFsDoc.avatarUrl ? { avatarUrl: fbPhoto } : {}),
+          });
+        }
       } catch {}
+
+      await authService.syncUser({
+        uid: effectiveUid,
+        email: fbEmail,
+        nombre: resolvedName,
+        rol: effectiveRol as any,
+        esChofer: isChofer,
+        tipoVehiculo: existingFsDoc?.tipoVehiculo ?? logged.tipoVehiculo ?? null,
+        phone: existingFsDoc?.phone || logged.phone,
+        barrio: existingFsDoc?.barrio || logged.barrio,
+        emailVerificado: true,
+      });
 
       const finalUser: User = {
         ...logged,
         id: effectiveUid,
         uid: effectiveUid,
-        name: fbName || logged.name || logged.nombre || 'Usuario Google',
-        nombre: fbName || logged.name || logged.nombre || 'Usuario Google',
-        email: fbEmail || logged.email,
-      };
-
-      setUser(finalUser);
-      localStorage.setItem(LOCAL_SESSION_KEY, JSON.stringify(finalUser));
-      return finalUser;
-    } catch (err: any) {
-      const msg = err.message || 'Error al ingresar con Google';
-      setAuthError(msg);
-      throw err;
-    }
-  };
-
-  const loginWithWhatsApp = async (
-    phone: string,
-    name?: string,
-    requestedRole?: string,
-    barrio?: string
-  ): Promise<User> => {
-    setAuthError(null);
-    setAuthNotice(null);
-
-    const digits = phone.replace(/\D/g, '');
-    if (digits.length < 8) {
-      const errMsg = 'Ingresá un número de WhatsApp válido (mínimo 8 dígitos, ej: 3489686939).';
-      setAuthError(errMsg);
-      throw new Error(errMsg);
-    }
-
-    const formattedPhone = phone.trim().startsWith('+') ? phone.trim() : `+54 9 ${digits}`;
-    const waDocUid = `wa_${digits}`;
-    const syntheticEmail = `wa_${digits}@whatsapp.uppa.app`;
-
-    try {
-      // Buscar perfil existente en registro local de WhatsApp o Firestore
-      let storedWaProfiles: Record<string, User> = {};
-      try {
-        const raw = localStorage.getItem('uppa_whatsapp_profiles');
-        if (raw) storedWaProfiles = JSON.parse(raw) || {};
-      } catch {}
-
-      let existingProfile: User | null = storedWaProfiles[digits] || null;
-      let fbUid = '';
-
-      try {
-        fbUid = (await ensureFirebaseAuthSession()) || '';
-      } catch {}
-
-      try {
-        const lookupUid = fbUid || waDocUid;
-        const fsByWa = await getUserDocument(lookupUid);
-        if (fsByWa) {
-          existingProfile = {
-            id: fsByWa.uid || waDocUid,
-            uid: fsByWa.uid || waDocUid,
-            name: fsByWa.nombre || existingProfile?.name || name || 'Vecino WhatsApp',
-            nombre: fsByWa.nombre || existingProfile?.nombre || name || 'Vecino WhatsApp',
-            email: fsByWa.email || syntheticEmail,
-            phone: fsByWa.phone || formattedPhone,
-            role: mapFirestoreRolToAppRole(fsByWa.rol, fsByWa.esChofer),
-            rol: fsByWa.rol,
-            esChofer: fsByWa.esChofer,
-            tipoVehiculo: fsByWa.tipoVehiculo ?? null,
-            barrio: fsByWa.barrio || barrio || 'Campana / Zárate',
-            avatarUrl: fsByWa.avatarUrl,
-            estado: fsByWa.estado || 'activo',
-            fechaRegistro: fsByWa.fechaRegistro,
-            emailVerificado: true,
-          };
-        }
-      } catch {}
-
-      const selectedRol = (requestedRole || existingProfile?.rol || 'pasajero') as
-        | 'pasajero'
-        | 'chofer_moto'
-        | 'chofer_auto'
-        | 'administrador';
-      const isChofer = selectedRol === 'chofer_moto' || selectedRol === 'chofer_auto';
-      const tipoVehiculo =
-        selectedRol === 'chofer_moto'
-          ? 'moto'
-          : selectedRol === 'chofer_auto'
-          ? 'auto'
-          : existingProfile?.tipoVehiculo ?? null;
-
-      const cleanName =
-        (name || '').trim() ||
-        existingProfile?.nombre ||
-        existingProfile?.name ||
-        `Vecino ${digits.slice(-4)}`;
-
-      const finalUser: User = {
-        id: existingProfile?.id || waDocUid,
-        uid: existingProfile?.uid || waDocUid,
-        name: cleanName,
-        nombre: cleanName,
-        email: existingProfile?.email || syntheticEmail,
-        phone: formattedPhone,
-        role: mapFirestoreRolToAppRole(selectedRol, isChofer),
-        rol: selectedRol,
+        name: resolvedName,
+        nombre: resolvedName,
+        email: fbEmail,
+        role: mapFirestoreRolToAppRole(effectiveRol, isChofer),
+        rol: effectiveRol,
         esChofer: isChofer,
-        tipoVehiculo,
-        barrio: (barrio || '').trim() || existingProfile?.barrio || 'Campana / Zárate',
-        avatarUrl:
-          existingProfile?.avatarUrl ||
-          `https://api.dicebear.com/7.x/bottts/svg?seed=${waDocUid}&backgroundColor=12141c`,
-        estado: 'activo',
-        fechaRegistro: existingProfile?.fechaRegistro || new Date().toISOString(),
+        tipoVehiculo: existingFsDoc?.tipoVehiculo ?? logged.tipoVehiculo ?? null,
+        phone: existingFsDoc?.phone || logged.phone || '',
+        barrio: existingFsDoc?.barrio || logged.barrio || 'Campana Centro',
+        avatarUrl: fbPhoto || existingFsDoc?.avatarUrl || logged.avatarUrl,
         emailVerificado: true,
+        estado: existingFsDoc?.estado || 'activo',
+        fechaRegistro: existingFsDoc?.fechaRegistro || logged.fechaRegistro || new Date().toISOString(),
       };
 
-      const registroFecha = finalUser.fechaRegistro || new Date().toISOString();
-      try {
-        const targetUid = fbUid || waDocUid;
-        await createUserDocument(targetUid, {
-          nombre: finalUser.nombre || finalUser.name,
-          email: finalUser.email,
-          rol: selectedRol,
-          esChofer: finalUser.esChofer,
-          tipoVehiculo: finalUser.tipoVehiculo ?? null,
-          phone: finalUser.phone,
-          barrio: finalUser.barrio,
-          avatarUrl: finalUser.avatarUrl,
-          emailVerificado: true,
-          estado: 'activo',
-          fechaRegistro: registroFecha,
-        });
-      } catch {}
-
-      try {
-        storedWaProfiles[digits] = finalUser;
-        localStorage.setItem('uppa_whatsapp_profiles', JSON.stringify(storedWaProfiles));
-        localStorage.setItem(LOCAL_SESSION_KEY, JSON.stringify(finalUser));
-      } catch {}
-
       setUser(finalUser);
-      setAuthNotice(`¡Sesión iniciada con WhatsApp (${formattedPhone})!`);
+      saveStoredSessionUser(finalUser);
       return finalUser;
     } catch (err: any) {
-      const msg = err?.message || 'Error al ingresar con WhatsApp';
+      const msg = err?.message || 'Error al ingresar con Google';
       setAuthError(msg);
       throw err;
+    } finally {
+      isManualAuthFlowRef.current = false;
     }
   };
 
   const logout = async (): Promise<void> => {
+    isLoggingOutRef.current = true;
     try {
       await signOut(auth);
     } catch {}
@@ -635,25 +823,43 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch {}
     setUser(null);
     setFirebaseUser(null);
+    setAuthError(null);
+    setAuthNotice(null);
+    setEmailVerificationSent(false);
+    saveStoredSessionUser(null);
     try {
-      localStorage.removeItem(LOCAL_SESSION_KEY);
-      localStorage.removeItem('uppa_session_user');
       localStorage.removeItem('uppa_session_token');
     } catch {}
   };
 
   const resetPassword = async (email: string): Promise<void> => {
+    const cleanEmail = email.trim().toLowerCase();
+    if (!EMAIL_REGEX.test(cleanEmail)) {
+      throw new Error('Por favor ingresá un correo electrónico válido.');
+    }
+
     try {
-      await sendPasswordResetEmail(auth, email);
-    } catch {}
-    await authService.resetPassword(email);
+      await sendPasswordResetEmail(auth, cleanEmail);
+      await authService.resetPassword(cleanEmail).catch(() => {});
+    } catch (err: any) {
+      if (isProviderUnavailableCode(err?.code)) {
+        await authService.resetPassword(cleanEmail);
+        return;
+      }
+      throw new Error(translateFirebaseAuthError(err?.code, 'No se pudo enviar el correo de recuperación.'));
+    }
   };
 
   const sendVerificationEmail = async (): Promise<boolean> => {
-    if (auth.currentUser) {
+    if (auth.currentUser && !auth.currentUser.isAnonymous) {
       try {
         await sendEmailVerification(auth.currentUser);
-      } catch {}
+      } catch (err: any) {
+        if (err?.code === 'auth/too-many-requests') {
+          throw new Error('Ya enviamos un correo recientemente. Esperá un momento antes de reenviar.');
+        }
+        throw new Error(translateFirebaseAuthError(err?.code, 'No se pudo enviar el correo de verificación.'));
+      }
     }
     setEmailVerificationSent(true);
     setAuthNotice('Correo de verificación enviado por Firebase.');
@@ -661,41 +867,77 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const reloadAuthUser = async (): Promise<boolean> => {
+    if (auth.currentUser && !auth.currentUser.isAnonymous) {
+      await auth.currentUser.reload();
+      const verified = Boolean(auth.currentUser.emailVerified);
+      setFirebaseUser({
+        uid: auth.currentUser.uid,
+        email: auth.currentUser.email || undefined,
+        displayName: auth.currentUser.displayName || undefined,
+        emailVerified: verified,
+      });
+
+      if (verified) {
+        await marcarEmailVerificadoEnFirestore(auth.currentUser.uid).catch(() => {});
+        if (user) {
+          const updatedUser = { ...user, emailVerificado: true };
+          setUser(updatedUser);
+          saveStoredSessionUser(updatedUser);
+        }
+      }
+      return verified;
+    }
+
     const updated = await authService.getCurrentUser();
     if (updated) {
       setUser(updated);
-      localStorage.setItem(LOCAL_SESSION_KEY, JSON.stringify(updated));
-      return true;
+      saveStoredSessionUser(updated);
+      return Boolean(updated.emailVerificado);
     }
-    return false;
+    return Boolean(user?.emailVerificado);
   };
 
   const updateProfileData = async (data: Partial<User>): Promise<void> => {
-    if (user?.id) {
-      await authService.updateProfile(user.id, data);
-      await updateUserDocument(user.id, {
+    if (!user?.id && !user?.uid) return;
+    const targetFirestoreUid =
+      (auth.currentUser && !auth.currentUser.isAnonymous ? auth.currentUser.uid : null) ||
+      auth.currentUser?.uid ||
+      user.uid ||
+      user.id;
+
+    await authService.updateProfile(user.id || targetFirestoreUid, data).catch(() => {});
+    if (targetFirestoreUid) {
+      await updateUserDocument(targetFirestoreUid, {
         nombre: data.name || data.nombre,
         phone: data.phone || data.telefono,
         barrio: data.barrio,
         rol: data.rol || data.role,
       }).catch(() => {});
-
-      const merged = { ...user, ...data };
-      setUser(merged);
-      localStorage.setItem(LOCAL_SESSION_KEY, JSON.stringify(merged));
     }
+
+    const merged: User = { ...user, ...data };
+    setUser(merged);
+    saveStoredSessionUser(merged);
   };
 
-  const isAuthenticated = !!user;
+  const isAuthenticated = Boolean(user);
   const isAdmin = user?.role === 'admin' || user?.rol === 'administrador';
-  const isEmailVerified = firebaseUser?.emailVerified ?? (user?.emailVerificado ?? true);
+  const isEmailVerified =
+    (firebaseUser && firebaseUser.email
+      ? Boolean(firebaseUser.emailVerified)
+      : undefined) ?? (user?.emailVerificado ?? true);
 
-  const effectiveFirebaseUser = firebaseUser || (user ? {
-    uid: user.id || user.uid,
-    email: user.email,
-    displayName: user.name,
-    emailVerified: isEmailVerified,
-  } : null);
+  const effectiveFirebaseUser =
+    firebaseUser?.email
+      ? firebaseUser
+      : user
+      ? {
+          uid: user.uid || user.id,
+          email: user.email,
+          displayName: user.name,
+          emailVerified: isEmailVerified,
+        }
+      : null;
 
   return (
     <AuthContext.Provider
@@ -715,7 +957,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         registerWithEmail,
         loginWithEmail,
         loginWithGoogle,
-        loginWithWhatsApp,
         logout,
         resetPassword,
         sendVerificationEmail,

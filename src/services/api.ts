@@ -276,7 +276,7 @@ async function executeLocalSimulator<T>(
 
       if (!user) {
         const uid = `usr_g_${now}_${Math.random().toString(36).substring(2, 6)}`;
-        const isAdmin = cleanEmail.includes('admin');
+        const isAdmin = cleanEmail === 'gastonrobertogimenez@gmail.com';
         const defaultName = name || cleanEmail.split('@')[0] || 'Usuario';
         user = {
           uid,
@@ -314,10 +314,61 @@ async function executeLocalSimulator<T>(
 
     case 'me': {
       const users = getSheetData<any>('USUARIOS', []);
-      const token = getStoredSessionToken();
-      // Si hay un usuario en sesión o retornamos el último usuario
-      const user = users[0] || null;
+      const activeToken = token || getStoredSessionToken();
+      if (!activeToken) {
+        return { ok: true, data: null as any, error: null, timestamp: now };
+      }
+      const sessions = getSheetData<any>('SESIONES', []);
+      const session = sessions.find((s) => s.token === activeToken && s.activo !== false);
+      const user = session ? users.find((u) => u.uid === session.uid) || null : null;
       return { ok: true, data: user as any, error: null, timestamp: now };
+    }
+
+    case 'syncUser': {
+      const { uid, email, nombre, rol, tipoVehiculo, esChofer, phone, barrio, emailVerificado } = body;
+      const cleanEmail = String(email || '').trim().toLowerCase();
+      if (!cleanEmail) {
+        return { ok: false, data: null, error: { code: 'INVALID_INPUT', message: 'Email requerido' }, timestamp: now };
+      }
+      const users = getSheetData<any>('USUARIOS', []);
+      const idx = users.findIndex((u) => u.email.toLowerCase() === cleanEmail || (uid && u.uid === uid));
+      const computedIsChofer = Boolean(
+        esChofer || rol === 'chofer_moto' || rol === 'chofer_auto' || rol === 'chofer_micro' || tipoVehiculo
+      );
+      if (idx >= 0) {
+        users[idx] = {
+          ...users[idx],
+          uid: uid || users[idx].uid,
+          nombre: nombre || users[idx].nombre,
+          rol: rol || users[idx].rol,
+          esChofer: esChofer !== undefined ? esChofer : users[idx].esChofer,
+          tipoVehiculo: tipoVehiculo !== undefined ? tipoVehiculo : users[idx].tipoVehiculo,
+          telefono: phone || users[idx].telefono || '',
+          barrio: barrio || users[idx].barrio || 'Campana Centro',
+          emailVerificado: emailVerificado ?? users[idx].emailVerificado ?? false,
+          ultimoAcceso: new Date().toISOString(),
+        };
+      } else {
+        const effectiveUid = uid || `usr_${now}_${Math.random().toString(36).substring(2, 7)}`;
+        users.push({
+          uid: effectiveUid,
+          nombre: nombre || cleanEmail.split('@')[0],
+          email: cleanEmail,
+          rol: rol || 'pasajero',
+          esChofer: computedIsChofer,
+          tipoVehiculo: tipoVehiculo || null,
+          activo: true,
+          telefono: phone || '',
+          barrio: barrio || 'Campana Centro',
+          avatarUrl: `https://api.dicebear.com/7.x/bottts/svg?seed=${effectiveUid}&backgroundColor=12141c`,
+          fechaRegistro: new Date().toISOString(),
+          ultimoAcceso: new Date().toISOString(),
+          emailVerificado: Boolean(emailVerificado),
+        });
+      }
+      saveSheetData('USUARIOS', users);
+      const syncedUser = users[idx >= 0 ? idx : users.length - 1];
+      return { ok: true, data: syncedUser as any, error: null, timestamp: now };
     }
 
     case 'logout': {

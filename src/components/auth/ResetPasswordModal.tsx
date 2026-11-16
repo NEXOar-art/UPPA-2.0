@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { authService } from '../../services/authService';
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '../../context/AuthContext';
 import {
   X,
   KeyRound,
@@ -18,31 +18,46 @@ interface ResetPasswordModalProps {
   onPasswordGeneratedAndLogin?: (user: any) => void;
 }
 
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export const ResetPasswordModal: React.FC<ResetPasswordModalProps> = ({
   isOpen,
   onClose,
   initialEmail = '',
 }) => {
+  const { resetPassword } = useAuth();
   const [email, setEmail] = useState(initialEmail);
   const [isSending, setIsSending] = useState(false);
   const [isSent, setIsSent] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      setEmail(initialEmail || '');
+      setIsSent(false);
+      setErrorMessage(null);
+      setIsSending(false);
+    }
+  }, [isOpen, initialEmail]);
 
   if (!isOpen) return null;
 
   const handleSendResetEmail = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleanEmail = email.trim().toLowerCase();
-    if (!cleanEmail) return;
+    if (!EMAIL_REGEX.test(cleanEmail)) {
+      setErrorMessage('Por favor ingresá un correo electrónico válido.');
+      return;
+    }
 
     setIsSending(true);
     setErrorMessage(null);
 
     try {
-      await authService.resetPassword(cleanEmail);
+      await resetPassword(cleanEmail);
       setIsSent(true);
     } catch (err: any) {
-      setErrorMessage(err.message || 'No se pudo enviar el correo de recuperación.');
+      setErrorMessage(err?.message || 'No se pudo enviar el correo de recuperación.');
     } finally {
       setIsSending(false);
     }
@@ -95,7 +110,7 @@ export const ResetPasswordModal: React.FC<ResetPasswordModalProps> = ({
               </div>
             )}
 
-            <form onSubmit={handleSendResetEmail} className="space-y-3.5">
+            <form onSubmit={handleSendResetEmail} noValidate className="space-y-3.5">
               <div>
                 <label className="block text-[11px] font-bold text-white mb-1.5 uppercase tracking-wider">
                   Correo electrónico
@@ -104,9 +119,14 @@ export const ResetPasswordModal: React.FC<ResetPasswordModalProps> = ({
                   <Mail className="w-4 h-4 text-[#9299A5] absolute left-3.5 top-1/2 -translate-y-1/2" />
                   <input
                     type="email"
+                    name="email"
+                    autoComplete="email"
                     required
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      if (errorMessage) setErrorMessage(null);
+                    }}
                     placeholder="ejemplo@gmail.com"
                     className="w-full min-h-[44px] bg-[#101114] border-2 border-white/15 rounded-xl pl-10 pr-3.5 py-2.5 text-xs text-white placeholder:text-[#9299A5] focus:outline-none focus:border-[#FFF19A]"
                   />
@@ -143,7 +163,7 @@ export const ResetPasswordModal: React.FC<ResetPasswordModalProps> = ({
                   Enviamos las instrucciones para restablecer tu contraseña a:
                 </div>
                 <div className="text-xs font-mono font-bold text-white mt-1 bg-[#202329] py-1 px-3 rounded-lg inline-block border border-white/15">
-                  {email}
+                  {email.trim().toLowerCase()}
                 </div>
                 <p className="text-[11px] text-[#9299A5] mt-2">
                   Revisá tu bandeja de entrada (y la carpeta de spam si es necesario) para crear tu nueva clave.

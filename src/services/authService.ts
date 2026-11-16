@@ -107,6 +107,19 @@ export const authService = {
     return res.ok;
   },
 
+  async syncUser(data: Partial<RegisterPayload> & { uid?: string; emailVerificado?: boolean }): Promise<User | null> {
+    try {
+      const res = await apiRequest<ApiUserRecord>('syncUser', {
+        method: 'POST',
+        body: data,
+      });
+      if (res.ok && res.data) {
+        return formatUserFromApi(res.data);
+      }
+    } catch {}
+    return null;
+  },
+
   async updateProfile(uid: string, partial: Partial<User>): Promise<void> {
     await apiRequest('updateUser', {
       method: 'POST',
