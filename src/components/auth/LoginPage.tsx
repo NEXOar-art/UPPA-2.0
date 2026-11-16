@@ -22,6 +22,8 @@ import {
   CheckCircle2,
   Phone,
   MapPin,
+  MessageCircle,
+  ArrowLeft,
 } from 'lucide-react';
 
 interface LoginPageProps {
@@ -33,6 +35,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
   const {
     registerWithEmail,
     loginWithEmail,
+    loginWithWhatsApp,
     authError,
     setAuthError,
     authNotice,
@@ -40,6 +43,11 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
   } = useAuth();
 
   const [authMode, setAuthMode] = useState<'login' | 'register'>('register');
+  const [isWhatsAppMode, setIsWhatsAppMode] = useState(false);
+  const [waPhone, setWaPhone] = useState('');
+  const [waName, setWaName] = useState('');
+  const [waRole, setWaRole] = useState<'pasajero' | 'chofer_moto' | 'chofer_auto'>('pasajero');
+  const [waBarrio, setWaBarrio] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
@@ -162,6 +170,41 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
     });
   };
 
+  const handleWhatsAppSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    setAuthError(null);
+    setLocalNotice(null);
+    try {
+      const userProfile = await loginWithWhatsApp(waPhone, waName, waRole, waBarrio);
+      setLocalNotice('¡Acceso concedido mediante WhatsApp!');
+      setTimeout(() => {
+        setIsSubmitting(false);
+        const computedRole = mapFirestoreRolToAppRole(userProfile.rol, userProfile.esChofer);
+        onLogin({
+          id: userProfile.uid || userProfile.id || 'wa_' + Date.now(),
+          uid: userProfile.uid || userProfile.id,
+          name: userProfile.nombre || userProfile.name || 'Vecino WhatsApp',
+          nombre: userProfile.nombre || userProfile.name || 'Vecino WhatsApp',
+          email: userProfile.email,
+          role: computedRole,
+          rol: userProfile.rol,
+          esChofer: userProfile.esChofer,
+          tipoVehiculo: userProfile.tipoVehiculo,
+          estado: userProfile.estado,
+          fechaRegistro: userProfile.fechaRegistro,
+          barrio: userProfile.barrio,
+          phone: userProfile.phone,
+          avatarUrl: userProfile.avatarUrl,
+          emailVerificado: true,
+        });
+      }, 300);
+    } catch {
+      setIsSubmitting(false);
+      setLocalNotice(null);
+    }
+  };
+
   return (
     <div className="relative min-h-screen w-full bg-[#101114] text-white flex flex-col justify-between overflow-x-hidden">
       {/* Subtle Background Atmosphere */}
@@ -258,12 +301,13 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
                 <button
                   type="button"
                   onClick={() => {
+                    setIsWhatsAppMode(false);
                     setAuthMode('register');
                     setAuthError(null);
                   }}
                   title="Crear una cuenta nueva en UPPA"
                   className={`flex-1 min-h-[40px] text-xs font-black rounded-xl transition-all cursor-pointer ${
-                    authMode === 'register'
+                    !isWhatsAppMode && authMode === 'register'
                       ? 'bg-[#FFF19A] text-[#101114]'
                       : 'text-[#9299A5] hover:text-white'
                   }`}
@@ -273,12 +317,13 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
                 <button
                   type="button"
                   onClick={() => {
+                    setIsWhatsAppMode(false);
                     setAuthMode('login');
                     setAuthError(null);
                   }}
                   title="Ingresar con una cuenta existente"
                   className={`flex-1 min-h-[40px] text-xs font-black rounded-xl transition-all cursor-pointer ${
-                    authMode === 'login'
+                    !isWhatsAppMode && authMode === 'login'
                       ? 'bg-[#FFF19A] text-[#101114]'
                       : 'text-[#9299A5] hover:text-white'
                   }`}
@@ -344,6 +389,124 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
                 </div>
               )}
 
+              {isWhatsAppMode ? (
+                <form onSubmit={handleWhatsAppSubmit} className="space-y-3 animate-in fade-in">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black text-[#B7F36B] flex items-center gap-1.5">
+                      <MessageCircle className="w-4 h-4" />
+                      <span>Ingreso Rápido con WhatsApp</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsWhatsAppMode(false);
+                        setAuthError(null);
+                      }}
+                      title="Volver a correo y Google"
+                      className="text-[11px] font-bold text-[#9299A5] hover:text-white flex items-center gap-1 cursor-pointer"
+                    >
+                      <ArrowLeft className="w-3.5 h-3.5" />
+                      <span>Volver</span>
+                    </button>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-white mb-1 uppercase tracking-wider">
+                      Número de WhatsApp *
+                    </label>
+                    <div className="relative">
+                      <Phone className="w-4 h-4 text-[#B7F36B] absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="tel"
+                        required
+                        value={waPhone}
+                        onChange={(e) => setWaPhone(e.target.value)}
+                        placeholder="+54 9 3489 68-6939"
+                        className="w-full min-h-[42px] bg-[#101114] border-2 border-[#B7F36B]/45 rounded-xl pl-9 pr-3.5 py-2 text-xs text-white placeholder:text-[#9299A5] focus:outline-none focus:border-[#B7F36B] font-mono"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-white mb-1 uppercase tracking-wider">
+                      Nombre y Apellido
+                    </label>
+                    <div className="relative">
+                      <UserIcon className="w-4 h-4 text-[#9299A5] absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        value={waName}
+                        onChange={(e) => setWaName(e.target.value)}
+                        placeholder="Tu nombre completo (si sos nuevo)"
+                        className="w-full min-h-[42px] bg-[#101114] border-2 border-white/15 rounded-xl pl-9 pr-3.5 py-2 text-xs text-white placeholder:text-[#9299A5] focus:outline-none focus:border-[#FFF19A]"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-white mb-1.5 uppercase tracking-wider">
+                      Función en la Comunidad
+                    </label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {[
+                        { id: 'pasajero' as const, label: 'Pasajero', sub: 'Vecino', icon: '🚶', activeCls: 'border-[#FFF19A] bg-[#FFF19A] text-[#101114]' },
+                        { id: 'chofer_moto' as const, label: 'Moto Taxi', sub: 'Chofer Moto', icon: '🏍️', activeCls: 'border-[#B7F36B] bg-[#B7F36B] text-[#101114]' },
+                        { id: 'chofer_auto' as const, label: 'Auto Taxi', sub: 'Chofer Auto', icon: '🚕', activeCls: 'border-[#FFF19A] bg-[#FFF19A] text-[#101114]' },
+                      ].map((r) => {
+                        const isSelected = waRole === r.id;
+                        return (
+                          <button
+                            key={r.id}
+                            type="button"
+                            onClick={() => setWaRole(r.id)}
+                            className={`p-2 rounded-xl border-2 text-center transition-all cursor-pointer flex flex-col items-center gap-0.5 ${
+                              isSelected
+                                ? `${r.activeCls} font-black`
+                                : 'bg-[#101114] border-white/15 text-[#9299A5] hover:text-white'
+                            }`}
+                          >
+                            <span className="text-lg">{r.icon}</span>
+                            <span className="text-[11px] font-black tracking-tight">{r.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-white mb-1 uppercase tracking-wider">
+                      Barrio / Zona (Opcional)
+                    </label>
+                    <div className="relative">
+                      <MapPin className="w-3.5 h-3.5 text-[#9299A5] absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        value={waBarrio}
+                        onChange={(e) => setWaBarrio(e.target.value)}
+                        placeholder="Campana Centro / Zárate"
+                        className="w-full min-h-[40px] bg-[#101114] border-2 border-white/15 rounded-xl pl-8 pr-2.5 py-2 text-xs text-white placeholder:text-[#9299A5] focus:outline-none focus:border-[#FFF19A]"
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    title="Ingresar a UPPA utilizando tu número de WhatsApp"
+                    className="w-full min-h-[46px] uppa-cta-green font-black text-xs rounded-xl flex items-center justify-center gap-2 transition-all mt-2 cursor-pointer disabled:opacity-50 active:scale-95"
+                  >
+                    {isSubmitting ? (
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <>
+                        <MessageCircle className="w-4 h-4" />
+                        <span>Ingresar con WhatsApp</span>
+                        <ChevronRight className="w-4 h-4" />
+                      </>
+                    )}
+                  </button>
+                </form>
+              ) : (
               <form onSubmit={handleSubmit} className="space-y-3">
                 {authMode === 'register' && (
                   <>
@@ -504,13 +667,13 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
                   )}
                 </button>
 
-                <div className="pt-1">
+                <div className="pt-1 space-y-2">
                   <button
                     type="button"
                     onClick={() => setIsGoogleChooserOpen(true)}
                     disabled={isSubmitting}
                     title="Elegir una cuenta de Google para ingresar a UPPA"
-                    className="w-full min-h-[44px] rounded-xl bg-[#101114] hover:bg-white/10 border-2 border-white/15 text-white text-xs font-bold flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
+                    className="w-full min-h-[44px] rounded-xl bg-[#101114] hover:bg-white/10 border-2 border-white/15 text-white text-xs font-bold flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer active:scale-95 transition-all"
                   >
                     <svg className="w-4 h-4" viewBox="0 0 24 24">
                       <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -520,8 +683,23 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
                     </svg>
                     <span>Continuar con Cuenta de Google</span>
                   </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsWhatsAppMode(true);
+                      setAuthError(null);
+                    }}
+                    disabled={isSubmitting}
+                    title="Ingresar o registrarse con tu número de WhatsApp"
+                    className="w-full min-h-[44px] rounded-xl bg-[#101114] hover:border-[#B7F36B] border-2 border-[#B7F36B]/45 text-[#B7F36B] text-xs font-black flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer active:scale-95 transition-all"
+                  >
+                    <MessageCircle className="w-4 h-4" />
+                    <span>Continuar con WhatsApp</span>
+                  </button>
                 </div>
               </form>
+              )}
 
               <div className="mt-4 pt-3 border-t border-white/10 flex items-center justify-between text-xs">
                 <button

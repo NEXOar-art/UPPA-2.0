@@ -1,7 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { motion } from 'motion/react';
 import { SolicitudTransporteFirestore, TaxiListing } from '../../types';
 import { getDistanceKm } from '../../utils/geolocation';
 import { playMicroSound } from '../../utils/soundEffects';
+import { LottieMicroIcon } from './LottieMicroIcon';
 import {
   Check,
   Star,
@@ -163,19 +165,21 @@ export const ActiveRideGlassWidget: React.FC<ActiveRideGlassWidgetProps> = ({
   const progressPercent = Math.round(((currentStepIndex + 1) / PROGRESS_STEPS.length) * 100);
 
   return (
-    <div className="uppa-glass-ios uppa-card-enter rounded-3xl p-3.5 sm:p-4 text-white space-y-3 relative overflow-hidden">
+    <motion.div
+      initial={{ opacity: 0, y: 12, scale: 0.96 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={{ type: 'spring', stiffness: 320, damping: 24 }}
+      className="uppa-glass-ios rounded-3xl p-3.5 sm:p-4 text-white space-y-3 relative overflow-hidden"
+    >
       {/* Subtle luminous top shimmer hairline */}
       <div className="absolute inset-x-6 top-0 h-[1px] bg-gradient-to-r from-transparent via-white/45 to-transparent pointer-events-none" />
 
       {/* iOS Glass Header: Viaje activo · Nombre · ETA */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
-          <span
-            className={`w-2.5 h-2.5 rounded-full shrink-0 ${
-              solicitud.estado === 'pendiente'
-                ? 'bg-[#FFF19A] animate-pulse'
-                : 'bg-[#B7F36B]'
-            }`}
+          <LottieMicroIcon
+            variant={solicitud.estado === 'pendiente' ? 'radar' : 'spark'}
+            className="w-5 h-5"
           />
           <div className="min-w-0">
             <div className="text-[10px] font-black uppercase tracking-wider text-[#9299A5] leading-none">
@@ -367,9 +371,10 @@ export const ActiveRideGlassWidget: React.FC<ActiveRideGlassWidgetProps> = ({
 
         {/* Track bar */}
         <div className="w-full h-1.5 rounded-full bg-white/10 overflow-hidden">
-          <div
-            className="h-full rounded-full bg-gradient-to-r from-[#FFF19A] to-[#B7F36B] transition-all duration-500 ease-out"
-            style={{ width: `${progressPercent}%` }}
+          <motion.div
+            className="h-full rounded-full bg-gradient-to-r from-[#FFF19A] to-[#B7F36B]"
+            animate={{ width: `${progressPercent}%` }}
+            transition={{ type: 'spring', stiffness: 160, damping: 20 }}
           />
         </div>
 
@@ -416,6 +421,6 @@ export const ActiveRideGlassWidget: React.FC<ActiveRideGlassWidgetProps> = ({
           })}
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 };

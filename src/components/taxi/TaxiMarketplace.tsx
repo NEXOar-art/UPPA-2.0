@@ -60,6 +60,8 @@ import {
   ChevronUp,
   Award,
   ExternalLink,
+  Info,
+  Lock,
 } from 'lucide-react';
 import { PoliticasTransporteModal } from './PoliticasTransporteModal';
 import { CalificarChoferModal } from './CalificarChoferModal';
@@ -75,6 +77,7 @@ interface TaxiMarketplaceProps {
   currentUserRole?: string;
   isDriverHabilitado?: boolean;
   userLocation?: UserLocation | null;
+  onOpenInfo?: () => void;
 }
 
 export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
@@ -88,6 +91,7 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
   currentUserRole = 'passenger',
   isDriverHabilitado = false,
   userLocation,
+  onOpenInfo,
 }) => {
   const [vehicleFilter, setVehicleFilter] = useState<'all' | 'auto' | 'moto'>('all');
   const [solicitudes, setSolicitudes] = useState<SolicitudTransporteFirestore[]>([]);
@@ -280,8 +284,39 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
   const [rankingList, setRankingList] = useState<CalificacionChoferFirestore[]>([]);
   const [isRankingDropdownOpen, setIsRankingDropdownOpen] = useState(false);
 
-  // Prestador seleccionado para calificar
-  const [calificarDriver, setCalificarDriver] = useState<TaxiListing | null>(null);
+  // Prestador seleccionado para calificar (asociado al viaje completado que tomó el usuario)
+  const [calificarTarget, setCalificarTarget] = useState<{
+    taxi: TaxiListing;
+    solicitudId: string;
+  } | null>(null);
+  const [ratedSolicitudIds, setRatedSolicitudIds] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem(`uppa_rated_solicitudes_${currentUserId || 'anon'}`);
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(`uppa_rated_solicitudes_${currentUserId || 'anon'}`);
+      setRatedSolicitudIds(raw ? JSON.parse(raw) : []);
+    } catch {
+      setRatedSolicitudIds([]);
+    }
+  }, [currentUserId]);
+
+  const markSolicitudAsRated = (solId: string) => {
+    setRatedSolicitudIds((prev) => {
+      if (prev.includes(solId)) return prev;
+      const next = [...prev, solId];
+      try {
+        localStorage.setItem(`uppa_rated_solicitudes_${currentUserId || 'anon'}`, JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  };
 
   // Suscripción al ranking de prestadores en vivo (últimas 3 hs)
   useEffect(() => {
@@ -556,6 +591,8 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
           }).percentage;
 
       return {
+        id: match.id,
+        userId: match.userId,
         driverName: match.driverName,
         vehicleType: normalizedType,
         vehicleModel: match.vehicleModel || (normalizedType === 'moto' ? 'Moto Taxi Habilitada' : 'Auto Taxi Habilitado'),
@@ -571,10 +608,84 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
         aceptaMascotas: Boolean(match.aceptaMascotas),
         cascoExtra: match.cascoExtra !== false,
         safetyIndex,
+        disponibilidad: match.isDesocupado ? ('desocupado' as const) : ('ocupado' as const),
       };
     }
     return null;
   }, [consoleMatchingTaxis]);
+
+  const doesSolicitudMatchDriver = (
+    sol: SolicitudTransporteFirestore,
+    driverId?: string,
+    driverName?: string
+  ) => {
+    const cleanDriverName = (driverName || '').trim().toLowerCase();
+    const cleanSolChoferName = (sol.choferNombre || '').trim().toLowerCase();
+    return Boolean(
+      (driverId && sol.choferId && sol.choferId === driverId) ||
+        (cleanDriverName && cleanSolChoferName && cleanSolChoferName === cleanDriverName)
+    );
+  };
+
+  const doesSolicitudBelongToPassenger = (sol: SolicitudTransporteFirestore) => {
+    if (currentUserId && currentUserId !== 'usr-anon' && sol.pasajeroId) {
+      return sol.pasajeroId === currentUserId;
+    }
+    const cleanUser = (currentUserName || '').trim().toLowerCase();
+    const cleanPass = (sol.nombrePasajero || '').trim().toLowerCase();
+    return Boolean(
+      (currentUserId && sol.pasajeroId === currentUserId) ||
+        (cleanUser && cleanPass && cleanPass === cleanUser)
+    );
+  };
+
+  const getDriverTripAccess = (
+    driverId: string | undefined,
+    driverName: string | undefined,
+    dispState: 'desocupado' | 'ocupado'
+  ) => {
+    const activeRide = solicitudes.find(
+      (s) =>
+        (s.estado === 'aceptado' || s.estado === 'en_camino') &&
+        doesSolicitudMatchDriver(s, driverId, driverName)
+    );
+    const isBusy = dispState === 'ocupado' || Boolean(activeRide);
+    const isViewerActivePassenger = Boolean(activeRide && doesSolicitudBelongToPassenger(activeRide));
+    const isViewerOwnCard = Boolean(
+      (driverId && currentUserId && driverId === currentUserId) ||
+        (driverName &&
+          currentUserName &&
+          driverName.trim().toLowerCase() === currentUserName.trim().toLowerCase())
+    );
+
+    const eligibleCompletedRide =
+      solicitudes
+        .filter(
+          (s) =>
+            s.estado === 'completado' &&
+            doesSolicitudMatchDriver(s, driverId, driverName) &&
+            doesSolicitudBelongToPassenger(s) &&
+            !ratedSolicitudIds.includes(s.id)
+        )
+        .sort(
+          (a, b) =>
+            Number(b.fechaAceptado || b.fechaSolicitud || 0) -
+            Number(a.fechaAceptado || a.fechaSolicitud || 0)
+        )[0] || null;
+
+    const canRate = Boolean(eligibleCompletedRide && !isBusy && !isViewerOwnCard);
+    const isWhatsAppLocked = Boolean(isBusy && !isViewerActivePassenger && !isViewerOwnCard);
+
+    return {
+      isBusy,
+      activeRide,
+      isViewerActivePassenger,
+      isViewerOwnCard,
+      eligibleCompletedRide,
+      canRate,
+      isWhatsAppLocked,
+    };
+  };
 
   const dynamicEtaMin = useMemo(() => {
     if (consoleMatchingTaxis.length > 0) {
@@ -615,10 +726,21 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
             <div className="w-10 h-10 rounded-xl bg-[#101114] border-2 border-[#FFF19A] flex items-center justify-center text-[#FFF19A] shrink-0">
               {consoleVehicleType === 'moto' ? <Bike className="w-5 h-5" /> : <Car className="w-5 h-5" />}
             </div>
-            <div>
+            <div className="flex items-center gap-2">
               <h2 className="text-base sm:text-lg font-black text-white font-display leading-tight tracking-tight">
-                Taxis & Motos
+                Taxis &amp; Motos
               </h2>
+              {onOpenInfo && (
+                <button
+                  type="button"
+                  onClick={onOpenInfo}
+                  title="Ver funcionalidades de Taxis & Motos"
+                  aria-label="Información de Taxis & Motos"
+                  className="w-6 h-6 rounded-full bg-[#101114] border border-white/20 hover:border-[#FFF19A] text-[#FFF19A] flex items-center justify-center shrink-0 cursor-pointer active:scale-95 transition-all"
+                >
+                  <Info className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
           </div>
 
@@ -1241,7 +1363,9 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
             allowPassengerGps: boolean
           ) => {
             const isMoto = normalizeVehicleType(taxi.vehicleType) === 'moto';
-            const isOcupado = getTaxiDisponibilidad(taxi) === 'ocupado';
+            const rawDisp = getTaxiDisponibilidad(taxi);
+            const tripAccess = getDriverTripAccess(taxi.userId || taxi.id, taxi.driverName, rawDisp);
+            const isOcupado = tripAccess.isBusy;
             const safetyIndex = typeof taxi.indiceSeguridad === 'number'
               ? taxi.indiceSeguridad
               : calculateDriverSafetyIndex({
@@ -1414,11 +1538,28 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                 <div className="flex items-center gap-2 pt-2 sm:pt-0 border-t sm:border-t-0 border-white/10 flex-wrap">
                   <button
                     type="button"
-                    onClick={() => setCalificarDriver(taxi)}
-                    className="min-h-[42px] px-3.5 py-2 rounded-xl bg-[#101114] hover:border-[#FFF19A] text-[#FFF19A] border-2 border-[#FFF19A]/40 text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer active:scale-95"
-                    title={`Calificar a ${taxi.driverName} (1 = Malo, 5 = Muy Bueno)`}
+                    disabled={!tripAccess.canRate}
+                    onClick={() => {
+                      if (!tripAccess.canRate || !tripAccess.eligibleCompletedRide) return;
+                      setCalificarTarget({
+                        taxi,
+                        solicitudId: tripAccess.eligibleCompletedRide.id,
+                      });
+                    }}
+                    className={`min-h-[42px] px-3.5 py-2 rounded-xl border-2 text-xs font-black flex items-center gap-1.5 transition-all ${
+                      tripAccess.canRate
+                        ? 'bg-[#101114] hover:border-[#FFF19A] text-[#FFF19A] border-[#FFF19A]/40 cursor-pointer active:scale-95'
+                        : 'bg-[#101114]/60 text-[#9299A5] border-white/10 opacity-45 cursor-not-allowed'
+                    }`}
+                    title={
+                      tripAccess.canRate
+                        ? `Calificar tu viaje finalizado con ${taxi.driverName} (1 = Malo, 5 = Muy Bueno)`
+                        : isOcupado
+                        ? 'No disponible mientras el prestador lleva un pasajero'
+                        : 'Solo podés calificar cuando tomes un servicio con este prestador y finalice el viaje'
+                    }
                   >
-                    <Star className="w-3.5 h-3.5 fill-[#FFF19A]" />
+                    <Star className={`w-3.5 h-3.5 ${tripAccess.canRate ? 'fill-[#FFF19A]' : ''}`} />
                     <span>Calificar</span>
                   </button>
 
@@ -1434,16 +1575,28 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                     </button>
                   )}
 
-                  <a
-                    href={getWhatsAppLink(taxi)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    title={`Contactar por WhatsApp con ${taxi.driverName}`}
-                    className="flex-1 sm:flex-none min-h-[42px] px-4 py-2 rounded-xl uppa-cta-green font-black text-xs flex items-center justify-center gap-1.5"
-                  >
-                    <MessageCircle className="w-4 h-4" />
-                    <span>WhatsApp</span>
-                  </a>
+                  {tripAccess.isWhatsAppLocked ? (
+                    <button
+                      type="button"
+                      disabled
+                      title="Bloqueado mientras el prestador lleva un pasajero. Se habilita al presionar DESOCUPADO."
+                      className="flex-1 sm:flex-none min-h-[42px] px-3.5 py-2 rounded-xl bg-[#101114]/70 border-2 border-white/10 text-[#9299A5] font-black text-xs flex items-center justify-center gap-1.5 opacity-55 cursor-not-allowed"
+                    >
+                      <Lock className="w-3.5 h-3.5 text-[#FFF19A]" />
+                      <span>En viaje</span>
+                    </button>
+                  ) : (
+                    <a
+                      href={getWhatsAppLink(taxi)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title={`Contactar por WhatsApp con ${taxi.driverName}`}
+                      className="flex-1 sm:flex-none min-h-[42px] px-4 py-2 rounded-xl uppa-cta-green font-black text-xs flex items-center justify-center gap-1.5"
+                    >
+                      <MessageCircle className="w-4 h-4" />
+                      <span>WhatsApp</span>
+                    </a>
+                  )}
 
                   {/* Botón GPS exclusivo para el prestador que aceptó la solicitud del pasajero */}
                   {allowPassengerGps && myAcceptedSolicitud && (
@@ -1708,26 +1861,53 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                   )}
                 </div>
 
-                {/* Botón Principal: Chatear con el conductor real activo (sin botón de Administración UPPA) */}
-                {activeDriverFeatured && chatWhatsAppUrl && (
-                  <a
-                    href={chatWhatsAppUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    title={`Abrir WhatsApp con ${activeDriverFeatured.driverName}`}
-                    className="w-full min-h-[46px] p-1.5 rounded-xl bg-[#101114] hover:border-[#B7F36B] border-2 border-white/15 flex items-center justify-between transition-all cursor-pointer group active:scale-[0.98]"
-                  >
-                    <div className="w-9 h-9 rounded-lg bg-[#B7F36B] flex items-center justify-center text-[#101114] shrink-0">
-                      <MessageCircle className="w-4 h-4" />
-                    </div>
-                    <div className="text-xs font-black text-white group-hover:text-[#B7F36B] transition-colors flex items-center gap-1 px-2 text-center truncate">
-                      <span className="truncate">
-                        Chatear con {activeDriverFeatured.driverName}
-                      </span>
-                    </div>
-                    <ArrowRight className="w-4 h-4 text-[#B7F36B] mr-2 shrink-0" />
-                  </a>
-                )}
+                {/* Botón Principal: Chatear con el conductor real activo (bloqueado si el prestador lleva pasajero hasta presionar DESOCUPADO) */}
+                {activeDriverFeatured &&
+                  chatWhatsAppUrl &&
+                  (() => {
+                    const featuredAccess = getDriverTripAccess(
+                      activeDriverFeatured.userId || activeDriverFeatured.id,
+                      activeDriverFeatured.driverName,
+                      activeDriverFeatured.disponibilidad
+                    );
+                    if (featuredAccess.isWhatsAppLocked) {
+                      return (
+                        <button
+                          type="button"
+                          disabled
+                          title="WhatsApp bloqueado mientras el prestador lleva un pasajero. Se habilita al presionar DESOCUPADO."
+                          className="w-full min-h-[46px] p-1.5 rounded-xl bg-[#101114]/70 border-2 border-white/10 flex items-center justify-between opacity-60 cursor-not-allowed"
+                        >
+                          <div className="w-9 h-9 rounded-lg bg-[#202329] border border-white/15 flex items-center justify-center text-[#FFF19A] shrink-0">
+                            <Lock className="w-4 h-4" />
+                          </div>
+                          <div className="text-[11px] font-black text-[#9299A5] px-2 text-center truncate">
+                            {activeDriverFeatured.driverName} en viaje · WhatsApp bloqueado hasta DESOCUPADO
+                          </div>
+                          <span className="w-4 mr-2 shrink-0" />
+                        </button>
+                      );
+                    }
+                    return (
+                      <a
+                        href={chatWhatsAppUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title={`Abrir WhatsApp con ${activeDriverFeatured.driverName}`}
+                        className="w-full min-h-[46px] p-1.5 rounded-xl bg-[#101114] hover:border-[#B7F36B] border-2 border-white/15 flex items-center justify-between transition-all cursor-pointer group active:scale-[0.98]"
+                      >
+                        <div className="w-9 h-9 rounded-lg bg-[#B7F36B] flex items-center justify-center text-[#101114] shrink-0">
+                          <MessageCircle className="w-4 h-4" />
+                        </div>
+                        <div className="text-xs font-black text-white group-hover:text-[#B7F36B] transition-colors flex items-center gap-1 px-2 text-center truncate">
+                          <span className="truncate">
+                            Chatear con {activeDriverFeatured.driverName}
+                          </span>
+                        </div>
+                        <ArrowRight className="w-4 h-4 text-[#B7F36B] mr-2 shrink-0" />
+                      </a>
+                    );
+                  })()}
               </div>
 
               {/* Encabezado de Prestadores de Servicio Habilitados */}
@@ -1979,14 +2159,17 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
       )}
 
       {/* Modal de Calificación a Prestador de Servicios */}
-      {calificarDriver && (
+      {calificarTarget && (
         <CalificarChoferModal
-          isOpen={!!calificarDriver}
-          onClose={() => setCalificarDriver(null)}
-          driverId={calificarDriver.userId || calificarDriver.id}
-          driverName={calificarDriver.driverName}
+          isOpen={!!calificarTarget}
+          onClose={() => setCalificarTarget(null)}
+          driverId={calificarTarget.taxi.userId || calificarTarget.taxi.id}
+          driverName={calificarTarget.taxi.driverName}
           pasajeroId={currentUserId}
           pasajeroNombre={currentUserName}
+          onSuccess={() => {
+            markSolicitudAsRated(calificarTarget.solicitudId);
+          }}
         />
       )}
 

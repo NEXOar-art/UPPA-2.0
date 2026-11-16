@@ -1,5 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import gsap from 'gsap';
+import { motion } from 'motion/react';
 import { Bus, Bike, Car, ArrowRight } from 'lucide-react';
+import { LottieMicroIcon } from '../common/LottieMicroIcon';
+import { playMicroSound } from '../../utils/soundEffects';
 
 interface SplashScreenProps {
   onFinish: () => void;
@@ -12,8 +16,22 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onFinish }) => {
   const [activeStage, setActiveStage] = useState<ActiveVehicleStage>('micro');
   const [statusText, setStatusText] = useState('Iniciando UPPA...');
   const [isFadingOut, setIsFadingOut] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    const ctx = gsap.context(() => {
+      gsap.fromTo(
+        '.uppa-splash-logo',
+        { opacity: 0, scale: 0.9, y: 18 },
+        { opacity: 1, scale: 1, y: 0, duration: 0.7, ease: 'power3.out' }
+      );
+      gsap.fromTo(
+        '.uppa-splash-card',
+        { opacity: 0, y: 14 },
+        { opacity: 1, y: 0, duration: 0.45, stagger: 0.1, delay: 0.25, ease: 'back.out(1.4)' }
+      );
+    }, containerRef);
+
     const t1 = setTimeout(() => {
       setProgress(35);
       setActiveStage('micro');
@@ -43,6 +61,7 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onFinish }) => {
     }, 3500);
 
     return () => {
+      ctx.revert();
       clearTimeout(t1);
       clearTimeout(t2);
       clearTimeout(t3);
@@ -52,6 +71,7 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onFinish }) => {
   }, []);
 
   const handleComplete = () => {
+    playMicroSound('ui_tap');
     setIsFadingOut(true);
     setTimeout(() => {
       onFinish();
@@ -60,6 +80,7 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onFinish }) => {
 
   return (
     <div
+      ref={containerRef}
       className={`fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#101114] text-white px-3 sm:px-4 transition-all duration-400 select-none overflow-y-auto ${
         isFadingOut ? 'opacity-0 scale-95 pointer-events-none' : 'opacity-100 scale-100'
       }`}
@@ -75,9 +96,9 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onFinish }) => {
         />
       </div>
 
-      <div className="relative z-10 flex flex-col items-center text-center max-w-sm sm:max-w-md w-full my-auto py-4 animate-in zoom-in-95 duration-500">
+      <div className="relative z-10 flex flex-col items-center text-center max-w-sm sm:max-w-md w-full my-auto py-4">
         {/* OFFICIAL UPPA LOGO CARD */}
-        <div className="relative mb-5 group">
+        <div className="uppa-splash-logo relative mb-5 group">
           <div className="relative w-72 sm:w-80 md:w-88 aspect-square rounded-3xl overflow-hidden border-2 border-[#FFF19A]/50 bg-[#202329] shadow-[6px_6px_0px_#000000]">
             <img
               src="/assets/aistudio/UPPALOGO_c4c84137.jpg"
@@ -94,10 +115,7 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onFinish }) => {
               }`}
             >
               {(activeStage === 'micro' || activeStage === 'all') && (
-                <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#FFF19A] opacity-80" />
-                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#FFF19A]" />
-                </span>
+                <LottieMicroIcon variant="spark" className="w-5 h-5 absolute -top-2 -right-2" />
               )}
             </div>
 
@@ -110,10 +128,7 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onFinish }) => {
               }`}
             >
               {(activeStage === 'moto' || activeStage === 'all') && (
-                <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#B7F36B] opacity-80" />
-                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#B7F36B]" />
-                </span>
+                <LottieMicroIcon variant="radar" className="w-5 h-5 absolute -top-2 -right-2" />
               )}
             </div>
 
@@ -126,10 +141,7 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onFinish }) => {
               }`}
             >
               {(activeStage === 'auto' || activeStage === 'all') && (
-                <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#B7F36B] opacity-80" />
-                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#B7F36B]" />
-                </span>
+                <LottieMicroIcon variant="radar" className="w-5 h-5 absolute -top-2 -right-2" />
               )}
             </div>
           </div>
@@ -138,7 +150,7 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onFinish }) => {
         {/* VEHICLE LOADING STATUS CARDS */}
         <div className="grid grid-cols-3 gap-2 w-full max-w-xs sm:max-w-sm mb-4">
           <div
-            className={`p-2 rounded-xl border-2 transition-all duration-300 flex flex-col items-center justify-center gap-1 ${
+            className={`uppa-splash-card p-2 rounded-xl border-2 transition-all duration-300 flex flex-col items-center justify-center gap-1 ${
               activeStage === 'micro'
                 ? 'bg-[#202329] border-[#FFF19A] text-[#FFF19A] scale-105'
                 : activeStage === 'moto' || activeStage === 'auto' || activeStage === 'all'
@@ -158,7 +170,7 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onFinish }) => {
           </div>
 
           <div
-            className={`p-2 rounded-xl border-2 transition-all duration-300 flex flex-col items-center justify-center gap-1 ${
+            className={`uppa-splash-card p-2 rounded-xl border-2 transition-all duration-300 flex flex-col items-center justify-center gap-1 ${
               activeStage === 'moto'
                 ? 'bg-[#202329] border-[#FFF19A] text-[#FFF19A] scale-105'
                 : activeStage === 'auto' || activeStage === 'all'
@@ -178,7 +190,7 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onFinish }) => {
           </div>
 
           <div
-            className={`p-2 rounded-xl border-2 transition-all duration-300 flex flex-col items-center justify-center gap-1 ${
+            className={`uppa-splash-card p-2 rounded-xl border-2 transition-all duration-300 flex flex-col items-center justify-center gap-1 ${
               activeStage === 'auto'
                 ? 'bg-[#202329] border-[#FFF19A] text-[#FFF19A] scale-105'
                 : activeStage === 'all'
@@ -201,30 +213,33 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onFinish }) => {
         {/* Progress Bar */}
         <div className="w-full max-w-xs sm:max-w-sm space-y-2 mb-4">
           <div className="w-full h-2.5 bg-[#202329] rounded-full overflow-hidden p-0.5 border border-white/15">
-            <div
-              className="h-full bg-[#FFF19A] rounded-full transition-all duration-500 ease-out"
-              style={{ width: `${progress}%` }}
+            <motion.div
+              className="h-full bg-gradient-to-r from-[#FFF19A] to-[#B7F36B] rounded-full"
+              animate={{ width: `${progress}%` }}
+              transition={{ type: 'spring', stiffness: 120, damping: 18 }}
             />
           </div>
 
           <div className="flex items-center justify-between text-[11px] font-mono text-white">
             <span className="flex items-center gap-1.5 truncate">
-              <span className="w-2 h-2 rounded-full bg-[#B7F36B] animate-ping inline-block shrink-0" />
+              <LottieMicroIcon variant="radar" className="w-4 h-4" />
               <span className="truncate">{statusText}</span>
             </span>
             <span className="font-black text-[#FFF19A] shrink-0 ml-2">{progress}%</span>
           </div>
         </div>
 
-        <button
+        <motion.button
           type="button"
+          whileHover={{ scale: 1.03 }}
+          whileTap={{ scale: 0.95 }}
           onClick={handleComplete}
           title="Omitir animación inicial e ingresar directamente a UPPA"
           className="group px-6 min-h-[44px] rounded-xl uppa-cta-yellow font-black text-xs flex items-center gap-2 transition-all cursor-pointer"
         >
           <span>Ingresar a UPPA</span>
           <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-        </button>
+        </motion.button>
       </div>
 
       <div className="relative z-10 text-center text-[10px] text-[#9299A5] font-mono py-2">

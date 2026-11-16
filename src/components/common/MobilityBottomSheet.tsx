@@ -21,8 +21,11 @@ import {
   SlidersHorizontal,
   X,
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import { LINEA_228_STOPS, Linea228Stop } from '../../data/linea228Stops';
 import { RankingPrestadoresDropdown } from '../taxi/RankingPrestadoresDropdown';
+import { LottieMicroIcon } from './LottieMicroIcon';
+import { playMicroSound } from '../../utils/soundEffects';
 
 interface MobilityBottomSheetProps {
   userName?: string;
@@ -146,13 +149,17 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
   if (isMinimized) {
     return (
       <div className="w-full max-w-sm mx-auto px-4 pointer-events-auto flex items-center justify-center gap-2 pb-1 uppa-card-enter">
-        <button
+        <motion.button
           type="button"
+          whileHover={{ scale: 1.08, y: -1 }}
+          whileTap={{ scale: 0.92 }}
+          transition={{ type: 'spring', stiffness: 450, damping: 24 }}
           onClick={() => {
+            playMicroSound('ui_tap');
             setIsMinimized(false);
             setDragOffsetY(0);
           }}
-          className="relative w-11 h-11 rounded-2xl uppa-glass-ios hover:border-[#FFF19A] hover:shadow-[0_0_12px_rgba(255,241,154,0.45)] border-[#FFF19A]/60 text-white flex items-center justify-center cursor-pointer group transition-all"
+          className="relative w-11 h-11 rounded-2xl uppa-glass-ios hover:border-[#FFF19A] hover:shadow-[0_0_12px_rgba(255,241,154,0.45)] border-[#FFF19A]/60 text-white flex items-center justify-center cursor-pointer group transition-colors"
           title="Opciones de transporte"
           aria-label="Opciones de transporte"
         >
@@ -163,22 +170,25 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
           <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-[#FFF19A] text-[#101114] border border-[#101114] flex items-center justify-center shadow">
             <ChevronUp className="w-2.5 h-2.5 stroke-[3]" />
           </span>
-        </button>
+        </motion.button>
 
         {isMapFreeMode && (
-          <button
+          <motion.button
             type="button"
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.92 }}
             onClick={(e) => {
               e.stopPropagation();
+              playMicroSound('ui_tap');
               window.dispatchEvent(new CustomEvent('uppa-map-show-controls'));
             }}
-            className="relative w-7 h-7 rounded-full uppa-glass-ios border border-white/25 hover:border-[#FFF19A] hover:shadow-[0_0_10px_rgba(255,241,154,0.45)] text-[#FFF19A] flex items-center justify-center cursor-pointer transition-all uppa-card-enter"
+            className="relative w-7 h-7 rounded-full uppa-glass-ios border border-white/25 hover:border-[#FFF19A] hover:shadow-[0_0_10px_rgba(255,241,154,0.45)] text-[#FFF19A] flex items-center justify-center cursor-pointer transition-colors uppa-card-enter"
             title="Modo Mapa Libre · Tocar para ver controles"
             aria-label="Modo Mapa Libre · Tocar para ver controles"
           >
             <SlidersHorizontal className="w-3 h-3" />
             <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-[#B7F36B] border border-[#101114] animate-pulse" />
-          </button>
+          </motion.button>
         )}
       </div>
     );
@@ -228,25 +238,32 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
 
           <div className="flex items-center gap-1.5 shrink-0">
             {isMapFreeMode && (
-              <button
+              <motion.button
                 type="button"
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.92 }}
                 onClick={(e) => {
                   e.stopPropagation();
+                  playMicroSound('ui_tap');
                   window.dispatchEvent(new CustomEvent('uppa-map-show-controls'));
                 }}
-                className="relative w-7 h-7 rounded-full uppa-glass-ios border border-white/25 hover:border-[#FFF19A] hover:shadow-[0_0_10px_rgba(255,241,154,0.45)] text-[#FFF19A] flex items-center justify-center cursor-pointer transition-all"
+                className="relative w-7 h-7 rounded-full uppa-glass-ios border border-white/25 hover:border-[#FFF19A] hover:shadow-[0_0_10px_rgba(255,241,154,0.45)] text-[#FFF19A] flex items-center justify-center cursor-pointer transition-colors"
                 title="Modo Mapa Libre · Tocar para ver controles"
                 aria-label="Modo Mapa Libre · Tocar para ver controles"
               >
                 <SlidersHorizontal className="w-3 h-3" />
                 <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-[#B7F36B] border border-[#101114] animate-pulse" />
-              </button>
+              </motion.button>
             )}
 
-            <button
+            <motion.button
               type="button"
-              onClick={() => setIsExpanded((prev) => !prev)}
-              className={`min-h-[38px] flex items-center gap-1.5 text-[11px] font-black px-3 py-1.5 rounded-xl border-2 transition-all cursor-pointer active:scale-95 ${
+              whileTap={{ scale: 0.95 }}
+              onClick={() => {
+                playMicroSound('ui_tap');
+                setIsExpanded((prev) => !prev);
+              }}
+              className={`min-h-[38px] flex items-center gap-1.5 text-[11px] font-black px-3 py-1.5 rounded-xl border-2 transition-colors cursor-pointer ${
                 isExpanded
                   ? 'text-[#101114] bg-[#FFF19A] border-[#FFF19A]'
                   : 'text-white hover:border-[#FFF19A] bg-[#101114] border-white/15'
@@ -259,20 +276,22 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
               ) : (
                 <ChevronDown className="w-3.5 h-3.5" />
               )}
-            </button>
+            </motion.button>
 
-            <button
+            <motion.button
               type="button"
+              whileTap={{ scale: 0.92 }}
               onClick={() => {
+                playMicroSound('ui_tap');
                 setIsExpanded(false);
                 setIsMinimized(true);
               }}
-              className="w-9 h-9 rounded-xl bg-[#101114] hover:border-rose-400 text-[#9299A5] hover:text-rose-300 border border-white/15 flex items-center justify-center transition-all cursor-pointer active:scale-95"
+              className="w-9 h-9 rounded-xl bg-[#101114] hover:border-rose-400 text-[#9299A5] hover:text-rose-300 border border-white/15 flex items-center justify-center transition-colors cursor-pointer"
               title="Minimizar panel de opciones (x)"
               aria-label="Minimizar panel"
             >
               <X className="w-4 h-4 stroke-[2.5]" />
-            </button>
+            </motion.button>
           </div>
         </div>
 
@@ -280,18 +299,25 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
         <div className="px-3.5 sm:px-5 pb-3">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {/* Card 1: Pedir Transporte Alternativo */}
-            <button
+            <motion.button
               type="button"
-              onClick={onOpenPedirTransporte}
+              whileHover={{ y: -2, scale: 1.015 }}
+              whileTap={{ scale: 0.96 }}
+              transition={{ type: 'spring', stiffness: 420, damping: 24 }}
+              onClick={() => {
+                playMicroSound('ui_tap');
+                onOpenPedirTransporte();
+              }}
               title="Emitir una solicitud rápida de Moto Taxi o Auto Taxi"
-              className="min-h-[76px] p-2.5 rounded-2xl bg-[#101114] hover:border-[#FFF19A] border-2 border-[#FFF19A]/40 text-left transition-all group active:scale-95 cursor-pointer flex flex-col justify-between"
+              className="min-h-[76px] p-2.5 rounded-2xl bg-[#101114] hover:border-[#FFF19A] border-2 border-[#FFF19A]/40 text-left transition-colors group cursor-pointer flex flex-col justify-between"
             >
               <div className="flex items-center justify-between mb-1.5">
                 <div className="w-8 h-8 rounded-xl bg-[#FFF19A] text-[#101114] flex items-center justify-center">
                   <Zap className="w-4 h-4 fill-[#101114]" />
                 </div>
-                <span className="px-1.5 py-0.5 rounded text-[8.5px] font-black uppercase tracking-wider bg-[#FFF19A]/15 text-[#FFF19A] border border-[#FFF19A]/40">
-                  Rápido
+                <span className="px-1.5 py-0.5 rounded text-[8.5px] font-black uppercase tracking-wider bg-[#FFF19A]/15 text-[#FFF19A] border border-[#FFF19A]/40 flex items-center gap-1">
+                  <LottieMicroIcon variant="spark" size={12} />
+                  <span>Rápido</span>
                 </span>
               </div>
               <div>
@@ -302,14 +328,22 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
                   Moto & Auto Taxi
                 </span>
               </div>
-            </button>
+            </motion.button>
 
             {/* Card 2: Taxi & Motos con Ranking */}
-            <div className="relative min-h-[76px] p-2.5 rounded-2xl bg-[#101114] hover:border-[#B7F36B] border-2 border-[#B7F36B]/40 text-left transition-all group flex flex-col justify-between">
+            <motion.div
+              whileHover={{ y: -2, scale: 1.015 }}
+              transition={{ type: 'spring', stiffness: 420, damping: 24 }}
+              className="relative min-h-[76px] p-2.5 rounded-2xl bg-[#101114] hover:border-[#B7F36B] border-2 border-[#B7F36B]/40 text-left transition-colors group flex flex-col justify-between"
+            >
               <div className="flex items-center justify-between mb-1.5">
-                <button
+                <motion.button
                   type="button"
-                  onClick={onOpenTaxis}
+                  whileTap={{ scale: 0.92 }}
+                  onClick={() => {
+                    playMicroSound('ui_tap');
+                    onOpenTaxis();
+                  }}
                   className="w-8 h-8 rounded-xl bg-[#B7F36B] text-[#101114] flex items-center justify-center cursor-pointer"
                   title="Abrir sección Taxis & Motos"
                 >
@@ -317,7 +351,7 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
                     <Bike className="w-3.5 h-3.5" />
                     <Car className="w-3.5 h-3.5" />
                   </div>
-                </button>
+                </motion.button>
 
                 <RankingPrestadoresDropdown
                   isOpen={isRankingDropdownOpen}
@@ -330,7 +364,10 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
 
               <button
                 type="button"
-                onClick={onOpenTaxis}
+                onClick={() => {
+                  playMicroSound('ui_tap');
+                  onOpenTaxis();
+                }}
                 title="Ver prestadores habilitados en Taxis & Motos"
                 className="text-left w-full cursor-pointer"
               >
@@ -341,12 +378,16 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
                   Prestadores en vivo
                 </span>
               </button>
-            </div>
+            </motion.div>
 
             {/* Card 3: Prestar Servicio */}
-            <button
+            <motion.button
               type="button"
+              whileHover={{ y: -2, scale: 1.015 }}
+              whileTap={{ scale: 0.96 }}
+              transition={{ type: 'spring', stiffness: 420, damping: 24 }}
               onClick={() => {
+                playMicroSound('ui_tap');
                 if (onOpenPrestarServicio) {
                   onOpenPrestarServicio();
                 } else {
@@ -354,7 +395,7 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
                 }
               }}
               title="Habilitar mi Auto o Moto para prestar servicio de traslado"
-              className="min-h-[76px] p-2.5 rounded-2xl bg-[#101114] hover:border-white/50 border-2 border-white/15 text-left transition-all group active:scale-95 cursor-pointer flex flex-col justify-between"
+              className="min-h-[76px] p-2.5 rounded-2xl bg-[#101114] hover:border-white/50 border-2 border-white/15 text-left transition-colors group cursor-pointer flex flex-col justify-between"
             >
               <div className="flex items-center justify-between mb-1.5">
                 <div className="w-8 h-8 rounded-xl bg-[#202329] text-[#FFF19A] border border-white/15 flex items-center justify-center">
@@ -372,14 +413,20 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
                   Habilitá tu unidad
                 </span>
               </div>
-            </button>
+            </motion.button>
 
             {/* Card 4: Chat Comunitario */}
-            <button
+            <motion.button
               type="button"
-              onClick={onOpenChat}
+              whileHover={{ y: -2, scale: 1.015 }}
+              whileTap={{ scale: 0.96 }}
+              transition={{ type: 'spring', stiffness: 420, damping: 24 }}
+              onClick={() => {
+                playMicroSound('ui_tap');
+                onOpenChat();
+              }}
               title="Abrir Chat Comunitario de pasajeros y choferes"
-              className="min-h-[76px] p-2.5 rounded-2xl bg-[#101114] hover:border-white/50 border-2 border-white/15 text-left transition-all group active:scale-95 cursor-pointer flex flex-col justify-between"
+              className="min-h-[76px] p-2.5 rounded-2xl bg-[#101114] hover:border-white/50 border-2 border-white/15 text-left transition-colors group cursor-pointer flex flex-col justify-between"
             >
               <div className="flex items-center justify-between mb-1.5">
                 <div className="w-8 h-8 rounded-xl bg-[#202329] text-white border border-white/15 flex items-center justify-center">
@@ -403,7 +450,7 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
                   Alertas en directo
                 </span>
               </div>
-            </button>
+            </motion.button>
           </div>
         </div>
 
@@ -418,7 +465,7 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
                 <div>
                   <h3 className="text-xs sm:text-sm font-black text-white flex items-center gap-1.5">
                     <span>Línea 228</span>
-                    <span className="w-2 h-2 rounded-full bg-[#B7F36B] inline-block" />
+                    <LottieMicroIcon variant="radar" size={16} />
                   </h3>
                   <p className="text-[10px] text-[#9299A5] font-medium">
                     Corredor en vivo · <strong className="text-white">62 paradas</strong>
@@ -470,8 +517,15 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
         </div>
 
         {/* Upward scrolling list of 62 stops */}
+        <AnimatePresence>
         {isExpanded && (
-          <div className="px-3.5 sm:px-5 pb-3 border-t border-white/10 pt-3 animate-in slide-in-from-bottom-2 duration-200">
+          <motion.div
+            initial={{ opacity: 0, y: 14 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 10 }}
+            transition={{ duration: 0.22 }}
+            className="px-3.5 sm:px-5 pb-3 border-t border-white/10 pt-3"
+          >
             <div className="flex items-center justify-between pb-2.5 mb-2.5 border-b border-white/10 gap-2">
               <div className="flex items-center gap-2 min-w-0">
                 <span className="w-2.5 h-2.5 rounded-full bg-[#B7F36B] shrink-0" />
@@ -644,8 +698,9 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
                 </button>
               </div>
             </div>
-          </div>
+          </motion.div>
         )}
+        </AnimatePresence>
       </div>
     </div>
   );

@@ -46,6 +46,12 @@ interface AuthContextType {
   ) => Promise<User>;
   loginWithEmail: (email: string, pass?: string) => Promise<User>;
   loginWithGoogle: (credential?: string, email?: string, name?: string) => Promise<User>;
+  loginWithWhatsApp: (
+    phone: string,
+    name?: string,
+    requestedRole?: string,
+    barrio?: string
+  ) => Promise<User>;
   logout: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   sendVerificationEmail: () => Promise<boolean>;
@@ -481,6 +487,158 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const loginWithWhatsApp = async (
+    phone: string,
+    name?: string,
+    requestedRole?: string,
+    barrio?: string
+  ): Promise<User> => {
+    setAuthError(null);
+    setAuthNotice(null);
+
+    const digits = phone.replace(/\D/g, '');
+    if (digits.length < 8) {
+      const errMsg = 'Ingresá un número de WhatsApp válido (mínimo 8 dígitos, ej: 3489686939).';
+      setAuthError(errMsg);
+      throw new Error(errMsg);
+    }
+
+    const formattedPhone = phone.trim().startsWith('+') ? phone.trim() : `+54 9 ${digits}`;
+    const waDocUid = `wa_${digits}`;
+    const syntheticEmail = `wa_${digits}@whatsapp.uppa.app`;
+
+    try {
+      // Buscar perfil existente en registro local de WhatsApp o Firestore
+      let storedWaProfiles: Record<string, User> = {};
+      try {
+        const raw = localStorage.getItem('uppa_whatsapp_profiles');
+        if (raw) storedWaProfiles = JSON.parse(raw) || {};
+      } catch {}
+
+      let existingProfile: User | null = storedWaProfiles[digits] || null;
+      let fbUid = waDocUid;
+
+      try {
+        if (!auth.currentUser) {
+          const anonCred = await signInAnonymously(auth);
+          if (anonCred?.user?.uid) {
+            fbUid = anonCred.user.uid;
+          }
+        } else {
+          fbUid = auth.currentUser.uid;
+        }
+      } catch {}
+
+      try {
+        const fsByWa = await getUserDocument(waDocUid);
+        if (fsByWa) {
+          existingProfile = {
+            id: fsByWa.uid || waDocUid,
+            uid: fsByWa.uid || waDocUid,
+            name: fsByWa.nombre || existingProfile?.name || name || 'Vecino WhatsApp',
+            nombre: fsByWa.nombre || existingProfile?.nombre || name || 'Vecino WhatsApp',
+            email: fsByWa.email || syntheticEmail,
+            phone: fsByWa.phone || formattedPhone,
+            role: mapFirestoreRolToAppRole(fsByWa.rol, fsByWa.esChofer),
+            rol: fsByWa.rol,
+            esChofer: fsByWa.esChofer,
+            tipoVehiculo: fsByWa.tipoVehiculo ?? null,
+            barrio: fsByWa.barrio || barrio || 'Campana / Zárate',
+            avatarUrl: fsByWa.avatarUrl,
+            estado: fsByWa.estado || 'activo',
+            fechaRegistro: fsByWa.fechaRegistro,
+            emailVerificado: true,
+          };
+        }
+      } catch {}
+
+      const selectedRol = (requestedRole || existingProfile?.rol || 'pasajero') as
+        | 'pasajero'
+        | 'chofer_moto'
+        | 'chofer_auto'
+        | 'administrador';
+      const isChofer = selectedRol === 'chofer_moto' || selectedRol === 'chofer_auto';
+      const tipoVehiculo =
+        selectedRol === 'chofer_moto'
+          ? 'moto'
+          : selectedRol === 'chofer_auto'
+          ? 'auto'
+          : existingProfile?.tipoVehiculo ?? null;
+
+      const cleanName =
+        (name || '').trim() ||
+        existingProfile?.nombre ||
+        existingProfile?.name ||
+        `Vecino ${digits.slice(-4)}`;
+
+      const finalUser: User = {
+        id: existingProfile?.id || waDocUid,
+        uid: existingProfile?.uid || waDocUid,
+        name: cleanName,
+        nombre: cleanName,
+        email: existingProfile?.email || syntheticEmail,
+        phone: formattedPhone,
+        role: mapFirestoreRolToAppRole(selectedRol, isChofer),
+        rol: selectedRol,
+        esChofer: isChofer,
+        tipoVehiculo,
+        barrio: (barrio || '').trim() || existingProfile?.barrio || 'Campana / Zárate',
+        avatarUrl:
+          existingProfile?.avatarUrl ||
+          `https://api.dicebear.com/7.x/bottts/svg?seed=${waDocUid}&backgroundColor=12141c`,
+        estado: 'activo',
+        fechaRegistro: existingProfile?.fechaRegistro || new Date().toISOString(),
+        emailVerificado: true,
+      };
+
+      const registroFecha = finalUser.fechaRegistro || new Date().toISOString();
+      try {
+        await createUserDocument(waDocUid, {
+          nombre: finalUser.nombre || finalUser.name,
+          email: finalUser.email,
+          rol: selectedRol,
+          esChofer: finalUser.esChofer,
+          tipoVehiculo: finalUser.tipoVehiculo ?? null,
+          phone: finalUser.phone,
+          barrio: finalUser.barrio,
+          avatarUrl: finalUser.avatarUrl,
+          emailVerificado: true,
+          estado: 'activo',
+          fechaRegistro: registroFecha,
+        });
+        if (fbUid && fbUid !== waDocUid) {
+          await createUserDocument(fbUid, {
+            nombre: finalUser.nombre || finalUser.name,
+            email: finalUser.email,
+            rol: selectedRol,
+            esChofer: finalUser.esChofer,
+            tipoVehiculo: finalUser.tipoVehiculo ?? null,
+            phone: finalUser.phone,
+            barrio: finalUser.barrio,
+            avatarUrl: finalUser.avatarUrl,
+            emailVerificado: true,
+            estado: 'activo',
+            fechaRegistro: registroFecha,
+          });
+        }
+      } catch {}
+
+      try {
+        storedWaProfiles[digits] = finalUser;
+        localStorage.setItem('uppa_whatsapp_profiles', JSON.stringify(storedWaProfiles));
+        localStorage.setItem(LOCAL_SESSION_KEY, JSON.stringify(finalUser));
+      } catch {}
+
+      setUser(finalUser);
+      setAuthNotice(`¡Sesión iniciada con WhatsApp (${formattedPhone})!`);
+      return finalUser;
+    } catch (err: any) {
+      const msg = err?.message || 'Error al ingresar con WhatsApp';
+      setAuthError(msg);
+      throw err;
+    }
+  };
+
   const logout = async (): Promise<void> => {
     try {
       await signOut(auth);
@@ -570,6 +728,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         registerWithEmail,
         loginWithEmail,
         loginWithGoogle,
+        loginWithWhatsApp,
         logout,
         resetPassword,
         sendVerificationEmail,

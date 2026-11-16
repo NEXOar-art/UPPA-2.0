@@ -46,6 +46,7 @@ import { PedirTransporteModal } from './components/common/PedirTransporteModal';
 import { MobilityBottomSheet } from './components/common/MobilityBottomSheet';
 import { TicketConsultaModal } from './components/common/TicketConsultaModal';
 import { ActiveRideGlassWidget } from './components/common/ActiveRideGlassWidget';
+import { SectionInfoSheetModal, AppSectionId } from './components/common/SectionInfoSheetModal';
 import { RankingPrestadoresDropdown } from './components/taxi/RankingPrestadoresDropdown';
 import { Linea228Stop } from './data/linea228Stops';
 import { useAuth } from './context/AuthContext';
@@ -101,6 +102,7 @@ import {
   ChevronUp,
   Maximize2,
   Ticket,
+  Info,
 } from 'lucide-react';
 
 function GlobalHoverTooltip() {
@@ -194,7 +196,7 @@ export default function App() {
           localStorage.removeItem('UPPA_AUTH_USER');
           return false;
         }
-        if (parsed && parsed.email && !parsed.email.includes('guest')) {
+        if (parsed && (parsed.email || parsed.phone) && !(parsed.email || '').includes('guest')) {
           return true;
         }
       }
@@ -212,7 +214,7 @@ export default function App() {
           localStorage.removeItem('UPPA_AUTH_USER');
           return INITIAL_USER;
         }
-        if (parsed && parsed.email && !parsed.email.includes('guest')) {
+        if (parsed && (parsed.email || parsed.phone) && !(parsed.email || '').includes('guest')) {
           return parsed;
         }
       }
@@ -222,6 +224,7 @@ export default function App() {
 
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isTicketModalOpen, setIsTicketModalOpen] = useState(false);
+  const [sectionInfoModal, setSectionInfoModal] = useState<AppSectionId | null>(null);
   const [showSplash, setShowSplash] = useState(true);
 
   // Driver Activation Session with paid countdown timer
@@ -269,7 +272,7 @@ export default function App() {
         const stored = localStorage.getItem('uppa_session_user');
         if (stored) {
           const parsed = JSON.parse(stored);
-          if (parsed && parsed.email && !parsed.email.includes('guest')) {
+          if (parsed && (parsed.email || parsed.phone) && !(parsed.email || '').includes('guest')) {
             setCurrentUser(parsed);
             setIsLoggedIn(true);
             return;
@@ -631,7 +634,9 @@ export default function App() {
   const [communityChatList, setCommunityChatList] = useState<MensajeChatFirestore[]>([]);
   const [dismissedChatMsgId, setDismissedChatMsgId] = useState<string | null>(null);
   const [solicitudesList, setSolicitudesList] = useState<SolicitudTransporteFirestore[]>([]);
-  const [dismissedGlassRideId, setDismissedGlassRideId] = useState<string | null>(null);
+  const [activeMapGlassRideId, setActiveMapGlassRideId] = useState<string | null>(null);
+  const shownMapGlassRideIdsRef = useRef<Set<string>>(new Set());
+  const mapGlassAutoHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Pop-up exclusivo de 10 segundos para el prestador cuando el pasajero recibe su código
   const [driverCodePopup, setDriverCodePopup] = useState<{
@@ -678,6 +683,7 @@ export default function App() {
     return () => {
       clearSelectedEventAutoClose();
       if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+      if (mapGlassAutoHideTimerRef.current) clearTimeout(mapGlassAutoHideTimerRef.current);
     };
   }, []);
 
@@ -1360,27 +1366,23 @@ export default function App() {
       return 0;
     };
     const relevant = solicitudesList.filter((sol) => {
-      if (sol.estado === 'cancelado' || sol.estado === 'expirada' || sol.estado === 'anulado') return false;
+      if (sol.estado === 'cancelado' || sol.estado === 'expirada' || sol.estado === 'anulado' || sol.estado === 'completado') {
+        return false;
+      }
       if (isSolicitudExpired(sol, now) || isSolicitudAceptadaExpired(sol, now)) return false;
+      // Tarjeta de viaje activo exclusiva para el pasajero que creó el viaje
       const isMyPassengerRide =
         (currentUser.id && sol.pasajeroId === currentUser.id) ||
         (currentUser.uid && sol.pasajeroId === currentUser.uid);
-      const isMyDriverRide =
-        Boolean(sol.choferId) &&
-        ((currentUser.id && sol.choferId === currentUser.id) ||
-          (currentUser.uid && sol.choferId === currentUser.uid));
-      return Boolean(isMyPassengerRide || isMyDriverRide);
+      return Boolean(isMyPassengerRide);
     });
     if (relevant.length === 0) return null;
-    // Priorizar viajes aceptados/en curso sobre pendientes recientes
     const sorted = [...relevant].sort((a, b) => {
       const rank = (s: SolicitudTransporteFirestore) =>
         s.estado === 'en_camino' || s.estado === 'aceptado'
           ? 3
           : s.estado === 'pendiente'
           ? 2
-          : s.estado === 'completado'
-          ? 1
           : 0;
       const diffRank = rank(b) - rank(a);
       if (diffRank !== 0) return diffRank;
@@ -1388,6 +1390,25 @@ export default function App() {
     });
     return sorted[0] || null;
   }, [solicitudesList, currentUser.id, currentUser.uid]);
+
+  // Mostrar la tarjeta de viaje activo solo al pasajero creador durante 4 segundos por cada nuevo viaje
+  useEffect(() => {
+    if (activeTab !== 'map') return;
+    if (!myLiveActiveSolicitud?.id) return;
+    const solId = myLiveActiveSolicitud.id;
+    if (shownMapGlassRideIdsRef.current.has(solId)) return;
+
+    shownMapGlassRideIdsRef.current.add(solId);
+    setActiveMapGlassRideId(solId);
+
+    if (mapGlassAutoHideTimerRef.current) {
+      clearTimeout(mapGlassAutoHideTimerRef.current);
+    }
+    mapGlassAutoHideTimerRef.current = setTimeout(() => {
+      setActiveMapGlassRideId((prev) => (prev === solId ? null : prev));
+      mapGlassAutoHideTimerRef.current = null;
+    }, 4000);
+  }, [activeTab, myLiveActiveSolicitud?.id]);
 
   const matchedLiveDriver = useMemo(() => {
     if (!myLiveActiveSolicitud?.choferId) return null;
@@ -2130,9 +2151,20 @@ export default function App() {
               />
             </div>
 
-            {/* Tarjeta Glassmorphism iOS de Viaje Activo en Mapa */}
+            {/* Icono pequeño (i) de información de funcionalidades de la sección Mapa */}
+            <button
+              type="button"
+              onClick={() => setSectionInfoModal('map')}
+              title="Ver funcionalidades de la sección Mapa"
+              aria-label="Información de Mapa en Vivo"
+              className="absolute top-3 left-3 z-20 w-7 h-7 rounded-full bg-[#202329]/90 backdrop-blur-md border border-white/25 hover:border-[#FFF19A] text-[#FFF19A] shadow-[0_2px_8px_rgba(0,0,0,0.5)] flex items-center justify-center cursor-pointer active:scale-95 transition-all"
+            >
+              <Info className="w-3.5 h-3.5" />
+            </button>
+
+            {/* Tarjeta Glassmorphism iOS de Viaje Activo en Mapa (solo para el pasajero, visible 4 segundos) */}
             {myLiveActiveSolicitud &&
-              myLiveActiveSolicitud.id !== dismissedGlassRideId &&
+              myLiveActiveSolicitud.id === activeMapGlassRideId &&
               !activeTrackingPassenger &&
               !activeTrackingTaxi && (
                 <div className="absolute top-16 left-3 right-3 sm:left-4 sm:right-auto sm:w-[375px] z-20 pointer-events-auto">
@@ -2140,22 +2172,9 @@ export default function App() {
                     solicitud={myLiveActiveSolicitud}
                     matchedDriver={matchedLiveDriver}
                     userLocation={userLocation}
-                    isDriverViewer={Boolean(
-                      myLiveActiveSolicitud.choferId &&
-                        ((currentUser.id && myLiveActiveSolicitud.choferId === currentUser.id) ||
-                          (currentUser.uid && myLiveActiveSolicitud.choferId === currentUser.uid))
-                    )}
+                    isDriverViewer={false}
                     onLocateOnMap={() => {
-                      const viewerIsDriver = Boolean(
-                        myLiveActiveSolicitud.choferId &&
-                          ((currentUser.id && myLiveActiveSolicitud.choferId === currentUser.id) ||
-                            (currentUser.uid && myLiveActiveSolicitud.choferId === currentUser.uid))
-                      );
-                      if (viewerIsDriver) {
-                        activarGpsHaciaPasajero(myLiveActiveSolicitud.id);
-                        setActiveTrackingPassenger({ ...myLiveActiveSolicitud, gpsActivadoChofer: true });
-                        showToast(`📍 GPS activado hacia ${myLiveActiveSolicitud.nombrePasajero}`);
-                      } else if (matchedLiveDriver) {
+                      if (matchedLiveDriver) {
                         setActiveTrackingTaxi(matchedLiveDriver);
                         showToast(`Trazando trayectoria con ${matchedLiveDriver.driverName}`);
                       } else {
@@ -2163,7 +2182,13 @@ export default function App() {
                       }
                     }}
                     onOpenTaxiTab={() => setActiveTab('taxi')}
-                    onClose={() => setDismissedGlassRideId(myLiveActiveSolicitud.id)}
+                    onClose={() => {
+                      if (mapGlassAutoHideTimerRef.current) {
+                        clearTimeout(mapGlassAutoHideTimerRef.current);
+                        mapGlassAutoHideTimerRef.current = null;
+                      }
+                      setActiveMapGlassRideId(null);
+                    }}
                   />
                 </div>
               )}
@@ -2257,6 +2282,7 @@ export default function App() {
             currentUserRole={currentUser.role}
             isDriverHabilitado={isDriverHabilitado}
             userLocation={userLocation}
+            onOpenInfo={() => setSectionInfoModal('taxi')}
             onOpenPublishModal={(tab) => {
               setPublishTaxiInitialTab(tab || 'transfer');
               setIsPublishTaxiOpen(true);
@@ -2279,6 +2305,7 @@ export default function App() {
             currentUser={currentUser}
             activeContextEvent={contextEventForChat}
             onClearContextEvent={() => setContextEventForChat(null)}
+            onOpenInfo={() => setSectionInfoModal('chat')}
           />
         )}
 
@@ -2349,9 +2376,12 @@ export default function App() {
         <div className="max-w-2xl mx-auto grid grid-cols-7 gap-0.5 sm:gap-1">
           {/* Tab 1: Mapa */}
           <button
-            onClick={() => setActiveTab('map')}
+            onClick={() => {
+              playMicroSound('ui_tap');
+              setActiveTab('map');
+            }}
             title="Ver mapa en vivo, recorridos y colectivos"
-            className={`min-h-[48px] py-1 px-1 rounded-xl flex flex-col items-center justify-center transition-all cursor-pointer group ${
+            className={`min-h-[48px] py-1 px-1 rounded-xl flex flex-col items-center justify-center transition-all cursor-pointer group active:scale-95 ${
               activeTab === 'map'
                 ? 'text-[#FFF19A] font-black'
                 : 'text-[#9299A5] hover:text-white'
@@ -2372,6 +2402,7 @@ export default function App() {
           {/* Botón 2: Mi ubicación */}
           <button
             onClick={() => {
+              playMicroSound('ui_tap');
               setActiveTab('map');
               if (!userLocation) {
                 setIsLocationModalOpen(true);
@@ -2380,7 +2411,7 @@ export default function App() {
                 showToast('Centrando en tu ubicación GPS');
               }
             }}
-            className="min-h-[48px] py-1 px-1 rounded-xl flex flex-col items-center justify-center transition-all cursor-pointer text-[#9299A5] hover:text-white group"
+            className="min-h-[48px] py-1 px-1 rounded-xl flex flex-col items-center justify-center transition-all cursor-pointer text-[#9299A5] hover:text-white group active:scale-95"
             title="Centrar el mapa en mi ubicación GPS actual"
           >
             <div className="p-1.5 rounded-lg bg-[#202329] border border-white/20 group-hover:border-[#FFF19A] group-hover:shadow-[0_0_10px_rgba(255,241,154,0.45)] text-[#B7F36B] transition-all">
@@ -2394,11 +2425,12 @@ export default function App() {
           {/* Botón 3: Enfocar */}
           <button
             onClick={() => {
+              playMicroSound('ui_tap');
               setActiveTab('map');
               window.dispatchEvent(new CustomEvent('uppa-map-fit-route'));
               showToast('Enfocando traza completa Malvinas ↔ Zárate');
             }}
-            className="min-h-[48px] py-1 px-1 rounded-xl flex flex-col items-center justify-center transition-all cursor-pointer text-[#9299A5] hover:text-white group"
+            className="min-h-[48px] py-1 px-1 rounded-xl flex flex-col items-center justify-center transition-all cursor-pointer text-[#9299A5] hover:text-white group active:scale-95"
             title="Enfocar el recorrido completo en el mapa"
           >
             <div className="p-1.5 rounded-lg bg-[#202329] border border-white/20 group-hover:border-[#FFF19A] group-hover:shadow-[0_0_10px_rgba(255,241,154,0.45)] text-white group-hover:text-[#FFF19A] transition-all">
@@ -2412,9 +2444,12 @@ export default function App() {
           {/* Tab 4: Taxi & Motos con acceso al Ranking de Prestadores */}
           <div className="relative flex items-center justify-center">
             <button
-              onClick={() => setActiveTab('taxi')}
+              onClick={() => {
+                playMicroSound('ui_tap');
+                setActiveTab('taxi');
+              }}
               title="Ir a Taxis & Motos para pedir o ver prestadores habilitados"
-              className={`min-h-[48px] py-1 px-1 rounded-xl flex flex-col items-center justify-center transition-all cursor-pointer flex-1 group ${
+              className={`min-h-[48px] py-1 px-1 rounded-xl flex flex-col items-center justify-center transition-all cursor-pointer flex-1 group active:scale-95 ${
                 activeTab === 'taxi'
                   ? 'text-[#B7F36B] font-black'
                   : 'text-[#9299A5] hover:text-white'
@@ -2438,7 +2473,10 @@ export default function App() {
             <div className="absolute right-0 top-1">
               <RankingPrestadoresDropdown
                 placement="top"
-                onOpenTaxiTab={() => setActiveTab('taxi')}
+                onOpenTaxiTab={() => {
+                  playMicroSound('ui_tap');
+                  setActiveTab('taxi');
+                }}
                 triggerButtonClassName="w-5 h-5 rounded-md bg-[#202329] hover:border-[#FFF19A] hover:shadow-[0_0_10px_rgba(255,241,154,0.45)] border border-white/20 text-[#FFF19A] flex items-center justify-center transition-all cursor-pointer"
               />
             </div>
@@ -2446,9 +2484,12 @@ export default function App() {
 
           {/* Tab 5: Chat Comunitario */}
           <button
-            onClick={() => setActiveTab('chat')}
+            onClick={() => {
+              playMicroSound('ui_tap');
+              setActiveTab('chat');
+            }}
             title="Abrir el chat comunitario de pasajeros y prestadores"
-            className={`min-h-[48px] py-1 px-1 rounded-xl flex flex-col items-center justify-center transition-all cursor-pointer relative group ${
+            className={`min-h-[48px] py-1 px-1 rounded-xl flex flex-col items-center justify-center transition-all cursor-pointer relative group active:scale-95 ${
               activeTab === 'chat'
                 ? 'text-[#FFF19A] font-black'
                 : 'text-[#9299A5] hover:text-white'
@@ -2474,10 +2515,13 @@ export default function App() {
           {/* Tab 6: Ticket de consulta */}
           <button
             type="button"
-            onClick={() => setIsTicketModalOpen(true)}
+            onClick={() => {
+              playMicroSound('ui_tap');
+              setIsTicketModalOpen(true);
+            }}
             title="Ticket de consulta"
             aria-label="Ticket de consulta"
-            className={`min-h-[48px] py-1 px-0.5 rounded-xl flex flex-col items-center justify-center transition-all cursor-pointer group ${
+            className={`min-h-[48px] py-1 px-0.5 rounded-xl flex flex-col items-center justify-center transition-all cursor-pointer group active:scale-95 ${
               isTicketModalOpen
                 ? 'text-[#FFF19A] font-black'
                 : 'text-[#9299A5] hover:text-white'
@@ -2497,9 +2541,12 @@ export default function App() {
 
           {/* Tab 7: Admin */}
           <button
-            onClick={() => setActiveTab('admin')}
+            onClick={() => {
+              playMicroSound('ui_tap');
+              setActiveTab('admin');
+            }}
             title="Abrir el panel de Administración UPPA"
-            className={`min-h-[48px] py-1 px-0.5 rounded-xl flex flex-col items-center justify-center transition-all cursor-pointer group ${
+            className={`min-h-[48px] py-1 px-0.5 rounded-xl flex flex-col items-center justify-center transition-all cursor-pointer group active:scale-95 ${
               activeTab === 'admin'
                 ? 'text-[#FFF19A] font-black'
                 : 'text-[#9299A5] hover:text-white'
@@ -2600,6 +2647,12 @@ export default function App() {
         onSubmitted={() =>
           showToast('Ticket listo para enviar a uppatransportecolaborativo@gmail.com')
         }
+      />
+
+      <SectionInfoSheetModal
+        isOpen={Boolean(sectionInfoModal)}
+        initialSection={sectionInfoModal || 'map'}
+        onClose={() => setSectionInfoModal(null)}
       />
 
       <AuthModal

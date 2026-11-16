@@ -59,6 +59,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     isEmailVerified,
     registerWithEmail,
     loginWithEmail,
+    loginWithWhatsApp,
     logout,
     sendVerificationEmail,
     reloadAuthUser,
@@ -83,6 +84,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [showLoginPassword, setShowLoginPassword] = useState(false);
+  const [isWaLoginMode, setIsWaLoginMode] = useState(false);
+  const [waPhone, setWaPhone] = useState('');
+  const [waName, setWaName] = useState('');
 
   // Edit profile state
   const [editName, setEditName] = useState('');
@@ -838,6 +842,88 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 </svg>
                 <span>Continuar con Google</span>
               </button>
+
+              {!isWaLoginMode ? (
+                <button
+                  type="button"
+                  onClick={() => setIsWaLoginMode(true)}
+                  disabled={isSubmitting}
+                  title="Ingresar con tu número de WhatsApp"
+                  className="w-full min-h-[44px] rounded-xl bg-[#101114] hover:border-[#B7F36B] border-2 border-[#B7F36B]/45 text-[#B7F36B] font-black text-xs flex items-center justify-center gap-2 transition-all cursor-pointer active:scale-95"
+                >
+                  <MessageCircle className="w-4 h-4" />
+                  <span>Continuar con WhatsApp</span>
+                </button>
+              ) : (
+                <div className="p-3 rounded-2xl bg-[#101114] border-2 border-[#B7F36B]/50 space-y-2.5 animate-in fade-in">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-black text-[#B7F36B] flex items-center gap-1.5">
+                      <MessageCircle className="w-3.5 h-3.5" />
+                      <span>Ingresar con WhatsApp</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setIsWaLoginMode(false)}
+                      className="text-[10.5px] text-[#9299A5] hover:text-white cursor-pointer"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                  <input
+                    type="tel"
+                    placeholder="+54 9 3489 68-6939"
+                    value={waPhone}
+                    onChange={(e) => setWaPhone(e.target.value)}
+                    className="w-full min-h-[38px] bg-[#202329] border border-white/15 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-[#B7F36B] font-mono"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Nombre y Apellido (opcional)"
+                    value={waName}
+                    onChange={(e) => setWaName(e.target.value)}
+                    className="w-full min-h-[38px] bg-[#202329] border border-white/15 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-[#FFF19A]"
+                  />
+                  <button
+                    type="button"
+                    disabled={isSubmitting}
+                    onClick={async () => {
+                      setIsSubmitting(true);
+                      setAuthError(null);
+                      try {
+                        const profile = await loginWithWhatsApp(waPhone, waName);
+                        onUpdateUser({
+                          ...currentUser,
+                          id: profile.uid || profile.id || currentUser.id,
+                          uid: profile.uid || profile.id || currentUser.uid,
+                          name: profile.nombre || profile.name || currentUser.name,
+                          nombre: profile.nombre || profile.name || currentUser.nombre,
+                          email: profile.email,
+                          role: profile.role,
+                          rol: profile.rol as any,
+                          esChofer: profile.esChofer,
+                          tipoVehiculo: profile.tipoVehiculo,
+                          phone: profile.phone,
+                          barrio: profile.barrio,
+                          estado: profile.estado,
+                          fechaRegistro: profile.fechaRegistro,
+                          avatarUrl: profile.avatarUrl,
+                          emailVerificado: true,
+                        });
+                        setSuccessMessage('¡Sesión iniciada con WhatsApp!');
+                        setIsWaLoginMode(false);
+                        setMode('profile');
+                      } catch {
+                      } finally {
+                        setIsSubmitting(false);
+                      }
+                    }}
+                    className="w-full min-h-[40px] uppa-cta-green font-black text-xs rounded-xl flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+                  >
+                    <MessageCircle className="w-3.5 h-3.5" />
+                    <span>Confirmar WhatsApp</span>
+                  </button>
+                </div>
+              )}
             </form>
           )}
 

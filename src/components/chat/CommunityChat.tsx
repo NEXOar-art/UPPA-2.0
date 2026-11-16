@@ -32,12 +32,14 @@ import {
   Smile,
   ChevronDown,
   RotateCcw,
+  Info,
 } from 'lucide-react';
 
 interface CommunityChatProps {
   currentUser: User;
   activeContextEvent?: MapEvent | null;
   onClearContextEvent?: () => void;
+  onOpenInfo?: () => void;
 }
 
 export type ChannelType = 'todos' | 'campana-zarate' | 'zarate-campana' | 'general';
@@ -63,6 +65,7 @@ export const CommunityChat: React.FC<CommunityChatProps> = ({
   currentUser,
   activeContextEvent,
   onClearContextEvent,
+  onOpenInfo,
 }) => {
   const [selectedChannel, setSelectedChannel] = useState<ChannelType>('todos');
   const [roleFilter, setRoleFilter] = useState<RoleFilter>('todos');
@@ -352,6 +355,17 @@ export const CommunityChat: React.FC<CommunityChatProps> = ({
               <h2 className="text-xs sm:text-sm font-black text-white font-display truncate uppercase tracking-tight">
                 Chat Comunitario
               </h2>
+              {onOpenInfo && (
+                <button
+                  type="button"
+                  onClick={onOpenInfo}
+                  title="Ver funcionalidades del Chat Comunitario"
+                  aria-label="Información de Chat Comunitario"
+                  className="w-6 h-6 rounded-full bg-[#101114] border border-white/20 hover:border-[#FFF19A] text-[#FFF19A] flex items-center justify-center shrink-0 cursor-pointer active:scale-95 transition-all"
+                >
+                  <Info className="w-3.5 h-3.5" />
+                </button>
+              )}
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9.5px] font-black bg-[#B7F36B]/15 text-[#B7F36B] border border-[#B7F36B]/45 shrink-0">
                 <span className="w-1.5 h-1.5 rounded-full bg-[#B7F36B] animate-ping" />
                 <span>EN VIVO</span>

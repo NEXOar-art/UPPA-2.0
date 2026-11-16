@@ -294,10 +294,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           <div className="h-1.5 bg-[#FFF19A] absolute top-0 left-0 right-0" />
 
           <div className="flex items-center gap-3 mb-6 pt-1">
-            <div className="w-12 h-12 rounded-2xl bg-[#101114] border-2 border-[#FFF19A]/50 flex items-center justify-center text-[#FFF19A]">
+            <div className="w-12 h-12 rounded-2xl bg-[#101114] border-2 border-[#FFF19A]/50 flex items-center justify-center text-[#FFF19A] shrink-0">
               <Shield className="w-6 h-6" />
             </div>
-            <div>
+            <div className="min-w-0">
               <h1 className="text-xl font-black text-white font-display tracking-tight uppercase">
                 Panel de Administración
               </h1>
