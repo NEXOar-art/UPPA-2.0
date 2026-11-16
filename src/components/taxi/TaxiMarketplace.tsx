@@ -20,6 +20,9 @@ import {
   setDriverDisponibilidad,
   validarCodigoSeguridadViaje,
   anularViajePorCodigo,
+  activarGpsHaciaPasajero,
+  finalizarViajeDeChofer,
+  anunciarVehiculoDesocupado,
   RANKING_WINDOW_MS,
 } from '../../services/realtimeFirebaseService';
 import { getDistanceKm, UserLocation } from '../../utils/geolocation';
@@ -623,9 +626,15 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
             {isPrestadorLogueado && (
               <button
                 type="button"
-                onClick={() => {
+                onClick={async () => {
                   const isCurrentlyOcupado = (currentUserId && disponibilidadMap[currentUserId] === 'ocupado') || false;
                   const nextDisp = isCurrentlyOcupado ? 'desocupado' : 'ocupado';
+                  if (nextDisp === 'desocupado') {
+                    try {
+                      await finalizarViajeDeChofer(currentUserId, currentUserName);
+                    } catch {}
+                    await anunciarVehiculoDesocupado(currentUserId, currentUserName);
+                  }
                   if (currentUserId) setDriverDisponibilidad(currentUserId, nextDisp);
                   if (currentUserName) setDriverDisponibilidad(currentUserName, nextDisp);
                   if (currentUserPhone) setDriverDisponibilidad(currentUserPhone, nextDisp);
@@ -954,7 +963,10 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                               <div className="space-y-1.5">
                                 <button
                                   type="button"
-                                  onClick={() => onLocatePassengerOnMap?.(sol)}
+                                  onClick={() => {
+                                    activarGpsHaciaPasajero(sol.id);
+                                    onLocatePassengerOnMap?.({ ...sol, gpsActivadoChofer: true });
+                                  }}
                                   className="w-full min-h-[44px] py-2 px-3 rounded-xl uppa-cta-yellow font-black text-xs flex items-center justify-center gap-1.5 cursor-pointer"
                                   title="Ir al mapa UPPA con trayectoria GPS hacia la ubicación del pasajero"
                                 >
@@ -966,6 +978,7 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                                   href={`https://www.google.com/maps/dir/?api=1&destination=${gpsTargetParam}&travelmode=driving`}
                                   target="_blank"
                                   rel="noopener noreferrer"
+                                  onClick={() => activarGpsHaciaPasajero(sol.id)}
                                   title="Abrir navegación giro a giro en Google Maps hasta el pasajero"
                                   className="w-full min-h-[40px] py-2 px-3 rounded-xl bg-[#202329] hover:border-[#FFF19A] border border-white/20 text-white font-bold text-[11px] flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
                                 >
@@ -1436,7 +1449,10 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                   {allowPassengerGps && myAcceptedSolicitud && (
                     <button
                       type="button"
-                      onClick={() => onLocatePassengerOnMap?.(myAcceptedSolicitud)}
+                      onClick={() => {
+                        activarGpsHaciaPasajero(myAcceptedSolicitud.id);
+                        onLocatePassengerOnMap?.({ ...myAcceptedSolicitud, gpsActivadoChofer: true });
+                      }}
                       className="flex-1 sm:flex-none min-h-[42px] px-3.5 py-2 rounded-xl uppa-cta-yellow font-black text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer"
                       title={`Ir con GPS directamente hasta la ubicación del pasajero ${myAcceptedSolicitud.nombrePasajero} (${myAcceptedSolicitud.origen})`}
                     >

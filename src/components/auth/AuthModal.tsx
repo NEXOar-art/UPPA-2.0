@@ -30,6 +30,8 @@ import {
 import {
   setDriverDisponibilidad,
   subscribeToDriversDisponibilidad,
+  finalizarViajeDeChofer,
+  anunciarVehiculoDesocupado,
 } from '../../services/realtimeFirebaseService';
 import { getActiveDriverSession } from '../../services/driverActivationService';
 
@@ -185,8 +187,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         isHabilitado)
   );
 
-  const handleToggleDriverDisponibilidad = () => {
+  const handleToggleDriverDisponibilidad = async () => {
     const nextState = driverDisponibilidad === 'ocupado' ? 'desocupado' : 'ocupado';
+    const dId = currentUid || authUser?.uid || currentUser?.uid || currentUser?.id || '';
+    const dName = currentUser?.nombre || currentUser?.name || authUser?.nombre || '';
+    if (nextState === 'desocupado') {
+      try {
+        await finalizarViajeDeChofer(dId, dName);
+      } catch {}
+      await anunciarVehiculoDesocupado(dId, dName);
+    }
     const keys = [
       currentUid,
       authUser?.uid,
@@ -874,8 +884,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                           </label>
                           <select
                             value={driverDisponibilidad}
-                            onChange={(e) => {
+                            onChange={async (e) => {
                               const next = e.target.value as 'desocupado' | 'ocupado';
+                              if (next === 'desocupado') {
+                                const dId = currentUid || authUser?.uid || currentUser?.uid || currentUser?.id || '';
+                                const dName = currentUser?.nombre || currentUser?.name || authUser?.nombre || '';
+                                try {
+                                  await finalizarViajeDeChofer(dId, dName);
+                                } catch {}
+                                await anunciarVehiculoDesocupado(dId, dName);
+                              }
                               const keys = [
                                 currentUid,
                                 authUser?.uid,

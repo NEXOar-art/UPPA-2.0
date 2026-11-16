@@ -187,6 +187,8 @@ export interface HabilitacionChofer {
   rating?: number;
   completedRides?: number;
   whatsappEnviadoEn?: number;
+  ultimoDesocupadoAt?: number;
+  disponibilidad?: 'desocupado' | 'ocupado';
 }
 
 export interface TaxiListing {
@@ -237,10 +239,13 @@ export interface SolicitudTransporteFirestore {
   codigoSeguridad?: string; // Código alfanumérico generado al aceptar, visible solo para el pasajero
   codigoValidado?: boolean; // True cuando el chofer ingresa el código correcto al subir al vehículo
   codigoValidadoEn?: number;
+  gpsActivadoChofer?: boolean; // True cuando el prestador presiona el botón de GPS hacia el pasajero (Paso 5)
+  gpsActivadoEn?: number;
   intentosFallidosCodigo?: number;
   motivoAnulacion?: string;
   fechaSolicitud: any;
   fechaAceptado?: number; // Timestamp de aceptación para ventana de exposición de 30 minutos
+  fechaCompletado?: number;
   expiresAt?: number; // Temporizador límite de 12 minutos
   actualizadoEn?: any;
   precioEstimado?: number;

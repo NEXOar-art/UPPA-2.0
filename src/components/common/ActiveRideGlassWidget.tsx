@@ -78,16 +78,18 @@ export const ActiveRideGlassWidget: React.FC<ActiveRideGlassWidgetProps> = ({
   }, [solicitud.origenCoords, userLocation, matchedDriver, isMoto]);
 
   // Real 6-step intelligent progress index (0..5)
+  // Paso 5 (index 4 - Viaje iniciado): se cumple cuando el prestador presiona el botón de GPS hacia el pasajero.
+  // Paso 6 (index 5 - Viaje finalizado): SOLO queda completo cuando el prestador aprieta DESOCUPADO.
   const currentStepIndex = useMemo(() => {
     if (solicitud.estado === 'completado') return 5;
-    if (solicitud.codigoValidado) return 4;
+    if (solicitud.gpsActivadoChofer) return 4;
     if (solicitud.estado === 'aceptado' || solicitud.estado === 'en_camino') {
       if (isNear) return 3; // Llegando
       if (solicitud.estado === 'en_camino' || matchedDriver) return 2; // En camino
       return 1; // Conductor encontrado
     }
     return 0; // Buscando conductor
-  }, [solicitud.estado, solicitud.codigoValidado, isNear, matchedDriver]);
+  }, [solicitud.estado, solicitud.gpsActivadoChofer, isNear, matchedDriver]);
 
   // Trigger subtle micro-sound when progress advances or match happens
   const prevStepRef = useRef<number>(currentStepIndex);
@@ -140,8 +142,8 @@ export const ActiveRideGlassWidget: React.FC<ActiveRideGlassWidgetProps> = ({
       ? 'Buscando móvil'
       : solicitud.estado === 'completado'
       ? 'Finalizado'
-      : solicitud.codigoValidado
-      ? 'En curso'
+      : solicitud.gpsActivadoChofer
+      ? 'Viaje iniciado'
       : etaMin !== null
       ? `${etaMin} min`
       : 'En camino';
@@ -374,8 +376,14 @@ export const ActiveRideGlassWidget: React.FC<ActiveRideGlassWidgetProps> = ({
         {/* Step checklist */}
         <div className={`grid ${compact ? 'grid-cols-2' : 'grid-cols-2 sm:grid-cols-3'} gap-1.5 pt-0.5`}>
           {PROGRESS_STEPS.map((step, idx) => {
-            const isCompleted = idx < currentStepIndex || (idx === 5 && solicitud.estado === 'completado');
-            const isCurrent = idx === currentStepIndex && !(idx === 5 && solicitud.estado === 'completado');
+            const isCompleted =
+              idx < currentStepIndex ||
+              (idx === 4 && Boolean(solicitud.gpsActivadoChofer)) ||
+              (idx === 5 && solicitud.estado === 'completado');
+            const isCurrent =
+              idx === currentStepIndex &&
+              !(idx === 4 && Boolean(solicitud.gpsActivadoChofer)) &&
+              !(idx === 5 && solicitud.estado === 'completado');
             return (
               <div
                 key={step.id}

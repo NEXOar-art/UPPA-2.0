@@ -68,6 +68,8 @@ import {
   subscribeToDriversDisponibilidad,
   setDriverDisponibilidad,
   finalizarViajeDeChofer,
+  activarGpsHaciaPasajero,
+  anunciarVehiculoDesocupado,
   isRealCommunityReport,
   enviarMensajeChat,
 } from './services/realtimeFirebaseService';
@@ -550,6 +552,13 @@ export default function App() {
       } catch (err) {
         console.warn('Error al finalizar viaje automático:', err);
       }
+      const vType =
+        (userHabilitacionRecord?.vehicleType ||
+          driverSession?.vehicleType ||
+          currentUser?.tipoVehiculo) === 'moto'
+          ? 'moto'
+          : 'auto';
+      await anunciarVehiculoDesocupado(driverId, driverName, vType);
       setActiveTrackingPassenger(null);
     }
 
@@ -623,6 +632,26 @@ export default function App() {
   const [dismissedChatMsgId, setDismissedChatMsgId] = useState<string | null>(null);
   const [solicitudesList, setSolicitudesList] = useState<SolicitudTransporteFirestore[]>([]);
   const [dismissedGlassRideId, setDismissedGlassRideId] = useState<string | null>(null);
+
+  // Pop-up exclusivo de 10 segundos para el prestador cuando el pasajero recibe su código
+  const [driverCodePopup, setDriverCodePopup] = useState<{
+    solicitudId: string;
+    pasajeroNombre: string;
+    origen: string;
+    destino: string;
+    solicitud: SolicitudTransporteFirestore;
+    expiresAt: number;
+  } | null>(null);
+  const shownDriverCodePopupIdsRef = useRef<Set<string>>(new Set());
+
+  // Pop-up global de 5 segundos en la sección principal del mapa al quedar un vehículo DESOCUPADO
+  const [desocupadoMapPopup, setDesocupadoMapPopup] = useState<{
+    id: string;
+    driverName: string;
+    vehicleType?: 'auto' | 'moto';
+    expiresAt: number;
+  } | null>(null);
+  const shownDesocupadoEventsRef = useRef<Set<string>>(new Set());
 
   // Eventos Push en Pantalla (Exposición de 7 segundos para mantener el mapa despejado)
   const [screenPushEvents, setScreenPushEvents] = useState<PushNotificationPayload[]>([]);
@@ -831,6 +860,139 @@ export default function App() {
       unsubSolicitudes();
     };
   }, []);
+
+  // Detectar cuando el pasajero recibe su código de seguridad y mostrar pop-up de 10s SOLO al prestador asignado
+  useEffect(() => {
+    const myIds = new Set(
+      [currentUser.id, currentUser.uid].filter(Boolean) as string[]
+    );
+    const myNames = new Set(
+      [currentUser.name, currentUser.nombre, driverSession?.driverName]
+        .filter(Boolean)
+        .map((n) => String(n).trim().toLowerCase())
+    );
+
+    const assignedPendingCode = solicitudesList.find((sol) => {
+      if (sol.estado !== 'aceptado' && sol.estado !== 'en_camino') return false;
+      if (!sol.codigoSeguridad || sol.codigoValidado) return false;
+      const matchesId = Boolean(sol.choferId && myIds.has(sol.choferId));
+      const matchesName = Boolean(
+        isDriverUser &&
+          sol.choferNombre &&
+          myNames.has(sol.choferNombre.trim().toLowerCase())
+      );
+      return matchesId || matchesName;
+    });
+
+    if (!assignedPendingCode) return;
+
+    const solId = assignedPendingCode.id;
+    let alreadyShown = shownDriverCodePopupIdsRef.current.has(solId);
+    if (!alreadyShown) {
+      try {
+        alreadyShown = sessionStorage.getItem(`uppa_shown_code_pop_${solId}`) === '1';
+      } catch {}
+    }
+    if (alreadyShown) return;
+
+    shownDriverCodePopupIdsRef.current.add(solId);
+    try {
+      sessionStorage.setItem(`uppa_shown_code_pop_${solId}`, '1');
+    } catch {}
+
+    playMicroSound('ride_accepted');
+    setDriverCodePopup({
+      solicitudId: solId,
+      pasajeroNombre: assignedPendingCode.nombrePasajero,
+      origen: assignedPendingCode.origen,
+      destino: assignedPendingCode.destino,
+      solicitud: assignedPendingCode,
+      expiresAt: Date.now() + 10000,
+    });
+  }, [solicitudesList, currentUser.id, currentUser.uid, currentUser.name, currentUser.nombre, driverSession?.driverName, isDriverUser]);
+
+  useEffect(() => {
+    if (!driverCodePopup) return;
+    const msLeft = Math.max(0, driverCodePopup.expiresAt - Date.now());
+    const t = setTimeout(() => {
+      setDriverCodePopup(null);
+    }, msLeft || 10000);
+    return () => clearTimeout(t);
+  }, [driverCodePopup]);
+
+  // Escuchar eventos globales de vehículo DESOCUPADO (ventana local, BroadcastChannel y Firestore)
+  useEffect(() => {
+    const triggerPopup = (driverName: string, vehicleType?: 'auto' | 'moto', ts?: number) => {
+      const stamp = typeof ts === 'number' ? ts : Date.now();
+      const bucket = Math.floor(stamp / 3000);
+      const dedupeKey = `${(driverName || 'chofer').trim().toLowerCase()}_${bucket}`;
+      if (shownDesocupadoEventsRef.current.has(dedupeKey)) return;
+      shownDesocupadoEventsRef.current.add(dedupeKey);
+
+      playMicroSound('step_progress');
+      setDesocupadoMapPopup({
+        id: `${dedupeKey}-${stamp}`,
+        driverName: driverName || 'Prestador habilitado',
+        vehicleType,
+        expiresAt: Date.now() + 5000,
+      });
+    };
+
+    const handleWindowEvent = (ev: Event) => {
+      const custom = ev as CustomEvent<{
+        choferId?: string;
+        choferNombre?: string;
+        vehicleType?: 'auto' | 'moto';
+        timestamp?: number;
+      }>;
+      if (custom.detail) {
+        triggerPopup(
+          custom.detail.choferNombre || 'Prestador habilitado',
+          custom.detail.vehicleType,
+          custom.detail.timestamp
+        );
+      }
+    };
+
+    window.addEventListener('uppa-vehiculo-desocupado', handleWindowEvent);
+    return () => {
+      window.removeEventListener('uppa-vehiculo-desocupado', handleWindowEvent);
+    };
+  }, []);
+
+  useEffect(() => {
+    const now = Date.now();
+    habilitacionesList.forEach((h) => {
+      if (
+        h.estado === 'activo' &&
+        typeof h.ultimoDesocupadoAt === 'number' &&
+        now - h.ultimoDesocupadoAt < 12000 &&
+        h.ultimoDesocupadoAt <= now + 5000
+      ) {
+        const bucket = Math.floor(h.ultimoDesocupadoAt / 3000);
+        const dedupeKey = `${h.driverName.trim().toLowerCase()}_${bucket}`;
+        if (!shownDesocupadoEventsRef.current.has(dedupeKey)) {
+          shownDesocupadoEventsRef.current.add(dedupeKey);
+          playMicroSound('step_progress');
+          setDesocupadoMapPopup({
+            id: `${dedupeKey}-${h.ultimoDesocupadoAt}`,
+            driverName: h.driverName,
+            vehicleType: h.vehicleType,
+            expiresAt: Date.now() + 5000,
+          });
+        }
+      }
+    });
+  }, [habilitacionesList]);
+
+  useEffect(() => {
+    if (!desocupadoMapPopup) return;
+    const msLeft = Math.max(0, desocupadoMapPopup.expiresAt - Date.now());
+    const t = setTimeout(() => {
+      setDesocupadoMapPopup(null);
+    }, msLeft || 5000);
+    return () => clearTimeout(t);
+  }, [desocupadoMapPopup]);
 
   const watchIdRef = useRef<number | null>(null);
 
@@ -1374,6 +1536,77 @@ export default function App() {
   return (
     <div className="flex flex-col h-screen w-screen bg-[#101114] text-white overflow-hidden font-sans">
       <GlobalHoverTooltip />
+
+      {/* Pop-up exclusivo de 10 segundos para el prestador cuando el pasajero recibe su código */}
+      {driverCodePopup && (
+        <div
+          role="alertdialog"
+          aria-label="Código facilitado por el pasajero"
+          className="fixed top-16 left-1/2 -translate-x-1/2 z-50 w-[calc(100vw-1.5rem)] max-w-md pointer-events-auto uppa-card-enter"
+        >
+          <div className="uppa-glass-ios rounded-2xl border-2 border-[#FFF19A] shadow-[0_12px_32px_rgba(0,0,0,0.7)] p-3.5 text-white space-y-2.5">
+            <div className="flex items-start justify-between gap-2.5">
+              <div className="flex items-start gap-2.5 min-w-0">
+                <div className="w-9 h-9 rounded-xl bg-[#FFF19A] text-[#101114] flex items-center justify-center shrink-0 border border-[#101114]">
+                  <KeyRound className="w-5 h-5" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs sm:text-[13px] font-black text-[#FFF19A] leading-snug tracking-wide">
+                    CODIGO PARA TAXIS &amp; MOTOS FACILITADO POR EL PASAJERO
+                  </p>
+                  <p className="text-[11px] text-white/90 mt-0.5 truncate">
+                    Pasajero: <strong className="text-[#B7F36B]">{driverCodePopup.pasajeroNombre}</strong>
+                  </p>
+                  <p className="text-[10px] text-[#9299A5] truncate">
+                    {driverCodePopup.origen} ➔ {driverCodePopup.destino}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setDriverCodePopup(null)}
+                className="w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-[#9299A5] hover:text-white flex items-center justify-center shrink-0 cursor-pointer"
+                title="Cerrar aviso"
+                aria-label="Cerrar aviso"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2 pt-0.5">
+              <button
+                type="button"
+                onClick={() => {
+                  activarGpsHaciaPasajero(driverCodePopup.solicitudId);
+                  setActiveTrackingPassenger({ ...driverCodePopup.solicitud, gpsActivadoChofer: true });
+                  setActiveTab('map');
+                  setDriverCodePopup(null);
+                  showToast(`📍 GPS activado hacia ${driverCodePopup.pasajeroNombre} · Viaje iniciado`);
+                }}
+                className="flex-1 min-h-[38px] px-3 py-1.5 rounded-xl uppa-cta-yellow text-[11px] font-black flex items-center justify-center gap-1.5 cursor-pointer"
+                title="Activar GPS hacia el pasajero y avanzar al paso Viaje iniciado"
+              >
+                <Navigation className="w-3.5 h-3.5 text-[#101114]" />
+                <span>GPS Pasajero</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTab('taxi');
+                  setDriverCodePopup(null);
+                }}
+                className="flex-1 min-h-[38px] px-3 py-1.5 rounded-xl bg-[#B7F36B] hover:brightness-95 text-[#101114] border border-[#101114] text-[11px] font-black flex items-center justify-center gap-1.5 cursor-pointer"
+                title="Ir a Taxis & Motos para ingresar el código del pasajero"
+              >
+                <KeyRound className="w-3.5 h-3.5" />
+                <span>Ir a Taxis &amp; Motos</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Toast Notification */}
       {toastMessage && (
@@ -1919,7 +2152,8 @@ export default function App() {
                             (currentUser.uid && myLiveActiveSolicitud.choferId === currentUser.uid))
                       );
                       if (viewerIsDriver) {
-                        setActiveTrackingPassenger(myLiveActiveSolicitud);
+                        activarGpsHaciaPasajero(myLiveActiveSolicitud.id);
+                        setActiveTrackingPassenger({ ...myLiveActiveSolicitud, gpsActivadoChofer: true });
                         showToast(`📍 GPS activado hacia ${myLiveActiveSolicitud.nombrePasajero}`);
                       } else if (matchedLiveDriver) {
                         setActiveTrackingTaxi(matchedLiveDriver);
@@ -1933,6 +2167,53 @@ export default function App() {
                   />
                 </div>
               )}
+
+            {/* Pop-up global de 5 segundos en la sección principal del mapa cuando un vehículo queda DESOCUPADO */}
+            {desocupadoMapPopup && (
+              <div
+                role="status"
+                aria-live="polite"
+                className="absolute top-16 left-1/2 -translate-x-1/2 z-40 w-[calc(100vw-1.5rem)] max-w-md pointer-events-auto uppa-card-enter"
+              >
+                <div className="uppa-glass-ios rounded-2xl border-2 border-[#B7F36B] shadow-[0_12px_32px_rgba(0,0,0,0.72)] p-3.5 text-white flex items-center justify-between gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDesocupadoMapPopup(null);
+                      setActiveTab('taxi');
+                    }}
+                    className="flex items-center gap-2.5 flex-1 min-w-0 text-left cursor-pointer group"
+                    title="Ir a Taxis & Motos para solicitar este vehículo disponible"
+                  >
+                    <div className="w-10 h-10 rounded-xl bg-[#B7F36B] text-[#101114] flex items-center justify-center shrink-0 border border-[#101114]">
+                      {desocupadoMapPopup.vehicleType === 'moto' ? (
+                        <Bike className="w-5 h-5" />
+                      ) : (
+                        <Car className="w-5 h-5" />
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs sm:text-[13px] font-black text-[#B7F36B] group-hover:text-[#FFF19A] transition-colors leading-snug tracking-wide">
+                        VEHICULO DESOCUPADO IR A TAXIS &amp; MOTOS
+                      </p>
+                      <p className="text-[11px] text-white/85 truncate mt-0.5">
+                        {desocupadoMapPopup.driverName} · Disponible ahora
+                      </p>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setDesocupadoMapPopup(null)}
+                    className="w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-[#9299A5] hover:text-white flex items-center justify-center shrink-0 cursor-pointer"
+                    title="Cerrar aviso"
+                    aria-label="Cerrar aviso"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Cabify-Inspired Mobility Bottom Sheet (Panel inferior con scrolling web hacia arriba) */}
             <div className="absolute bottom-2 left-0 right-0 z-30 pointer-events-none">

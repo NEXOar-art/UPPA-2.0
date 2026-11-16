@@ -1208,6 +1208,20 @@ export function subscribeToSolicitudesTransporte(
     solicitudesBroadcastChannel.addEventListener('message', handleBroadcast);
   }
 
+  const handleLocalWindowSync = (event: Event) => {
+    const custom = event as CustomEvent<{ solicitudId?: string; patch?: Partial<SolicitudTransporteFirestore> }>;
+    if (custom.detail?.solicitudId && custom.detail.patch) {
+      currentSolicitudes = currentSolicitudes.map((s) =>
+        s.id === custom.detail.solicitudId ? { ...s, ...custom.detail.patch } : s
+      );
+      setCached('solicitudes', currentSolicitudes);
+      callback(currentSolicitudes);
+    }
+  };
+  if (typeof window !== 'undefined') {
+    window.addEventListener('uppa-solicitudes-local-sync', handleLocalWindowSync);
+  }
+
   const colRef = collection(db, COL_SOLICITUDES);
   const q = query(colRef, orderBy('fechaSolicitud', 'desc'));
 
@@ -1232,6 +1246,9 @@ export function subscribeToSolicitudesTransporte(
   return () => {
     if (solicitudesBroadcastChannel) {
       solicitudesBroadcastChannel.removeEventListener('message', handleBroadcast);
+    }
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('uppa-solicitudes-local-sync', handleLocalWindowSync);
     }
     unsubFirestore();
   };
@@ -1407,6 +1424,53 @@ export async function aceptarSolicitudTransporte(
   }
 
   return existing ? { ...existing, ...patch } : null;
+}
+
+/**
+ * Registra que el prestador presionó el botón de GPS para dirigirse al pasajero,
+ * cumpliendo el Paso 5 ("Viaje iniciado") de la barra de progreso inteligente.
+ */
+export async function activarGpsHaciaPasajero(solicitudId: string): Promise<void> {
+  if (!solicitudId) return;
+  const now = Date.now();
+  const cached = getCached<SolicitudTransporteFirestore[]>('solicitudes', MOCK_INITIAL_SOLICITUDES);
+  const patch: Partial<SolicitudTransporteFirestore> = {
+    gpsActivadoChofer: true,
+    gpsActivadoEn: now,
+  };
+
+  setCached(
+    'solicitudes',
+    cached.map((s) => (s.id === solicitudId ? { ...s, ...patch } : s))
+  );
+
+  try {
+    solicitudesBroadcastChannel?.postMessage({
+      type: 'UPDATE_SOLICITUD',
+      solicitudId,
+      patch,
+    });
+  } catch {}
+
+  if (typeof window !== 'undefined') {
+    try {
+      window.dispatchEvent(
+        new CustomEvent('uppa-solicitudes-local-sync', {
+          detail: { solicitudId, patch },
+        })
+      );
+    } catch {}
+  }
+
+  try {
+    const docRef = doc(db, COL_SOLICITUDES, solicitudId);
+    await updateDoc(docRef, {
+      ...patch,
+      actualizadoEn: serverTimestamp(),
+    });
+  } catch (err) {
+    console.warn('Firestore activarGpsHaciaPasajero notice (resilient mode):', err);
+  }
 }
 
 /**
@@ -1650,8 +1714,86 @@ if (disponibilidadBroadcastChannel) {
           cb(event.data.map);
         } catch {}
       });
+    } else if (event.data?.type === 'VEHICULO_DESOCUPADO' && event.data.detail) {
+      if (typeof window !== 'undefined') {
+        try {
+          window.dispatchEvent(
+            new CustomEvent('uppa-vehiculo-desocupado', {
+              detail: event.data.detail,
+            })
+          );
+        } catch {}
+      }
     }
   };
+}
+
+/**
+ * Anuncia a toda la comunidad en tiempo real (Firestore + BroadcastChannel + ventana)
+ * que un prestador presionó DESOCUPADO para mostrar el pop-up de 5 segundos en el mapa.
+ */
+export async function anunciarVehiculoDesocupado(
+  choferId: string,
+  choferNombre: string,
+  vehicleType?: 'auto' | 'moto'
+): Promise<void> {
+  const now = Date.now();
+  const detail = {
+    choferId: choferId || '',
+    choferNombre: choferNombre || 'Prestador habilitado',
+    vehicleType: vehicleType || 'auto',
+    timestamp: now,
+  };
+
+  if (typeof window !== 'undefined') {
+    try {
+      window.dispatchEvent(
+        new CustomEvent('uppa-vehiculo-desocupado', { detail })
+      );
+    } catch {}
+  }
+
+  try {
+    disponibilidadBroadcastChannel?.postMessage({
+      type: 'VEHICULO_DESOCUPADO',
+      detail,
+    });
+  } catch {}
+
+  try {
+    const currentHabs = obtenerHabilitacionesActuales();
+    const normName = (choferNombre || '').trim().toLowerCase();
+    const matchingHabs = currentHabs.filter(
+      (h) =>
+        h.estado === 'activo' &&
+        ((choferId && h.driverId === choferId) ||
+          (normName && h.driverName.trim().toLowerCase() === normName))
+    );
+
+    if (matchingHabs.length > 0) {
+      const updatedHabs = currentHabs.map((h) =>
+        matchingHabs.some((m) => m.id === h.id)
+          ? { ...h, disponibilidad: 'desocupado' as const, ultimoDesocupadoAt: now }
+          : h
+      );
+      setCached('habilitaciones', updatedHabs);
+      notifyHabilitacionesListeners(updatedHabs);
+
+      for (const m of matchingHabs) {
+        try {
+          const docRef = doc(db, COL_HABILITACIONES, m.id);
+          await updateDoc(docRef, {
+            disponibilidad: 'desocupado',
+            ultimoDesocupadoAt: now,
+          });
+        } catch (err) {
+          console.warn('Firestore anunciarVehiculoDesocupado resilient mode:', err);
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('anunciarVehiculoDesocupado error:', err);
+  }
 }
 
 export function subscribeToDriversDisponibilidad(
