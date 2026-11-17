@@ -3,7 +3,11 @@ import L from 'leaflet';
 import { TransitRoute, MapEvent, LiveBus, TaxiListing, BusStop, EventType, SolicitudTransporteFirestore } from '../../types';
 import { UserLocation, getDistanceKm } from '../../utils/geolocation';
 import { calculateRealBusSpeed } from '../../utils/busSpeedEstimator';
-import { playMicroSound } from '../../utils/soundEffects';
+import {
+  playMicroSound,
+  startPassengerApproachAlarm,
+  stopPassengerApproachAlarm,
+} from '../../utils/soundEffects';
 import { MAP_CONFIG } from '../../config/api';
 import {
   Crosshair,
@@ -384,14 +388,19 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
   isEventsPanelOpenRef.current = isEventsPanelOpen;
   isEventFilterPanelOpenRef.current = isEventFilterPanelOpen;
 
+  const passengerAlarmUntilRef = useRef<number>(0);
+  const scheduleHideTimerRef = useRef<(customDurationMs?: number) => void>(() => {});
   const resetHideTimerRef = useRef<() => void>(() => {});
-  const resetHideTimer = () => {
+  const scheduleHideTimer = (customDurationMs: number = 3500) => {
     setAreCardsVisible(true);
 
     if (hideTimerRef.current) {
       clearTimeout(hideTimerRef.current);
       hideTimerRef.current = null;
     }
+
+    const remainingAlarmMs = Math.max(0, passengerAlarmUntilRef.current - Date.now());
+    const effectiveDurationMs = Math.max(customDurationMs, remainingAlarmMs);
 
     hideTimerRef.current = setTimeout(() => {
       // Don't auto-hide if user is hovering cards or interacting with stops or events panel
@@ -403,8 +412,10 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
       ) {
         setAreCardsVisible(false);
       }
-    }, 3500); // 3.5 segundos de exposición
+    }, effectiveDurationMs);
   };
+  const resetHideTimer = () => scheduleHideTimer(3500);
+  scheduleHideTimerRef.current = scheduleHideTimer;
   resetHideTimerRef.current = resetHideTimer;
 
   useEffect(() => {
@@ -1540,6 +1551,27 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
   }, [activeTrackingTaxi, userLocation]);
 
   // =========================================================================
+  // PASSENGER APPROACH ALARM (Solo alarma por 10s sin voz al habilitar GPS)
+  // =========================================================================
+  const trackedPassengerId = activeTrackingPassenger?.id || null;
+  useEffect(() => {
+    if (!trackedPassengerId) {
+      passengerAlarmUntilRef.current = 0;
+      stopPassengerApproachAlarm();
+      return;
+    }
+
+    passengerAlarmUntilRef.current = Date.now() + 10000;
+    scheduleHideTimerRef.current(10000);
+    const stopAlarm = startPassengerApproachAlarm(10000);
+
+    return () => {
+      passengerAlarmUntilRef.current = 0;
+      stopAlarm();
+    };
+  }, [trackedPassengerId]);
+
+  // =========================================================================
   // PASSENGER TRACKING TRAJECTORY & GPS (Chofer hacia Pasajero)
   // =========================================================================
   useEffect(() => {
@@ -1565,16 +1597,10 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
 
     let isMounted = true;
 
-    // Voice announcement
+    // Silenciar cualquier voz previa: solo debe sonar la alarma de acercamiento al pasajero
     try {
       if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
         window.speechSynthesis.cancel();
-        const utterance = new SpeechSynthesisUtterance(
-          `Ubicación del pasajero ${activeTrackingPassenger.nombrePasajero} habilitada en GPS. Trazando ruta hacia ${activeTrackingPassenger.origen}.`
-        );
-        utterance.lang = 'es-AR';
-        utterance.rate = 1.05;
-        window.speechSynthesis.speak(utterance);
       }
     } catch {}
 
@@ -1621,9 +1647,6 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
         passengerLat,
         passengerLng,
       });
-      if (calculatedDistKm <= 0.5 || calculatedEtaMin <= 2) {
-        playMicroSound('driver_near');
-      }
 
       // 1. PUNTO A (Chofer GPS en camino)
       const driverMarkerIcon = L.divIcon({

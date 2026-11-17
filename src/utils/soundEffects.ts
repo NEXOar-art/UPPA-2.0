@@ -6,7 +6,8 @@ export type MicroSoundType =
   | 'driver_near'
   | 'step_progress'
   | 'ad_spark'
-  | 'ui_tap';
+  | 'ui_tap'
+  | 'passenger_approach_alarm';
 
 interface ToneSegment {
   startSec: number;
@@ -62,6 +63,14 @@ const SOUND_RECIPES: Record<MicroSoundType, { totalSec: number; volume: number; 
     volume: 0.24,
     tones: [
       { startSec: 0, durSec: 0.075, freqStart: 520, freqEnd: 660, gain: 0.16, wave: 'triangle' },
+    ],
+  },
+  passenger_approach_alarm: {
+    totalSec: 0.42,
+    volume: 0.5,
+    tones: [
+      { startSec: 0, durSec: 0.14, freqStart: 880, freqEnd: 987.77, gain: 0.26, wave: 'sine' },
+      { startSec: 0.17, durSec: 0.2, freqStart: 1174.66, freqEnd: 1318.51, gain: 0.28, wave: 'triangle' },
     ],
   },
 };
@@ -168,3 +177,58 @@ export function playMicroSound(type: MicroSoundType): void {
     // Graceful no-op on restricted autoplay environments
   }
 }
+
+let passengerAlarmInterval: ReturnType<typeof setInterval> | null = null;
+let passengerAlarmTimeout: ReturnType<typeof setTimeout> | null = null;
+
+/**
+ * Detiene inmediatamente la alarma sonora de acercamiento al pasajero.
+ */
+export function stopPassengerApproachAlarm(): void {
+  if (passengerAlarmInterval) {
+    clearInterval(passengerAlarmInterval);
+    passengerAlarmInterval = null;
+  }
+  if (passengerAlarmTimeout) {
+    clearTimeout(passengerAlarmTimeout);
+    passengerAlarmTimeout = null;
+  }
+  try {
+    const howl = howlCache['passenger_approach_alarm'];
+    if (howl) {
+      howl.stop();
+    }
+  } catch {}
+}
+
+/**
+ * Reproduce únicamente la alarma estilo radar acercándose al pasajero durante 10 segundos,
+ * silenciando cualquier síntesis de voz previa para evitar superposición de audio.
+ */
+export function startPassengerApproachAlarm(durationMs: number = 10000): () => void {
+  stopPassengerApproachAlarm();
+
+  try {
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+  } catch {}
+
+  const playAlarmPulse = () => {
+    try {
+      const howl = getOrCreateHowl('passenger_approach_alarm');
+      if (howl) {
+        howl.play();
+      }
+    } catch {}
+  };
+
+  playAlarmPulse();
+  passengerAlarmInterval = setInterval(playAlarmPulse, 1100);
+  passengerAlarmTimeout = setTimeout(() => {
+    stopPassengerApproachAlarm();
+  }, durationMs);
+
+  return () => stopPassengerApproachAlarm();
+}
+
