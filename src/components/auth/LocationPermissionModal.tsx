@@ -55,8 +55,8 @@ export const LocationPermissionModal: React.FC<LocationPermissionModalProps> = (
       },
       {
         enableHighAccuracy: true,
-        timeout: 8000,
-        maximumAge: 10000,
+        timeout: 5500,
+        maximumAge: 2500,
       }
     );
   };

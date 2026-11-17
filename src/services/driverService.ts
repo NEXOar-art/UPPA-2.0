@@ -165,7 +165,7 @@ export function subscribeToHabilitaciones(
   };
 
   fetchHabs();
-  const timer = setInterval(fetchHabs, 5000);
+  const timer = setInterval(fetchHabs, 3000);
 
   return () => {
     isMounted = false;

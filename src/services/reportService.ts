@@ -54,7 +54,7 @@ export function subscribeToReports(
   };
 
   fetchReports();
-  const poll = setInterval(fetchReports, 5000);
+  const poll = setInterval(fetchReports, 3000);
 
   return () => {
     isMounted = false;

@@ -1,5 +1,7 @@
 import { MAP_CONFIG } from '../config/api';
 
+export const GPS_UPDATE_INTERVAL_MS = 3000;
+
 export interface UserLocation {
   lat: number;
   lng: number;

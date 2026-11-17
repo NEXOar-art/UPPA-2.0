@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   MOCK_ROUTES,
   MOCK_EVENTS,
@@ -25,7 +25,12 @@ import {
   SolicitudTransporteFirestore,
 } from './types';
 import { computeLineSentiment } from './utils/sentiment';
-import { UserLocation, reverseGeocode } from './utils/geolocation';
+import {
+  UserLocation,
+  reverseGeocode,
+  getDistanceKm,
+  GPS_UPDATE_INTERVAL_MS,
+} from './utils/geolocation';
 import { recordGpsSample } from './utils/busSpeedEstimator';
 import { TeslaMap } from './components/map/TeslaMap';
 import { EventBottomSheet } from './components/map/EventBottomSheet';
@@ -69,6 +74,8 @@ import {
   setDriverDisponibilidad,
   finalizarViajeDeChofer,
   activarGpsHaciaPasajero,
+  actualizarUbicacionPasajeroSolicitud,
+  actualizarUbicacionChoferGps,
   anunciarVehiculoDesocupado,
   isRealCommunityReport,
   enviarMensajeChat,
@@ -1160,37 +1167,85 @@ export default function App() {
     return () => clearInterval(interval);
   }, []);
 
-  // Continuous GPS Watcher - Available freely for all users without login
+  const lastReverseGeocodeRef = useRef<{
+    lat: number;
+    lng: number;
+    address: string;
+    at: number;
+  } | null>(null);
+
+  const applyFreshGpsFix = useCallback(async (pos: GeolocationPosition) => {
+    const { latitude, longitude, accuracy, speed, heading } = pos.coords;
+    const now = Date.now();
+    recordGpsSample({ latitude, longitude, speed, accuracy });
+
+    const cachedGeo = lastReverseGeocodeRef.current;
+    const movedKm = cachedGeo
+      ? getDistanceKm(cachedGeo.lat, cachedGeo.lng, latitude, longitude)
+      : Infinity;
+    const needsGeocode = !cachedGeo || movedKm >= 0.05 || now - cachedGeo.at > 25000;
+
+    setUserLocation((prev) => ({
+      lat: latitude,
+      lng: longitude,
+      accuracy: accuracy || 12,
+      speed: speed ?? prev?.speed ?? 0,
+      heading: heading ?? prev?.heading ?? 0,
+      address: cachedGeo?.address || prev?.address,
+      timestamp: now,
+      isSimulated: false,
+    }));
+
+    if (needsGeocode) {
+      try {
+        const address = await reverseGeocode(latitude, longitude);
+        lastReverseGeocodeRef.current = {
+          lat: latitude,
+          lng: longitude,
+          address,
+          at: Date.now(),
+        };
+        setUserLocation((prev) =>
+          prev
+            ? {
+                ...prev,
+                address,
+              }
+            : prev
+        );
+      } catch {}
+    }
+  }, []);
+
+  // Continuous GPS Watcher + Active 3-Second Polling - Available freely for all users
   useEffect(() => {
     if (!('geolocation' in navigator)) return;
 
-    watchIdRef.current = navigator.geolocation.watchPosition(
-      async (pos) => {
-        const { latitude, longitude, accuracy, speed, heading } = pos.coords;
-        recordGpsSample({ latitude, longitude, speed, accuracy });
-        const address = await reverseGeocode(latitude, longitude);
+    const geoOptions: PositionOptions = {
+      enableHighAccuracy: true,
+      maximumAge: 2500,
+      timeout: 5500,
+    };
 
-        setUserLocation((prev) => ({
-          lat: latitude,
-          lng: longitude,
-          accuracy: accuracy || 12,
-          speed: speed || prev?.speed || 0,
-          heading: heading || 0,
-          address,
-          timestamp: Date.now(),
-          isSimulated: false,
-        }));
-      },
+    navigator.geolocation.getCurrentPosition(applyFreshGpsFix, () => {}, geoOptions);
+
+    watchIdRef.current = navigator.geolocation.watchPosition(
+      applyFreshGpsFix,
       () => {},
-      { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
+      geoOptions
     );
 
+    const gpsPollInterval = setInterval(() => {
+      navigator.geolocation.getCurrentPosition(applyFreshGpsFix, () => {}, geoOptions);
+    }, GPS_UPDATE_INTERVAL_MS);
+
     return () => {
+      clearInterval(gpsPollInterval);
       if (watchIdRef.current !== null) {
         navigator.geolocation.clearWatch(watchIdRef.current);
       }
     };
-  }, []);
+  }, [applyFreshGpsFix]);
 
   // Sync Driver GPS to Marketplace with activation code and countdown timer
   useEffect(() => {
@@ -1392,10 +1447,25 @@ export default function App() {
 
         const isViewerThisDriver = Boolean(
           (currentUser.id && hab.driverId === currentUser.id) ||
-          (currentUser.uid && hab.driverId === currentUser.uid)
+          (currentUser.uid && hab.driverId === currentUser.uid) ||
+          (currentUser.name &&
+            hab.driverName &&
+            hab.driverName.trim().toLowerCase() === currentUser.name.trim().toLowerCase())
         );
         const detLat = -34.175 + ((idx % 7) - 3) * 0.0055;
         const detLng = -58.965 + ((idx % 5) - 2) * 0.0055;
+        const liveLat =
+          isViewerThisDriver && userLocation
+            ? userLocation.lat
+            : typeof hab.lat === 'number' && Number.isFinite(hab.lat)
+            ? hab.lat
+            : detLat;
+        const liveLng =
+          isViewerThisDriver && userLocation
+            ? userLocation.lng
+            : typeof hab.lng === 'number' && Number.isFinite(hab.lng)
+            ? hab.lng
+            : detLng;
 
         result.push({
           id: hab.id,
@@ -1406,8 +1476,8 @@ export default function App() {
           patente: hab.patente || '',
           whatsapp: hab.whatsapp,
           zone: hab.zone || 'Zárate ↔ Campana',
-          lat: isViewerThisDriver && userLocation ? userLocation.lat : detLat,
-          lng: isViewerThisDriver && userLocation ? userLocation.lng : detLng,
+          lat: liveLat,
+          lng: liveLng,
           hoursPaid: hab.horas || 12,
           startsAt: hab.startsAt || now,
           endsAt: hab.endsAt || now + 12 * 3600 * 1000,
@@ -1542,6 +1612,100 @@ export default function App() {
       ) || null
     );
   }, [myLiveActiveSolicitud, marketplaceTaxis]);
+
+  // Mantener coordenadas de rastreo sincronizadas en vivo cada 3s para mapa de conductor y pasajero
+  const liveActiveTrackingTaxi = useMemo(() => {
+    if (!activeTrackingTaxi) return null;
+    return (
+      marketplaceTaxis.find(
+        (t) =>
+          t.id === activeTrackingTaxi.id ||
+          t.userId === activeTrackingTaxi.userId ||
+          t.driverName.trim().toLowerCase() === activeTrackingTaxi.driverName.trim().toLowerCase()
+      ) || activeTrackingTaxi
+    );
+  }, [activeTrackingTaxi, marketplaceTaxis]);
+
+  const liveActiveTrackingPassenger = useMemo(() => {
+    if (!activeTrackingPassenger) return null;
+    const latest = solicitudesList.find((s) => s.id === activeTrackingPassenger.id);
+    if (!latest) return activeTrackingPassenger;
+    if (
+      latest.estado === 'completado' ||
+      latest.estado === 'cancelado' ||
+      latest.estado === 'anulado'
+    ) {
+      return null;
+    }
+    return latest;
+  }, [activeTrackingPassenger, solicitudesList]);
+
+  // Transmisión GPS compartida cada 3 segundos hacia Firestore (Chofer en línea + Pasajero con viaje activo)
+  const gpsBroadcastContextRef = useRef<{
+    userLocation: UserLocation | null;
+    isPrestandoServicioTaxi: boolean;
+    isDriverOnline: boolean;
+    driverIdentifiers: string[];
+    activeSolicitudId: string | null;
+  }>({
+    userLocation: null,
+    isPrestandoServicioTaxi: false,
+    isDriverOnline: false,
+    driverIdentifiers: [],
+    activeSolicitudId: null,
+  });
+
+  gpsBroadcastContextRef.current = {
+    userLocation,
+    isPrestandoServicioTaxi,
+    isDriverOnline,
+    driverIdentifiers: [
+      userHabilitacionRecord?.id,
+      userHabilitacionRecord?.driverId,
+      driverSession?.driverId,
+      currentUser.uid,
+      currentUser.id,
+      driverSession?.driverName,
+      currentUser.nombre,
+      currentUser.name,
+    ].filter(Boolean) as string[],
+    activeSolicitudId:
+      myLiveActiveSolicitud &&
+      (myLiveActiveSolicitud.estado === 'pendiente' ||
+        myLiveActiveSolicitud.estado === 'aceptado' ||
+        myLiveActiveSolicitud.estado === 'en_camino')
+        ? myLiveActiveSolicitud.id
+        : null,
+  };
+
+  useEffect(() => {
+    const pushLiveGpsSync = () => {
+      const ctx = gpsBroadcastContextRef.current;
+      const loc = ctx.userLocation;
+      if (!loc || loc.isSimulated) return;
+
+      if (ctx.isPrestandoServicioTaxi && ctx.isDriverOnline && ctx.driverIdentifiers.length > 0) {
+        actualizarUbicacionChoferGps(ctx.driverIdentifiers, {
+          lat: loc.lat,
+          lng: loc.lng,
+          speed: loc.speed,
+          heading: loc.heading,
+          accuracy: loc.accuracy,
+        });
+      }
+
+      if (ctx.activeSolicitudId) {
+        actualizarUbicacionPasajeroSolicitud(ctx.activeSolicitudId, {
+          lat: loc.lat,
+          lng: loc.lng,
+        });
+      }
+    };
+
+    pushLiveGpsSync();
+    const timer = setInterval(pushLiveGpsSync, GPS_UPDATE_INTERVAL_MS);
+    return () => clearInterval(timer);
+  }, []);
 
   const handlePublishTaxi = (
     listingData: Omit<TaxiListing, 'id' | 'startsAt' | 'endsAt' | 'status' | 'rating' | 'completedRides'>,
@@ -2421,14 +2585,14 @@ export default function App() {
                 userLocation={userLocation}
                 isDriverMode={isPrestandoServicioTaxi}
                 isDriverOnline={isDriverOnline}
-                activeTrackingTaxi={activeTrackingTaxi}
+                activeTrackingTaxi={liveActiveTrackingTaxi}
                 onClearTrackingTaxi={() => setActiveTrackingTaxi(null)}
                 onOpenPedirTransporte={() => setIsPedirTransporteOpen(true)}
                 onAddEvent={handleCreateEvent}
                 currentUserName={currentUser.name}
                 currentUserId={currentUser.id}
                 focusedStop={focusedStopOnMap}
-                activeTrackingPassenger={activeTrackingPassenger}
+                activeTrackingPassenger={liveActiveTrackingPassenger}
                 onClearTrackingPassenger={() => setActiveTrackingPassenger(null)}
               />
             </div>

@@ -1382,6 +1382,20 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
   // =========================================================================
   // DRIVER TRACKING TRAJECTORY & ETA (Punto A -> Punto B Titilando)
   // =========================================================================
+  const lastFittedTaxiTrackIdRef = useRef<string | null>(null);
+  const lastTaxiSoundIdRef = useRef<string | null>(null);
+  const taxiRouteCacheRef = useRef<{
+    id: string;
+    dLat: number;
+    dLng: number;
+    uLat: number;
+    uLng: number;
+    coords: [number, number][];
+    distKm: number;
+    etaMin: number;
+    fetchedAt: number;
+  } | null>(null);
+
   useEffect(() => {
     if (!mapInstanceRef.current || !trajectoryLayerRef.current) return;
     const map = mapInstanceRef.current;
@@ -1389,6 +1403,8 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
     layer.clearLayers();
 
     if (!activeTrackingTaxi) {
+      lastFittedTaxiTrackIdRef.current = null;
+      lastTaxiSoundIdRef.current = null;
       setTrajectoryInfo(null);
       return;
     }
@@ -1408,28 +1424,51 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
       let calculatedDistKm = getDistanceKm(driverLat, driverLng, userLat, userLng);
       let calculatedEtaMin = Math.max(2, Math.round((calculatedDistKm / 35) * 60));
 
-      // Attempt LocationIQ Directions API with the verified API key
-      try {
-        const response = await fetch(
-          `https://us1.locationiq.com/v1/directions/driving/${driverLng},${driverLat};${userLng},${userLat}?key=${CARTOGRAPHY_API_KEY}&overview=full&geometries=geojson`,
-          { signal: AbortSignal.timeout(3000) }
-        );
+      const cache = taxiRouteCacheRef.current;
+      const canReuseDirections =
+        cache &&
+        cache.id === activeTrackingTaxi.id &&
+        Date.now() - cache.fetchedAt < 15000 &&
+        getDistanceKm(cache.dLat, cache.dLng, driverLat, driverLng) < 0.05 &&
+        getDistanceKm(cache.uLat, cache.uLng, userLat, userLng) < 0.05;
 
-        if (response.ok) {
-          const data = await response.json();
-          if (data && data.routes && data.routes[0]) {
-            const rawCoords: [number, number][] = data.routes[0].geometry.coordinates.map(
-              ([lng, lat]: [number, number]) => [lat, lng]
-            );
-            if (rawCoords.length >= 2) {
-              finalCoords = rawCoords;
-              calculatedDistKm = Math.round((data.routes[0].distance / 1000) * 10) / 10;
-              calculatedEtaMin = Math.max(1, Math.round(data.routes[0].duration / 60));
+      if (canReuseDirections && cache) {
+        finalCoords = [[driverLat, driverLng], ...cache.coords.slice(1, -1), [userLat, userLng]];
+      } else {
+        // Attempt LocationIQ Directions API with the verified API key
+        try {
+          const response = await fetch(
+            `https://us1.locationiq.com/v1/directions/driving/${driverLng},${driverLat};${userLng},${userLat}?key=${CARTOGRAPHY_API_KEY}&overview=full&geometries=geojson`,
+            { signal: AbortSignal.timeout(3000) }
+          );
+
+          if (response.ok) {
+            const data = await response.json();
+            if (data && data.routes && data.routes[0]) {
+              const rawCoords: [number, number][] = data.routes[0].geometry.coordinates.map(
+                ([lng, lat]: [number, number]) => [lat, lng]
+              );
+              if (rawCoords.length >= 2) {
+                finalCoords = rawCoords;
+                calculatedDistKm = Math.round((data.routes[0].distance / 1000) * 10) / 10;
+                calculatedEtaMin = Math.max(1, Math.round(data.routes[0].duration / 60));
+                taxiRouteCacheRef.current = {
+                  id: activeTrackingTaxi.id,
+                  dLat: driverLat,
+                  dLng: driverLng,
+                  uLat: userLat,
+                  uLng: userLng,
+                  coords: rawCoords,
+                  distKm: calculatedDistKm,
+                  etaMin: calculatedEtaMin,
+                  fetchedAt: Date.now(),
+                };
+              }
             }
           }
+        } catch {
+          // network or timeout: fallback to corridor interpolation
         }
-      } catch {
-        // network or timeout: fallback to corridor interpolation
       }
 
       // Fallback street path interpolation if API was unavailable
@@ -1467,7 +1506,11 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
         distKm: calculatedDistKm,
         etaMinutes: calculatedEtaMin,
       });
-      if (calculatedDistKm <= 0.5 || calculatedEtaMin <= 2) {
+      if (
+        (calculatedDistKm <= 0.5 || calculatedEtaMin <= 2) &&
+        lastTaxiSoundIdRef.current !== activeTrackingTaxi.id
+      ) {
+        lastTaxiSoundIdRef.current = activeTrackingTaxi.id;
         playMicroSound('driver_near');
       }
 
@@ -1535,11 +1578,14 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
         lineJoin: 'round',
       }).addTo(layer);
 
-      // 4. Auto-fit bounds to show full route trajectory
-      try {
-        const bounds = L.latLngBounds([[driverLat, driverLng], [userLat, userLng]]);
-        map.fitBounds(bounds, { padding: [80, 80], maxZoom: 15 });
-      } catch {}
+      // 4. Auto-fit bounds only when starting tracking for this taxi ID
+      if (lastFittedTaxiTrackIdRef.current !== activeTrackingTaxi.id) {
+        lastFittedTaxiTrackIdRef.current = activeTrackingTaxi.id;
+        try {
+          const bounds = L.latLngBounds([[driverLat, driverLng], [userLat, userLng]]);
+          map.fitBounds(bounds, { padding: [80, 80], maxZoom: 15 });
+        } catch {}
+      }
     };
 
     fetchTrajectory();
@@ -1574,6 +1620,17 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
   // =========================================================================
   // PASSENGER TRACKING TRAJECTORY & GPS (Chofer hacia Pasajero)
   // =========================================================================
+  const lastFittedPassengerTrackIdRef = useRef<string | null>(null);
+  const passengerRouteCacheRef = useRef<{
+    id: string;
+    dLat: number;
+    dLng: number;
+    pLat: number;
+    pLng: number;
+    coords: [number, number][];
+    fetchedAt: number;
+  } | null>(null);
+
   useEffect(() => {
     if (!mapInstanceRef.current || !passengerTrackingLayerRef.current) return;
     const map = mapInstanceRef.current;
@@ -1581,6 +1638,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
     layer.clearLayers();
 
     if (!activeTrackingPassenger) {
+      lastFittedPassengerTrackIdRef.current = null;
       setPassengerTrajectoryInfo(null);
       return;
     }
@@ -1609,26 +1667,47 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
       let calculatedDistKm = getDistanceKm(driverLat, driverLng, passengerLat, passengerLng);
       let calculatedEtaMin = Math.max(1, Math.round((calculatedDistKm / 35) * 60));
 
-      try {
-        const response = await fetch(
-          `https://us1.locationiq.com/v1/directions/driving/${driverLng},${driverLat};${passengerLng},${passengerLat}?key=${CARTOGRAPHY_API_KEY}&overview=full&geometries=geojson`,
-          { signal: AbortSignal.timeout(3000) }
-        );
+      const cache = passengerRouteCacheRef.current;
+      const canReuseDirections =
+        cache &&
+        cache.id === activeTrackingPassenger.id &&
+        Date.now() - cache.fetchedAt < 15000 &&
+        getDistanceKm(cache.dLat, cache.dLng, driverLat, driverLng) < 0.05 &&
+        getDistanceKm(cache.pLat, cache.pLng, passengerLat, passengerLng) < 0.05;
 
-        if (response.ok) {
-          const data = await response.json();
-          if (data && data.routes && data.routes[0]) {
-            const rawCoords: [number, number][] = data.routes[0].geometry.coordinates.map(
-              ([lng, lat]: [number, number]) => [lat, lng]
-            );
-            if (rawCoords.length >= 2) {
-              finalCoords = rawCoords;
-              calculatedDistKm = Math.round((data.routes[0].distance / 1000) * 10) / 10;
-              calculatedEtaMin = Math.max(1, Math.round(data.routes[0].duration / 60));
+      if (canReuseDirections && cache) {
+        finalCoords = [[driverLat, driverLng], ...cache.coords.slice(1, -1), [passengerLat, passengerLng]];
+      } else {
+        try {
+          const response = await fetch(
+            `https://us1.locationiq.com/v1/directions/driving/${driverLng},${driverLat};${passengerLng},${passengerLat}?key=${CARTOGRAPHY_API_KEY}&overview=full&geometries=geojson`,
+            { signal: AbortSignal.timeout(3000) }
+          );
+
+          if (response.ok) {
+            const data = await response.json();
+            if (data && data.routes && data.routes[0]) {
+              const rawCoords: [number, number][] = data.routes[0].geometry.coordinates.map(
+                ([lng, lat]: [number, number]) => [lat, lng]
+              );
+              if (rawCoords.length >= 2) {
+                finalCoords = rawCoords;
+                calculatedDistKm = Math.round((data.routes[0].distance / 1000) * 10) / 10;
+                calculatedEtaMin = Math.max(1, Math.round(data.routes[0].duration / 60));
+                passengerRouteCacheRef.current = {
+                  id: activeTrackingPassenger.id,
+                  dLat: driverLat,
+                  dLng: driverLng,
+                  pLat: passengerLat,
+                  pLng: passengerLng,
+                  coords: rawCoords,
+                  fetchedAt: Date.now(),
+                };
+              }
             }
           }
-        }
-      } catch {}
+        } catch {}
+      }
 
       if (finalCoords.length === 0) {
         const midLat = (driverLat + passengerLat) / 2;
@@ -1726,11 +1805,14 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
         lineJoin: 'round',
       }).addTo(layer);
 
-      // 4. Auto-fit bounds
-      try {
-        const bounds = L.latLngBounds([[driverLat, driverLng], [passengerLat, passengerLng]]);
-        map.fitBounds(bounds, { padding: [80, 80], maxZoom: 16 });
-      } catch {}
+      // 4. Auto-fit bounds only on initial tracking session start
+      if (lastFittedPassengerTrackIdRef.current !== activeTrackingPassenger.id) {
+        lastFittedPassengerTrackIdRef.current = activeTrackingPassenger.id;
+        try {
+          const bounds = L.latLngBounds([[driverLat, driverLng], [passengerLat, passengerLng]]);
+          map.fitBounds(bounds, { padding: [80, 80], maxZoom: 16 });
+        } catch {}
+      }
     };
 
     fetchPassengerTrajectory();

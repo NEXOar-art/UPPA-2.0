@@ -54,7 +54,7 @@ export function subscribeToTransportRequests(
   };
 
   fetchList();
-  const poll = setInterval(fetchList, 4000);
+  const poll = setInterval(fetchList, 3000);
 
   return () => {
     isMounted = false;

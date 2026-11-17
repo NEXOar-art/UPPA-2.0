@@ -189,6 +189,12 @@ export interface HabilitacionChofer {
   whatsappEnviadoEn?: number;
   ultimoDesocupadoAt?: number;
   disponibilidad?: 'desocupado' | 'ocupado';
+  lat?: number;
+  lng?: number;
+  speed?: number | null;
+  heading?: number | null;
+  gpsAccuracy?: number;
+  gpsUpdatedAt?: number;
 }
 
 export interface TaxiListing {
@@ -230,6 +236,7 @@ export interface SolicitudTransporteFirestore {
   origen: string;
   destino: string;
   origenCoords?: { lat: number; lng: number };
+  origenCoordsUpdatedAt?: number;
   destinoCoords?: { lat: number; lng: number };
   estado: 'pendiente' | 'aceptado' | 'en_camino' | 'completado' | 'cancelado' | 'expirada' | 'anulado';
   tipoVehiculoRequerido: 'moto' | 'auto';

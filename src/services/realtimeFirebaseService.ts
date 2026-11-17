@@ -1712,6 +1712,68 @@ export async function activarGpsHaciaPasajero(solicitudId: string): Promise<void
 }
 
 /**
+ * Actualiza en tiempo real las coordenadas GPS del pasajero sobre su solicitud activa
+ * para que el prestador asignado y la vista de mapa tengan su ubicación exacta cada 3 segundos.
+ */
+export async function actualizarUbicacionPasajeroSolicitud(
+  solicitudId: string,
+  coords: { lat: number; lng: number }
+): Promise<void> {
+  if (!solicitudId || !Number.isFinite(coords.lat) || !Number.isFinite(coords.lng)) return;
+  const now = Date.now();
+  const cached = getCached<SolicitudTransporteFirestore[]>('solicitudes', MOCK_INITIAL_SOLICITUDES);
+  const existing = cached.find((s) => s.id === solicitudId);
+  if (
+    existing &&
+    existing.estado !== 'pendiente' &&
+    existing.estado !== 'aceptado' &&
+    existing.estado !== 'en_camino'
+  ) {
+    return;
+  }
+
+  const patch: Partial<SolicitudTransporteFirestore> = {
+    origenCoords: { lat: coords.lat, lng: coords.lng },
+    origenCoordsUpdatedAt: now,
+  };
+
+  setCached(
+    'solicitudes',
+    cached.map((s) => (s.id === solicitudId ? { ...s, ...patch } : s))
+  );
+
+  try {
+    solicitudesBroadcastChannel?.postMessage({
+      type: 'UPDATE_SOLICITUD',
+      solicitudId,
+      patch,
+    });
+  } catch {}
+
+  if (typeof window !== 'undefined') {
+    try {
+      window.dispatchEvent(
+        new CustomEvent('uppa-solicitudes-local-sync', {
+          detail: { solicitudId, patch },
+        })
+      );
+    } catch {}
+  }
+
+  try {
+    await ensureFirebaseAuthSession();
+    const docRef = doc(db, COL_SOLICITUDES, solicitudId);
+    await updateDoc(docRef, {
+      ...patch,
+      actualizadoEn: serverTimestamp(),
+    });
+    notifyFirestoreSyncHealthy(`${COL_SOLICITUDES}/${solicitudId}`);
+  } catch {
+    // Silent resilient mode during 3s background GPS ticks
+  }
+}
+
+/**
  * Valida el código alfanumérico provisto por el pasajero al subir al vehículo.
  * Si es correcto: habilita el viaje y pasa a estado 'en_camino'.
  * Si es incorrecto: contabiliza intento en Firestore/caché y si supera 3 intentos, el viaje queda anulado.
@@ -2712,6 +2774,76 @@ export async function revocarHabilitacionChofer(habilitacionId: string): Promise
   } catch (error) {
     console.warn('Firestore revocarHabilitacionChofer resilient mode:', error);
     reportFirestorePermissionIssue(error, OperationType.UPDATE, path);
+  }
+}
+
+/**
+ * Publica cada 3 segundos las coordenadas GPS reales del prestador habilitado en línea
+ * en Firestore y canales locales para que todos los usuarios vean su ubicación fiel.
+ */
+export async function actualizarUbicacionChoferGps(
+  identifiers: string[],
+  coords: {
+    lat: number;
+    lng: number;
+    speed?: number | null;
+    heading?: number | null;
+    accuracy?: number;
+  }
+): Promise<void> {
+  if (!Number.isFinite(coords.lat) || !Number.isFinite(coords.lng)) return;
+  const normalizedIds = new Set(
+    identifiers.map((v) => String(v || '').trim().toLowerCase()).filter(Boolean)
+  );
+  if (normalizedIds.size === 0) return;
+
+  const now = Date.now();
+  const currentList = getCached<HabilitacionChofer[]>('habilitaciones', MOCK_INITIAL_HABILITACIONES);
+  const matchingIds: string[] = [];
+
+  const updatedList = currentList.map((h) => {
+    const isMatch =
+      h.estado === 'activo' &&
+      (normalizedIds.has(h.id.toLowerCase()) ||
+        normalizedIds.has((h.driverId || '').toLowerCase()) ||
+        normalizedIds.has((h.driverName || '').trim().toLowerCase()));
+    if (isMatch) {
+      matchingIds.push(h.id);
+      return {
+        ...h,
+        lat: coords.lat,
+        lng: coords.lng,
+        speed: coords.speed ?? null,
+        heading: coords.heading ?? null,
+        gpsAccuracy: coords.accuracy ?? 15,
+        gpsUpdatedAt: now,
+      };
+    }
+    return h;
+  });
+
+  if (matchingIds.length === 0) return;
+
+  setCached('habilitaciones', updatedList);
+  notifyHabilitacionesListeners(updatedList);
+
+  try {
+    await ensureFirebaseAuthSession();
+    for (const habId of matchingIds) {
+      const docRef = doc(db, COL_HABILITACIONES, habId);
+      await updateDoc(docRef, {
+        lat: coords.lat,
+        lng: coords.lng,
+        speed: coords.speed ?? null,
+        heading: coords.heading ?? null,
+        gpsAccuracy: coords.accuracy ?? 15,
+        gpsUpdatedAt: now,
+        actualizadoEn: serverTimestamp(),
+      });
+    }
+    notifyFirestoreSyncHealthy(COL_HABILITACIONES);
+  } catch {
+    // Silent resilient mode during 3s background GPS ticks
   }
 }
 
