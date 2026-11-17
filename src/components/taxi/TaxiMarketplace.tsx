@@ -93,7 +93,7 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
   userLocation,
   onOpenInfo,
 }) => {
-  const [vehicleFilter, setVehicleFilter] = useState<'all' | 'auto' | 'moto'>('all');
+  const [featuredIndex, setFeaturedIndex] = useState<number>(0);
   const [solicitudes, setSolicitudes] = useState<SolicitudTransporteFirestore[]>([]);
 
   // Rol del usuario: ¿Es prestador de servicio habilitado?
@@ -143,17 +143,6 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
       setReqOrigin(userLocation.address);
     }
   }, [userLocation]);
-
-  // Sincronizar tipo de vehículo al cambiar filtros superiores
-  useEffect(() => {
-    if (vehicleFilter === 'auto') {
-      setConsoleVehicleType('auto');
-      setReqType('auto');
-    } else if (vehicleFilter === 'moto') {
-      setConsoleVehicleType('moto');
-      setReqType('moto');
-    }
-  }, [vehicleFilter]);
 
   // Live 1-second ticker for 12-minute countdown timer
   const [nowTimestamp, setNowTimestamp] = useState<number>(Date.now());
@@ -436,51 +425,6 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
     return v.includes('moto') ? 'moto' : 'auto';
   };
 
-  // Prestadores visibles en pantalla:
-  // 1. Filtrados por vehículo y tiempo abonado vigente (endsAt > nowTimestamp).
-  // 2. Calculada la distancia GPS en kilómetros a la ubicación del usuario.
-  // 3. Ordenados por cercanía GPS, priorizando a los DESOCUPADOS primero.
-  const visibleTaxis = useMemo(() => {
-    const list = taxis
-      .filter((t) => {
-        if (vehicleFilter !== 'all' && normalizeVehicleType(t.vehicleType) !== vehicleFilter) {
-          return false;
-        }
-        return t.endsAt > nowTimestamp;
-      })
-      .map((t) => {
-        const distKm = getDistanceKm(refCoords.lat, refCoords.lng, t.lat, t.lng);
-        const disponibilidad = getTaxiDisponibilidad(t);
-        const isDesocupado = disponibilidad === 'desocupado';
-        const formattedDistance =
-          distKm < 1
-            ? `${Math.round(distKm * 1000)} m`
-            : `${distKm.toFixed(1)} km`;
-        return {
-          ...t,
-          distanceKm: distKm,
-          formattedDistance,
-          isDesocupado,
-          isClosest: false,
-        };
-      });
-
-    // Ordenar: desocupados primero, luego por menor distancia GPS
-    list.sort((a, b) => {
-      if (a.isDesocupado && !b.isDesocupado) return -1;
-      if (!a.isDesocupado && b.isDesocupado) return 1;
-      return a.distanceKm - b.distanceKm;
-    });
-
-    // Marcar el primer prestador desocupado como el más cercano
-    const firstDesocupado = list.find((item) => item.isDesocupado);
-    if (firstDesocupado) {
-      firstDesocupado.isClosest = true;
-    }
-
-    return list;
-  }, [taxis, vehicleFilter, nowTimestamp, refCoords, disponibilidadMap]);
-
   // Solicitud aceptada activa que pertenece exclusivamente al prestador logueado actual
   const myAcceptedSolicitud = useMemo(() => {
     if (!isPrestadorLogueado) return null;
@@ -558,24 +502,44 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
   };
 
   const consoleMatchingTaxis = useMemo(() => {
-    return taxis
+    const list = taxis
       .filter((t) => t.endsAt > nowTimestamp && normalizeVehicleType(t.vehicleType) === consoleVehicleType)
       .map((t) => {
         const distKm = getDistanceKm(refCoords.lat, refCoords.lng, t.lat, t.lng);
         const isDesocupado = getTaxiDisponibilidad(t) === 'desocupado';
-        return { ...t, distanceKm: distKm, isDesocupado };
+        const formattedDistance =
+          distKm < 1
+            ? `${Math.round(distKm * 1000)} m`
+            : `${distKm.toFixed(1)} km`;
+        return {
+          ...t,
+          distanceKm: distKm,
+          formattedDistance,
+          isDesocupado,
+          isClosest: false,
+        };
       })
       .sort((a, b) => {
         if (a.isDesocupado && !b.isDesocupado) return -1;
         if (!a.isDesocupado && b.isDesocupado) return 1;
         return a.distanceKm - b.distanceKm;
       });
+
+    const firstDesocupado = list.find((item) => item.isDesocupado);
+    if (firstDesocupado) {
+      firstDesocupado.isClosest = true;
+    }
+
+    return list;
   }, [taxis, consoleVehicleType, nowTimestamp, refCoords, disponibilidadMap]);
+
+  const safeFeaturedIndex =
+    consoleMatchingTaxis.length > 0 ? featuredIndex % consoleMatchingTaxis.length : 0;
 
   // Conductor destacado para la consola interactiva (Solo prestadores REALES del vehículo seleccionado)
   const activeDriverFeatured = useMemo(() => {
     if (consoleMatchingTaxis.length > 0) {
-      const match = consoleMatchingTaxis[0];
+      const match = consoleMatchingTaxis[safeFeaturedIndex] || consoleMatchingTaxis[0];
       const normalizedType = normalizeVehicleType(match.vehicleType);
       const safetyIndex = typeof match.indiceSeguridad === 'number'
         ? match.indiceSeguridad
@@ -591,6 +555,7 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
           }).percentage;
 
       return {
+        rawTaxi: match,
         id: match.id,
         userId: match.userId,
         driverName: match.driverName,
@@ -601,6 +566,12 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
         completedRides: match.completedRides || 0,
         whatsapp: match.whatsapp || '',
         avatarUrl: match.avatarUrl,
+        zone: match.zone || 'Zárate ↔ Campana',
+        endsAt: match.endsAt,
+        distanceKm: match.distanceKm,
+        formattedDistance: match.formattedDistance,
+        isClosest: match.isClosest,
+        isDesocupado: match.isDesocupado,
         isReal: true,
         asientos: match.asientos || (normalizedType === 'auto' ? 4 : 1),
         aireAcondicionado: match.aireAcondicionado !== false,
@@ -612,7 +583,7 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
       };
     }
     return null;
-  }, [consoleMatchingTaxis]);
+  }, [consoleMatchingTaxis, safeFeaturedIndex]);
 
   const doesSolicitudMatchDriver = (
     sol: SolicitudTransporteFirestore,
@@ -689,10 +660,11 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
 
   const dynamicEtaMin = useMemo(() => {
     if (consoleMatchingTaxis.length > 0) {
-      return Math.max(2, Math.round((consoleMatchingTaxis[0].distanceKm || 1.2) * 2.5));
+      const target = consoleMatchingTaxis[safeFeaturedIndex] || consoleMatchingTaxis[0];
+      return Math.max(2, Math.round((target.distanceKm || 1.2) * 2.5));
     }
     return 3;
-  }, [consoleMatchingTaxis]);
+  }, [consoleMatchingTaxis, safeFeaturedIndex]);
 
   const chatWhatsAppUrl = useMemo(() => {
     if (!activeDriverFeatured?.whatsapp) {
@@ -870,29 +842,11 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
             )}
           </button>
 
-          {/* Desplegable limpio de Tipo de Vehículo */}
-          <div className="flex items-center gap-2">
-            <select
-              value={vehicleFilter}
-              onChange={(e) => {
-                const val = e.target.value as 'all' | 'auto' | 'moto';
-                setVehicleFilter(val);
-                if (val === 'auto') {
-                  setConsoleVehicleType('auto');
-                  setReqType('auto');
-                } else if (val === 'moto') {
-                  setConsoleVehicleType('moto');
-                  setReqType('moto');
-                }
-              }}
-              title="Filtrar prestadores de servicio: Todos, Autos o Motos"
-              aria-label="Filtrar prestadores por tipo de vehículo"
-              className="min-h-[44px] px-3.5 py-2 rounded-xl bg-[#101114] hover:border-[#FFF19A] border-2 border-white/15 text-white text-xs font-black focus:outline-none focus:border-[#FFF19A] transition-colors cursor-pointer"
-            >
-              <option value="all">Todos ({totalCount})</option>
-              <option value="auto">Autos ({autoCount})</option>
-              <option value="moto">Motos ({motoCount})</option>
-            </select>
+          {/* Resumen de Prestadores Activos (el cambio de Auto / Moto se realiza desde los botones superiores del contenedor) */}
+          <div className="flex items-center gap-2 text-[11px] font-black text-[#9299A5] bg-[#101114] border-2 border-white/10 px-3 py-2 rounded-xl">
+            <span className="text-white">Autos: <span className="text-[#B7F36B] font-mono">{autoCount}</span></span>
+            <span>·</span>
+            <span className="text-white">Motos: <span className="text-[#FFF19A] font-mono">{motoCount}</span></span>
           </div>
         </div>
 
@@ -1396,7 +1350,12 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
         {/* Ficha del Prestador Activo + Botón Exclusivo GPS al Pasajero cuando aceptó un viaje */}
         {(() => {
           const renderTaxiCard = (
-            taxi: (typeof visibleTaxis)[number],
+            taxi: TaxiListing & {
+              distanceKm: number;
+              formattedDistance: string;
+              isDesocupado: boolean;
+              isClosest: boolean;
+            },
             allowPassengerGps: boolean
           ) => {
             const isMoto = normalizeVehicleType(taxi.vehicleType) === 'moto';
@@ -1678,254 +1637,406 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
             ) : null;
           }
 
+          const featuredAccess = activeDriverFeatured
+            ? getDriverTripAccess(
+                activeDriverFeatured.userId || activeDriverFeatured.id,
+                activeDriverFeatured.driverName,
+                activeDriverFeatured.disponibilidad
+              )
+            : null;
+          const isFeaturedOcupado = Boolean(featuredAccess?.isBusy);
+
           return (
-            <>
-              {/* CONSOLA INTERACTIVA AUTOMOTRIZ DE PREVISUALIZACIÓN (Sin campos de recogida/destino) */}
-              <div className="w-full max-w-[460px] mx-auto rounded-3xl bg-[#202329] border-2 border-white/15 p-3.5 sm:p-4 shadow-[5px_5px_0px_rgba(0,0,0,0.65)] space-y-3">
-                {/* Fila de Estado */}
-                <div className="flex items-center justify-between gap-2 flex-wrap">
-                  <div className="text-[#B7F36B] font-black text-xs sm:text-sm flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-[#B7F36B]" />
-                    <span>
-                      {activeDriverFeatured
-                        ? `Llegada estimada ~${dynamicEtaMin} min · ${consoleVehicleType === 'moto' ? 'Moto Taxi' : 'Auto Taxi'}`
-                        : `Disponibilidad de ${consoleVehicleType === 'moto' ? 'Moto Taxi' : 'Auto Taxi'}`}
-                    </span>
-                  </div>
-                  <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-[#101114] border border-white/15 text-[#9299A5]">
-                    {consoleVehicleType === 'auto' ? `${autoCount} autos` : `${motoCount} motos`}
+            <div className="w-full max-w-[460px] mx-auto rounded-3xl bg-[#202329] border-2 border-white/15 p-3.5 sm:p-4 shadow-[5px_5px_0px_rgba(0,0,0,0.65)] space-y-3">
+              {/* Fila de Estado Superior */}
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="text-[#B7F36B] font-black text-xs sm:text-sm flex items-center gap-2">
+                  <span
+                    className={`w-2.5 h-2.5 rounded-full ${
+                      activeDriverFeatured
+                        ? isFeaturedOcupado
+                          ? 'bg-[#FFF19A]'
+                          : 'bg-[#B7F36B]'
+                        : 'bg-[#9299A5]'
+                    }`}
+                  />
+                  <span>
+                    {activeDriverFeatured
+                      ? `Llegada estimada ~${dynamicEtaMin} min · ${consoleVehicleType === 'moto' ? 'Moto Taxi' : 'Auto Taxi'}`
+                      : `Disponibilidad de ${consoleVehicleType === 'moto' ? 'Moto Taxi' : 'Auto Taxi'}`}
                   </span>
                 </div>
+                <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-[#101114] border border-white/15 text-[#9299A5]">
+                  {consoleVehicleType === 'auto' ? `${autoCount} autos` : `${motoCount} motos`}
+                </span>
+              </div>
 
-                {/* Tarjetas de Selección con Imagen: Auto Taxi vs Moto Taxi */}
-                <div className="grid grid-cols-2 gap-2.5">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setConsoleVehicleType('auto');
-                      setVehicleFilter('auto');
-                      setReqType('auto');
-                    }}
-                    title="Ver imagen y prestadores exclusivos de Auto Taxi"
-                    className={`min-h-[58px] px-3 py-2 rounded-2xl border-2 flex items-center gap-2.5 transition-all cursor-pointer active:scale-[0.98] ${
-                      consoleVehicleType === 'auto'
-                        ? 'bg-[#101114] border-[#FFF19A] text-white shadow-[0_0_0_1px_#FFF19A]'
-                        : 'bg-[#101114]/65 border-white/15 text-[#9299A5] hover:border-white/40 hover:text-white'
+              {/* Botones Superiores para cambiar tipo de vehículo: Auto Taxi vs Moto Taxi */}
+              <div className="grid grid-cols-2 gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setConsoleVehicleType('auto');
+                    setReqType('auto');
+                    setFeaturedIndex(0);
+                  }}
+                  title="Ver fichas de Auto Taxi"
+                  className={`min-h-[58px] px-3 py-2 rounded-2xl border-2 flex items-center gap-2.5 transition-all cursor-pointer active:scale-[0.98] ${
+                    consoleVehicleType === 'auto'
+                      ? 'bg-[#101114] border-[#FFF19A] text-white shadow-[0_0_0_1px_#FFF19A]'
+                      : 'bg-[#101114]/65 border-white/15 text-[#9299A5] hover:border-white/40 hover:text-white'
+                  }`}
+                >
+                  <div className="w-11 h-11 rounded-xl bg-[#202329] border border-white/15 flex items-center justify-center p-1 shrink-0 overflow-hidden">
+                    <img
+                      src="/assets/aistudio/auto_vehicle.png"
+                      alt="Auto Taxi"
+                      className="w-full h-full object-contain"
+                    />
+                  </div>
+                  <div className="text-left min-w-0">
+                    <div className={`text-xs font-black leading-tight ${consoleVehicleType === 'auto' ? 'text-[#FFF19A]' : 'text-white'}`}>
+                      Auto Taxi
+                    </div>
+                    <div className="text-[10px] font-semibold text-[#9299A5] truncate">
+                      {autoCount} {autoCount === 1 ? 'prestador' : 'prestadores'}
+                    </div>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setConsoleVehicleType('moto');
+                    setReqType('moto');
+                    setFeaturedIndex(0);
+                  }}
+                  title="Ver fichas de Moto Taxi"
+                  className={`min-h-[58px] px-3 py-2 rounded-2xl border-2 flex items-center gap-2.5 transition-all cursor-pointer active:scale-[0.98] ${
+                    consoleVehicleType === 'moto'
+                      ? 'bg-[#101114] border-[#FFF19A] text-white shadow-[0_0_0_1px_#FFF19A]'
+                      : 'bg-[#101114]/65 border-white/15 text-[#9299A5] hover:border-white/40 hover:text-white'
+                  }`}
+                >
+                  <div className="w-11 h-11 rounded-xl bg-[#202329] border border-white/15 flex items-center justify-center p-1 shrink-0 overflow-hidden">
+                    <img
+                      src="/assets/aistudio/moto_vehicle.png"
+                      alt="Moto Taxi"
+                      className="w-full h-full object-contain"
+                    />
+                  </div>
+                  <div className="text-left min-w-0">
+                    <div className={`text-xs font-black leading-tight ${consoleVehicleType === 'moto' ? 'text-[#FFF19A]' : 'text-white'}`}>
+                      Moto Taxi
+                    </div>
+                    <div className="text-[10px] font-semibold text-[#9299A5] truncate">
+                      {motoCount} {motoCount === 1 ? 'prestador' : 'prestadores'}
+                    </div>
+                  </div>
+                </button>
+              </div>
+
+              {/* Contenedor Único: Logo Botón (siguiente ficha del mismo vehículo) + Ficha Completa */}
+              <div className="grid grid-cols-12 gap-2.5 items-stretch">
+                {/* Lado Izquierdo: Botón Logo del vehículo seleccionado para recorrer las demás fichas */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (consoleMatchingTaxis.length > 1) {
+                      setFeaturedIndex((prev) => (prev + 1) % consoleMatchingTaxis.length);
+                    }
+                  }}
+                  disabled={consoleMatchingTaxis.length <= 1}
+                  className={`col-span-5 rounded-2xl bg-[#101114] border-2 p-2.5 flex flex-col items-center justify-between transition-all group text-left ${
+                    consoleMatchingTaxis.length > 1
+                      ? 'border-[#FFF19A]/40 hover:border-[#FFF19A] cursor-pointer active:scale-[0.98]'
+                      : 'border-white/15 cursor-default'
+                  }`}
+                  title={
+                    consoleMatchingTaxis.length > 1
+                      ? `Tocar logo para ver el siguiente ${consoleVehicleType === 'auto' ? 'Auto Taxi' : 'Moto Taxi'} (${safeFeaturedIndex + 1} de ${consoleMatchingTaxis.length})`
+                      : `${consoleVehicleType === 'auto' ? 'Auto Taxi' : 'Moto Taxi'} activo`
+                  }
+                >
+                  <div className="w-full flex items-center justify-between text-[10px] font-black uppercase tracking-wider px-0.5 gap-1">
+                    <span className="text-[#FFF19A] font-mono truncate">
+                      {consoleVehicleType === 'auto' ? 'AUTO TAXI' : 'MOTO TAXI'}
+                    </span>
+                    <span className="text-[9px] bg-[#202329] px-1.5 py-0.5 rounded text-white border border-white/10 font-mono shrink-0">
+                      {consoleMatchingTaxis.length > 0
+                        ? `${safeFeaturedIndex + 1} / ${consoleMatchingTaxis.length}`
+                        : '0'}
+                    </span>
+                  </div>
+
+                  <div className="my-1 flex items-center justify-center h-[160px] w-full">
+                    <img
+                      src={consoleVehicleType === 'auto' ? '/assets/aistudio/auto_vehicle.png' : '/assets/aistudio/moto_vehicle.png'}
+                      alt={consoleVehicleType === 'auto' ? 'Auto Taxi UPPA' : 'Moto Taxi UPPA'}
+                      className={`max-h-full object-contain transition-transform duration-300 ${
+                        consoleMatchingTaxis.length > 1 ? 'group-hover:scale-105' : ''
+                      }`}
+                    />
+                  </div>
+
+                  <div className="text-[10px] text-[#9299A5] font-bold text-center w-full pt-1.5 border-t border-white/10 leading-tight">
+                    {consoleMatchingTaxis.length > 1 ? (
+                      <>
+                        Tocar logo ➔ <span className="text-[#FFF19A]">Ver siguiente</span>
+                      </>
+                    ) : consoleMatchingTaxis.length === 1 ? (
+                      <span className="text-[#B7F36B]">Único activo</span>
+                    ) : (
+                      <span>Sin activos</span>
+                    )}
+                  </div>
+                </button>
+
+                {/* Lado Derecho: Ficha Única Completa del Prestador */}
+                {activeDriverFeatured ? (
+                  <div
+                    className={`col-span-7 rounded-2xl bg-[#101114] border-2 p-3 flex flex-col justify-between space-y-2 ${
+                      isFeaturedOcupado ? 'border-[#FFF19A]/60' : 'border-[#B7F36B]/45'
                     }`}
                   >
-                    <div className="w-11 h-11 rounded-xl bg-[#202329] border border-white/15 flex items-center justify-center p-1 shrink-0 overflow-hidden">
-                      <img
-                        src="/assets/aistudio/auto_vehicle.png"
-                        alt="Auto Taxi"
-                        className="w-full h-full object-contain"
-                      />
-                    </div>
-                    <div className="text-left min-w-0">
-                      <div className={`text-xs font-black leading-tight ${consoleVehicleType === 'auto' ? 'text-[#FFF19A]' : 'text-white'}`}>
-                        Auto Taxi
-                      </div>
-                      <div className="text-[10px] font-semibold text-[#9299A5] truncate">
-                        {autoCount} {autoCount === 1 ? 'prestador' : 'prestadores'}
-                      </div>
-                    </div>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setConsoleVehicleType('moto');
-                      setVehicleFilter('moto');
-                      setReqType('moto');
-                    }}
-                    title="Ver imagen y prestadores exclusivos de Moto Taxi"
-                    className={`min-h-[58px] px-3 py-2 rounded-2xl border-2 flex items-center gap-2.5 transition-all cursor-pointer active:scale-[0.98] ${
-                      consoleVehicleType === 'moto'
-                        ? 'bg-[#101114] border-[#FFF19A] text-white shadow-[0_0_0_1px_#FFF19A]'
-                        : 'bg-[#101114]/65 border-white/15 text-[#9299A5] hover:border-white/40 hover:text-white'
-                    }`}
-                  >
-                    <div className="w-11 h-11 rounded-xl bg-[#202329] border border-white/15 flex items-center justify-center p-1 shrink-0 overflow-hidden">
-                      <img
-                        src="/assets/aistudio/moto_vehicle.png"
-                        alt="Moto Taxi"
-                        className="w-full h-full object-contain"
-                      />
-                    </div>
-                    <div className="text-left min-w-0">
-                      <div className={`text-xs font-black leading-tight ${consoleVehicleType === 'moto' ? 'text-[#FFF19A]' : 'text-white'}`}>
-                        Moto Taxi
-                      </div>
-                      <div className="text-[10px] font-semibold text-[#9299A5] truncate">
-                        {motoCount} {motoCount === 1 ? 'prestador' : 'prestadores'}
-                      </div>
-                    </div>
-                  </button>
-                </div>
-
-                {/* Visualización Interactiva del Vehículo & Ficha Real del Conductor */}
-                <div className="grid grid-cols-12 gap-2.5 items-stretch">
-                  {/* Lado Izquierdo: Imagen sincronizada estrictamente con Auto Taxi / Moto Taxi */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const next = consoleVehicleType === 'auto' ? 'moto' : 'auto';
-                      setConsoleVehicleType(next);
-                      setReqType(next);
-                      setVehicleFilter(next);
-                    }}
-                    className="col-span-5 rounded-2xl bg-[#101114] border-2 border-white/15 hover:border-[#FFF19A] p-2.5 flex flex-col items-center justify-between cursor-pointer transition-all group text-left"
-                    title={`Imagen de ${consoleVehicleType === 'auto' ? 'Auto Taxi' : 'Moto Taxi'}. Tocar para cambiar a ${consoleVehicleType === 'auto' ? 'Moto Taxi' : 'Auto Taxi'}`}
-                  >
-                    <div className="w-full flex items-center justify-between text-[10px] font-black uppercase tracking-wider px-0.5">
-                      <span className="text-[#FFF19A] font-mono">
-                        {consoleVehicleType === 'auto' ? 'AUTO TAXI' : 'MOTO TAXI'}
-                      </span>
-                      <span className="text-[9px] bg-[#202329] px-1.5 py-0.5 rounded text-white border border-white/10">
-                        {consoleVehicleType === 'auto' ? `${autoCount}` : `${motoCount}`}
-                      </span>
-                    </div>
-
-                    <div className="my-1 flex items-center justify-center h-[160px] w-full">
-                      <img
-                        src={consoleVehicleType === 'auto' ? '/assets/aistudio/auto_vehicle.png' : '/assets/aistudio/moto_vehicle.png'}
-                        alt={consoleVehicleType === 'auto' ? 'Auto Taxi UPPA' : 'Moto Taxi UPPA'}
-                        className="max-h-full object-contain group-hover:scale-105 transition-transform duration-300"
-                      />
-                    </div>
-
-                    <div className="text-[10px] text-[#9299A5] font-bold text-center w-full pt-1 border-t border-white/10">
-                      Tocar ⇄ <span className="text-[#FFF19A]">{consoleVehicleType === 'auto' ? 'Ver Motos' : 'Ver Autos'}</span>
-                    </div>
-                  </button>
-
-                  {/* Lado Derecho: Ficha Real del Conductor del vehículo seleccionado */}
-                  {activeDriverFeatured ? (
-                    <div className="col-span-7 rounded-2xl bg-[#101114] border-2 border-[#B7F36B]/40 p-3 flex flex-col justify-between space-y-2">
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-10 h-10 rounded-xl bg-[#202329] border border-[#B7F36B] overflow-hidden flex items-center justify-center shrink-0">
-                          {activeDriverFeatured.avatarUrl ? (
-                            <img
-                              src={activeDriverFeatured.avatarUrl}
-                              alt={activeDriverFeatured.driverName}
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <span className="text-sm font-black text-[#B7F36B]">
-                              {activeDriverFeatured.driverName.charAt(0).toUpperCase()}
-                            </span>
-                          )}
+                    {/* Cabecera: Avatar + Nombre + Modelo + Estado */}
+                    <div className="space-y-1.5">
+                      <div className="flex items-start gap-2">
+                        <div className="relative shrink-0">
+                          <div className="w-10 h-10 rounded-xl bg-[#202329] border border-[#B7F36B] overflow-hidden flex items-center justify-center">
+                            {activeDriverFeatured.avatarUrl ? (
+                              <img
+                                src={activeDriverFeatured.avatarUrl}
+                                alt={activeDriverFeatured.driverName}
+                                referrerPolicy="no-referrer"
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <span className="text-sm font-black text-[#B7F36B]">
+                                {activeDriverFeatured.driverName.charAt(0).toUpperCase()}
+                              </span>
+                            )}
+                          </div>
+                          <span
+                            className={`absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full ring-2 ring-[#101114] ${
+                              isFeaturedOcupado ? 'bg-[#FFF19A]' : 'bg-[#B7F36B]'
+                            }`}
+                            title={isFeaturedOcupado ? 'En viaje (Ocupado)' : 'Disponible (Desocupado)'}
+                          />
                         </div>
-                        <div className="min-w-0">
-                          <h4 className="font-black text-white text-sm truncate leading-tight">
-                            {activeDriverFeatured.driverName}
-                          </h4>
-                          <p className="text-[11px] text-[#9299A5] truncate">
+
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-1 flex-wrap">
+                            <h4 className="font-black text-white text-xs sm:text-sm truncate leading-tight">
+                              {activeDriverFeatured.driverName}
+                            </h4>
+                            <span
+                              className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-black uppercase shrink-0 ${
+                                isFeaturedOcupado
+                                  ? 'bg-[#FFF19A] text-[#101114]'
+                                  : 'bg-[#B7F36B] text-[#101114]'
+                              }`}
+                            >
+                              {isFeaturedOcupado ? 'OCUPADO' : 'DISPONIBLE'}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-[#9299A5] truncate mt-0.5">
                             {activeDriverFeatured.vehicleModel}
                           </p>
                         </div>
                       </div>
 
-                      <div className="flex items-center justify-between gap-1">
-                        <span className="px-2 py-0.5 rounded-md bg-white text-[#101114] font-mono font-black text-[10.5px] border border-[#9299A5] tracking-wider uppercase truncate max-w-[125px]">
+                      {/* Patente, Calificación y Viajes */}
+                      <div className="flex items-center justify-between gap-1.5 flex-wrap">
+                        <span className="px-2 py-0.5 rounded-md bg-white text-[#101114] font-mono font-black text-[10px] border border-[#9299A5] tracking-wider uppercase truncate max-w-[110px]">
                           {activeDriverFeatured.plateNumber}
                         </span>
+                        <div className="flex items-center gap-1.5">
+                          <span
+                            className="text-[#FFF19A] font-bold text-xs flex items-center gap-0.5 font-mono"
+                            title="Calificación real del prestador (0 si aún no tiene calificaciones)"
+                          >
+                            <Star className="w-3.5 h-3.5 fill-[#FFF19A] text-[#FFF19A]" />
+                            <span>{activeDriverFeatured.rating > 0 ? activeDriverFeatured.rating.toFixed(1) : '0'}</span>
+                          </span>
+                          <span className="text-[10px] text-[#9299A5] font-semibold">
+                            · {activeDriverFeatured.completedRides} viajes
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Distancia GPS, Zona y Tiempo restante de turno */}
+                      <div className="flex flex-wrap items-center gap-1 text-[10px]">
                         <span
-                          className="text-[#FFF19A] font-bold text-xs flex items-center gap-1 font-mono"
-                          title="Calificación real del prestador (0 si aún no tiene calificaciones)"
+                          className={`inline-flex items-center gap-1 font-mono font-bold px-1.5 py-0.5 rounded-md ${
+                            activeDriverFeatured.isClosest && !isFeaturedOcupado
+                              ? 'bg-[#B7F36B] text-[#101114] font-black'
+                              : 'bg-[#202329] text-white border border-white/10'
+                          }`}
+                          title="Distancia aproximada en línea recta según coordenadas GPS"
                         >
-                          <Star className="w-3.5 h-3.5 fill-[#FFF19A] text-[#FFF19A]" />
-                          <span>{activeDriverFeatured.rating > 0 ? activeDriverFeatured.rating.toFixed(1) : '0'}</span>
+                          <Navigation className="w-2.5 h-2.5" />
+                          <span>a {activeDriverFeatured.formattedDistance}</span>
+                          {activeDriverFeatured.isClosest && !isFeaturedOcupado && (
+                            <span className="uppercase font-black">(Más cercano)</span>
+                          )}
+                        </span>
+
+                        <span className="inline-flex items-center gap-1 font-mono font-bold px-1.5 py-0.5 rounded-md bg-[#202329] border border-white/10 text-[#B7F36B]">
+                          <Clock className="w-2.5 h-2.5" />
+                          <span>{formatRemainingTime(activeDriverFeatured.endsAt)}</span>
                         </span>
                       </div>
 
-                      <div className="text-[11px] text-[#9299A5] font-semibold">
-                        {consoleVehicleType === 'moto' ? 'Moto Taxi' : 'Auto Taxi'} · ~{dynamicEtaMin} min
+                      <div className="flex items-center gap-1 text-[10.5px] text-white min-w-0">
+                        <MapPin className="w-3 h-3 text-[#FFF19A] shrink-0" />
+                        <span className="truncate">{activeDriverFeatured.zone}</span>
                       </div>
 
-                      <div className="flex items-center gap-1.5 text-[10.5px] text-white flex-wrap">
-                        <span className="font-bold text-[#B7F36B]">
-                          {consoleVehicleType === 'auto'
-                            ? `👥 ${activeDriverFeatured.asientos} asientos`
-                            : activeDriverFeatured.cascoExtra
-                            ? '🪖 Casco extra'
-                            : 'Sin casco extra'}
-                        </span>
-                        {consoleVehicleType === 'auto' && (
-                          <span className="text-[10px] text-[#FFF19A]">
-                            · {activeDriverFeatured.aireAcondicionado ? '❄️ Aire' : 'Sin aire'}
-                          </span>
+                      {/* Confort y Capacidad Real */}
+                      <div className="flex flex-wrap items-center gap-1 pt-0.5">
+                        {consoleVehicleType === 'moto' ? (
+                          <>
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9.5px] font-bold bg-[#202329] border border-[#FFF19A]/35 text-[#FFF19A]">
+                              <span>🪖</span>
+                              <span>{activeDriverFeatured.cascoExtra ? 'Casco extra' : 'Sin casco extra'}</span>
+                            </span>
+                            {activeDriverFeatured.baul && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9.5px] font-bold bg-[#202329] border border-white/15 text-white">
+                                <span>📦</span>
+                                <span>Baúl</span>
+                              </span>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9.5px] font-bold bg-[#202329] border border-white/15 text-white">
+                              <span>👥</span>
+                              <span>{activeDriverFeatured.asientos} as.</span>
+                            </span>
+                            {activeDriverFeatured.aireAcondicionado && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9.5px] font-bold bg-[#202329] border border-[#B7F36B]/35 text-[#B7F36B]">
+                                <span>❄️</span>
+                                <span>Aire</span>
+                              </span>
+                            )}
+                            {activeDriverFeatured.baul && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9.5px] font-bold bg-[#202329] border border-white/15 text-white">
+                                <span>🧳</span>
+                                <span>Baúl</span>
+                              </span>
+                            )}
+                            {activeDriverFeatured.aceptaMascotas && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9.5px] font-bold bg-[#202329] border border-[#FFF19A]/35 text-[#FFF19A]">
+                                <span>🐾</span>
+                                <span>Mascotas</span>
+                              </span>
+                            )}
+                          </>
                         )}
-                        <span className="text-[10px] text-[#9299A5]">
-                          · {activeDriverFeatured.baul ? '🧳 Baúl' : 'Sin baúl'}
-                        </span>
-                        {consoleVehicleType === 'auto' && activeDriverFeatured.aceptaMascotas && (
-                          <span className="text-[10px] text-white">
-                            · 🐾 Mascotas
-                          </span>
-                        )}
-                        <span className="text-[#9299A5] text-[10px]">
-                          · {activeDriverFeatured.completedRides} viajes
-                        </span>
-                      </div>
-
-                      <div className="pt-1.5 border-t border-white/10 space-y-1">
-                        <div className="text-[10px] text-[#9299A5] leading-tight flex items-center justify-between">
-                          <span>{activeDriverFeatured.safetyIndex}% seguridad</span>
-                          <span className="text-[#B7F36B] font-black">Verificado</span>
-                        </div>
-                        <div className="w-full bg-[#202329] h-2 rounded-full overflow-hidden border border-white/10">
-                          <div
-                            className="h-full bg-[#B7F36B] rounded-full transition-all"
-                            style={{ width: `${Math.min(100, Math.max(10, activeDriverFeatured.safetyIndex))}%` }}
-                          />
-                        </div>
                       </div>
                     </div>
-                  ) : (
-                    <div className="col-span-7 rounded-2xl bg-[#101114] border-2 border-white/10 p-3 flex flex-col justify-between space-y-2">
-                      <div className="space-y-1.5">
-                        <div className="flex items-center gap-2 text-[#FFF19A]">
-                          {consoleVehicleType === 'moto' ? <Bike className="w-5 h-5" /> : <Car className="w-5 h-5" />}
-                          <h4 className="font-black text-white text-xs leading-tight">
-                            Sin {consoleVehicleType === 'moto' ? 'Motos' : 'Autos'} activos
-                          </h4>
-                        </div>
-                        <p className="text-[10.5px] text-[#9299A5] leading-relaxed">
-                          No hay prestadores reales de {consoleVehicleType === 'moto' ? 'Moto Taxi' : 'Auto Taxi'} con turno vigente en este momento.
-                        </p>
+
+                    {/* Barra de Seguridad Verificada */}
+                    <div className="pt-1.5 border-t border-white/10 space-y-1">
+                      <div className="text-[10px] text-[#9299A5] leading-tight flex items-center justify-between">
+                        <span>{activeDriverFeatured.safetyIndex}% seguridad</span>
+                        <span className="text-[#B7F36B] font-black">Verificado</span>
+                      </div>
+                      <div className="w-full bg-[#202329] h-2 rounded-full overflow-hidden border border-white/10">
+                        <div
+                          className="h-full bg-[#B7F36B] rounded-full transition-all"
+                          style={{ width: `${Math.min(100, Math.max(10, activeDriverFeatured.safetyIndex))}%` }}
+                        />
                       </div>
                     </div>
-                  )}
-                </div>
+                  </div>
+                ) : (
+                  <div className="col-span-7 rounded-2xl bg-[#101114] border-2 border-white/10 p-3 flex flex-col justify-between space-y-2.5">
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-2 text-[#FFF19A]">
+                        {consoleVehicleType === 'moto' ? <Bike className="w-5 h-5" /> : <Car className="w-5 h-5" />}
+                        <h4 className="font-black text-white text-xs leading-tight">
+                          Sin {consoleVehicleType === 'moto' ? 'Motos' : 'Autos'} activos
+                        </h4>
+                      </div>
+                      <p className="text-[10.5px] text-[#9299A5] leading-relaxed">
+                        No hay prestadores reales de {consoleVehicleType === 'moto' ? 'Moto Taxi' : 'Auto Taxi'} con turno vigente en este momento.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => onOpenPublishModal('transfer')}
+                      className="min-h-[38px] px-3 py-1.5 rounded-xl uppa-cta-green font-black text-[11px] inline-flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <KeyRound className="w-3.5 h-3.5" />
+                      <span>Prestar Servicio</span>
+                    </button>
+                  </div>
+                )}
+              </div>
 
-                {/* Botón Principal: Chatear con el conductor real activo (bloqueado si el prestador lleva pasajero hasta presionar DESOCUPADO) */}
-                {activeDriverFeatured &&
-                  chatWhatsAppUrl &&
-                  (() => {
-                    const featuredAccess = getDriverTripAccess(
-                      activeDriverFeatured.userId || activeDriverFeatured.id,
-                      activeDriverFeatured.driverName,
-                      activeDriverFeatured.disponibilidad
-                    );
-                    if (featuredAccess.isWhatsAppLocked) {
-                      return (
-                        <button
-                          type="button"
-                          disabled
-                          title="WhatsApp bloqueado mientras el prestador lleva un pasajero. Se habilita al presionar DESOCUPADO."
-                          className="w-full min-h-[46px] p-1.5 rounded-xl bg-[#101114]/70 border-2 border-white/10 flex items-center justify-between opacity-60 cursor-not-allowed"
-                        >
-                          <div className="w-9 h-9 rounded-lg bg-[#202329] border border-white/15 flex items-center justify-center text-[#FFF19A] shrink-0">
-                            <Lock className="w-4 h-4" />
-                          </div>
-                          <div className="text-[11px] font-black text-[#9299A5] px-2 text-center truncate">
-                            {activeDriverFeatured.driverName} en viaje · WhatsApp bloqueado hasta DESOCUPADO
-                          </div>
-                          <span className="w-4 mr-2 shrink-0" />
-                        </button>
-                      );
-                    }
-                    return (
+              {/* Botones Integrados de Acción de la Ficha: Calificar, Mapa y WhatsApp */}
+              {activeDriverFeatured && featuredAccess && (
+                <div className="space-y-2 pt-0.5">
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      disabled={!featuredAccess.canRate}
+                      onClick={() => {
+                        if (!featuredAccess.canRate || !featuredAccess.eligibleCompletedRide) return;
+                        setCalificarTarget({
+                          taxi: activeDriverFeatured.rawTaxi,
+                          solicitudId: featuredAccess.eligibleCompletedRide.id,
+                        });
+                      }}
+                      className={`min-h-[42px] px-3 py-2 rounded-xl border-2 text-xs font-black flex items-center justify-center gap-1.5 transition-all ${
+                        featuredAccess.canRate
+                          ? 'bg-[#101114] hover:border-[#FFF19A] text-[#FFF19A] border-[#FFF19A]/45 cursor-pointer active:scale-95'
+                          : 'bg-[#101114]/60 text-[#9299A5] border-white/10 opacity-45 cursor-not-allowed'
+                      }`}
+                      title={
+                        featuredAccess.canRate
+                          ? `Calificar tu viaje finalizado con ${activeDriverFeatured.driverName} (1 = Malo, 5 = Muy Bueno)`
+                          : isFeaturedOcupado
+                          ? 'No disponible mientras el prestador lleva un pasajero'
+                          : 'Solo podés calificar cuando tomes un servicio con este prestador y finalice el viaje'
+                      }
+                    >
+                      <Star className={`w-3.5 h-3.5 ${featuredAccess.canRate ? 'fill-[#FFF19A]' : ''}`} />
+                      <span>Calificar</span>
+                    </button>
+
+                    {onSelectTaxiOnMap && (
+                      <button
+                        type="button"
+                        onClick={() => onSelectTaxiOnMap(activeDriverFeatured.rawTaxi)}
+                        className="min-h-[42px] px-3 py-2 rounded-xl bg-[#101114] hover:border-white text-white border-2 border-white/20 text-xs font-bold flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer"
+                        title={`Ver a ${activeDriverFeatured.driverName} en el mapa y trazar ruta`}
+                      >
+                        <Navigation className="w-3.5 h-3.5 text-[#FFF19A]" />
+                        <span>Mapa</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {chatWhatsAppUrl &&
+                    (featuredAccess.isWhatsAppLocked ? (
+                      <button
+                        type="button"
+                        disabled
+                        title="WhatsApp bloqueado mientras el prestador lleva un pasajero. Se habilita al presionar DESOCUPADO."
+                        className="w-full min-h-[46px] p-1.5 rounded-xl bg-[#101114]/70 border-2 border-white/10 flex items-center justify-between opacity-60 cursor-not-allowed"
+                      >
+                        <div className="w-9 h-9 rounded-lg bg-[#202329] border border-white/15 flex items-center justify-center text-[#FFF19A] shrink-0">
+                          <Lock className="w-4 h-4" />
+                        </div>
+                        <div className="text-[11px] font-black text-[#9299A5] px-2 text-center truncate">
+                          {activeDriverFeatured.driverName} en viaje · WhatsApp bloqueado hasta DESOCUPADO
+                        </div>
+                        <span className="w-4 mr-2 shrink-0" />
+                      </button>
+                    ) : (
                       <a
                         href={chatWhatsAppUrl}
                         target="_blank"
@@ -1943,75 +2054,10 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                         </div>
                         <ArrowRight className="w-4 h-4 text-[#B7F36B] mr-2 shrink-0" />
                       </a>
-                    );
-                  })()}
-              </div>
-
-              {/* Encabezado de Prestadores de Servicio Habilitados */}
-              <div className="flex items-center justify-between pt-2 pb-0.5 gap-2 flex-wrap">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#B7F36B]" />
-                  <h3 className="text-sm font-black text-white tracking-wide flex items-center gap-2 flex-wrap">
-                    <span>
-                      {vehicleFilter === 'auto'
-                        ? 'Prestadores de Auto Taxi Habilitados'
-                        : vehicleFilter === 'moto'
-                        ? 'Prestadores de Moto Taxi Habilitados'
-                        : 'Prestadores de Servicio Habilitados'}
-                    </span>
-                    <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-[#B7F36B] text-[#101114] font-mono">
-                      {visibleTaxis.length}
-                    </span>
-                  </h3>
-                  {vehicleFilter !== 'all' && (
-                    <button
-                      type="button"
-                      onClick={() => setVehicleFilter('all')}
-                      title="Quitar filtro y mostrar todos los prestadores (Auto Taxi y Moto Taxi)"
-                      className="min-h-[32px] px-2.5 py-1 rounded-lg bg-[#202329] hover:border-[#FFF19A] border border-white/20 text-[10px] font-black text-[#FFF19A] transition-all cursor-pointer"
-                    >
-                      Ver todos ({totalCount})
-                    </button>
-                  )}
+                    ))}
                 </div>
-                <span className="text-[11px] text-[#9299A5] font-semibold hidden sm:inline">
-                  Directo por WhatsApp y Mapa GPS
-                </span>
-              </div>
-
-              {/* Driver Cards Stream - Solo Prestadores 100% Reales Habilitados */}
-              <div className="space-y-3">
-                {visibleTaxis.length === 0 ? (
-                  <div className="p-6 text-center text-xs text-[#9299A5] rounded-2xl bg-[#202329] border-2 border-white/10 space-y-3">
-                    <div className="w-12 h-12 rounded-2xl bg-[#101114] border-2 border-[#FFF19A]/40 text-[#FFF19A] mx-auto flex items-center justify-center">
-                      {vehicleFilter === 'moto' ? <Bike className="w-6 h-6" /> : <Car className="w-6 h-6" />}
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-black text-white">
-                        No hay {vehicleFilter === 'moto' ? 'motos' : vehicleFilter === 'auto' ? 'autos' : 'prestadores'} habilitados en este momento
-                      </h4>
-                      <p className="text-[11px] text-[#9299A5] mt-1 max-w-md mx-auto leading-relaxed">
-                        Todos los prestadores mostrados en UPPA son reales y verificados con turno vigente. Podés solicitar un traslado o postularte como prestador.
-                      </p>
-                    </div>
-                    {!isPrestadorLogueado && (
-                      <div className="pt-1 flex justify-center">
-                        <button
-                          type="button"
-                          onClick={() => onOpenPublishModal('transfer')}
-                          className="min-h-[42px] px-4 py-2 rounded-xl uppa-cta-green font-black text-xs inline-flex items-center gap-1.5 cursor-pointer"
-                        >
-                          <KeyRound className="w-4 h-4" />
-                          <span>Prestar Servicio / Solicitar Habilitación</span>
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  visibleTaxis.map((taxi) => renderTaxiCard(taxi, false))
-                )}
-              </div>
-            </>
+              )}
+            </div>
           );
         })()}
       </div>
