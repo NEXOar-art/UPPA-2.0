@@ -88,33 +88,33 @@ const SECTIONS: SectionConfig[] = [
     headerIcon: <Car className="w-5 h-5 text-[#B7F36B]" />,
     features: [
       {
-        title: 'Consola Interactiva y Cercanía GPS',
+        title: 'Solicitudes Solo para Choferes Disponibles',
         description:
-          'Filtrá entre Auto Taxi y Moto Taxi habilitados, conocé distancia estimada, confort del vehículo (aire, baúl, casco extra, mascotas) y prestador más cercano.',
+          'Los pedidos de transporte alternativo aparecen únicamente a los choferes habilitados que se encuentren en estado DESOCUPADO, resguardando la privacidad de cada pasajero.',
         icon: <Car className="w-4 h-4 text-[#B7F36B]" />,
       },
       {
-        title: 'Pedido de Transporte con Código Seguro',
+        title: 'Código de Viaje para el Pasajero',
         description:
-          'Emití un pedido con origen y destino (12 min de vigencia). Al ser aceptado recibís un código de seguridad para validar tu viaje junto al prestador.',
+          'Emití un pedido con origen y destino (12 min de vigencia). Al ser aceptado, el pasajero recibe su Código de Viaje para verificar que aborda el móvil indicado.',
         icon: <KeyRound className="w-4 h-4 text-[#FFF19A]" />,
       },
       {
-        title: 'Contacto Directo por WhatsApp',
+        title: 'Ficha con WhatsApp del Pasajero y GPS al Aceptar',
         description:
-          'Mientras un prestador está llevando un pasajero (OCUPADO), el botón de WhatsApp permanece bloqueado para terceros y se habilita al presionar DESOCUPADO.',
-        icon: <MessageSquare className="w-4 h-4 text-[#B7F36B]" />,
+          'Cuando el prestador acepta la solicitud, aparece automáticamente la ficha del viaje con el WhatsApp del pasajero y el botón de GPS para trazar la ruta directa hasta su ubicación.',
+        icon: <Navigation className="w-4 h-4 text-[#B7F36B]" />,
       },
       {
         title: 'Calificación Exclusiva Post-Viaje',
         description:
-          'Solo el pasajero que tomó el servicio y una vez finalizado el viaje puede calificar de 1 a 5 estrellas al prestador para el ranking de las últimas 3 horas.',
+          'Una vez finalizado el viaje, el pasajero puede calificar de 1 a 5 estrellas al prestador para el ranking de las últimas 3 horas.',
         icon: <Star className="w-4 h-4 text-[#FFF19A]" />,
       },
       {
-        title: 'Herramientas del Prestador Habilitado',
+        title: 'Estado DESOCUPADO / OCUPADO',
         description:
-          'Los choferes habilitados activan su turno por horas, usan el botón GPS Pasajero para avanzar al punto 5 y finalizan el viaje en el punto 6 presionando DESOCUPADO.',
+          'Los choferes habilitados aceptan viajes pasando automáticamente a OCUPADO y finalizan el traslado presionando DESOCUPADO para volver a recibir pedidos.',
         icon: <CheckCircle2 className="w-4 h-4 text-[#B7F36B]" />,
       },
     ],

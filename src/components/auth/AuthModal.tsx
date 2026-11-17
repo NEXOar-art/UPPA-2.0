@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { User } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 import { auth } from '../../config/firebase';
@@ -42,6 +42,7 @@ interface AuthModalProps {
   currentUser: User;
   onUpdateUser: (updated: User) => void;
   defaultMode?: 'register' | 'login' | 'profile';
+  focusEmailVerificationTick?: number;
   isHabilitado?: boolean;
   onOpenPublishTaxi?: () => void;
 }
@@ -52,6 +53,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   currentUser,
   onUpdateUser,
   defaultMode,
+  focusEmailVerificationTick,
   isHabilitado,
   onOpenPublishTaxi,
 }) => {
@@ -60,6 +62,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     firebaseUser,
     isAuthenticated,
     isEmailVerified,
+    emailVerificationSent,
     registerWithEmail,
     loginWithEmail,
     logout,
@@ -101,6 +104,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [isCheckingVerification, setIsCheckingVerification] = useState(false);
   const [isResendingEmail, setIsResendingEmail] = useState(false);
   const [isHabilitacionCardExpanded, setIsHabilitacionCardExpanded] = useState(false);
+  const [needsReauthForEmail, setNeedsReauthForEmail] = useState(false);
+  const [reauthPassword, setReauthPassword] = useState('');
+  const [showReauthPassword, setShowReauthPassword] = useState(false);
+  const [highlightEmailCard, setHighlightEmailCard] = useState(false);
+  const emailVerificationCardRef = useRef<HTMLDivElement | null>(null);
 
   const [driverDisponibilidad, setDriverDisponibilidadState] = useState<'desocupado' | 'ocupado'>('desocupado');
 
@@ -110,6 +118,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setAuthError(null);
     setSuccessMessage(null);
     setVerificationSentNotice(null);
+    setNeedsReauthForEmail(false);
+    setReauthPassword('');
     setRegName('');
     setRegEmail('');
     setRegPassword('');
@@ -120,7 +130,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
     if (defaultMode) {
       setMode(defaultMode);
-    } else if (isAuthenticated && authUser) {
+    } else if (focusEmailVerificationTick) {
+      setMode('profile');
+    } else if (isAuthenticated && (authUser || currentUser?.email)) {
       setMode('profile');
     } else {
       setMode('register');
@@ -135,7 +147,20 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       setEditBarrio(currentUser.barrio || '');
       setEditPhone(currentUser.phone || '');
     }
-  }, [isOpen, isAuthenticated, authUser, defaultMode]);
+  }, [isOpen, isAuthenticated, authUser, defaultMode, focusEmailVerificationTick]);
+
+  useEffect(() => {
+    if (!isOpen || mode !== 'profile' || !focusEmailVerificationTick) return;
+    setHighlightEmailCard(true);
+    const scrollTimer = setTimeout(() => {
+      emailVerificationCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 100);
+    const clearTimer = setTimeout(() => setHighlightEmailCard(false), 3000);
+    return () => {
+      clearTimeout(scrollTimer);
+      clearTimeout(clearTimer);
+    };
+  }, [isOpen, mode, focusEmailVerificationTick]);
 
   const currentUid = authUser?.uid || currentUser?.uid || currentUser?.id || '';
 
@@ -407,17 +432,52 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
   };
 
+  const targetVerificationEmail = firebaseUser?.email || authUser?.email || currentUser.email || '';
+
   const handleResendVerification = async () => {
     setIsResendingEmail(true);
     setAuthError(null);
+    setSuccessMessage(null);
+    setVerificationSentNotice(null);
     try {
       await sendVerificationEmail();
+      setNeedsReauthForEmail(false);
       setVerificationSentNotice(
-        `Hemos reenviado el correo de autenticación a ${firebaseUser?.email || currentUser.email}. Revisá tu casilla y la carpeta de spam.`
+        `¡Correo enviado a ${targetVerificationEmail}! Revisá tu bandeja de entrada, Promociones o Spam (remitente: noreply@uppa-22dc3.firebaseapp.com) y hacé clic en el enlace.`
       );
     } catch (err: any) {
       console.error('Error al reenviar:', err);
-      setAuthError(err?.message || 'No se pudo reenviar el correo de verificación.');
+      const rawMsg = err?.message || 'No se pudo enviar el correo de verificación.';
+      if (rawMsg.startsWith('REAUTH_REQUIRED:')) {
+        setNeedsReauthForEmail(true);
+        setAuthError(rawMsg.replace('REAUTH_REQUIRED:', '').trim());
+      } else {
+        setAuthError(rawMsg);
+      }
+    } finally {
+      setIsResendingEmail(false);
+    }
+  };
+
+  const handleReauthAndSendVerification = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!targetVerificationEmail || !reauthPassword.trim()) {
+      setAuthError('Ingresá tu contraseña para conectar tu correo y enviar el mail de verificación.');
+      return;
+    }
+    setIsResendingEmail(true);
+    setAuthError(null);
+    setVerificationSentNotice(null);
+    try {
+      await loginWithEmail(targetVerificationEmail, reauthPassword.trim());
+      setNeedsReauthForEmail(false);
+      setReauthPassword('');
+      await sendVerificationEmail();
+      setVerificationSentNotice(
+        `¡Correo enviado a ${targetVerificationEmail}! Revisá tu bandeja de entrada o carpeta de Spam y hacé clic en el enlace.`
+      );
+    } catch (err: any) {
+      setAuthError(err?.message || 'No se pudo autenticar y enviar el correo de verificación.');
     } finally {
       setIsResendingEmail(false);
     }
@@ -430,6 +490,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       const verified = await reloadAuthUser();
       if (verified) {
         setVerificationSentNotice(null);
+        setNeedsReauthForEmail(false);
         setSuccessMessage('¡Excelente! Tu correo electrónico ha sido autenticado en Firebase.');
         onUpdateUser({
           ...currentUser,
@@ -437,7 +498,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         });
       } else {
         setAuthError(
-          'El correo aún figura como no verificado. Hacé clic en el enlace que enviamos a tu email o solicitá un nuevo correo.'
+          'El correo aún figura como pendiente de verificación. Hacé clic en el enlace que llegó a tu casilla o presioná "Enviar / Reenviar mail".'
         );
       }
     } catch (err: any) {
@@ -909,6 +970,105 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           {/* TAB 3: MI PERFIL */}
           {mode === 'profile' && (
             <div className="mt-4 space-y-3.5 animate-in fade-in">
+              {/* Si el email está pendiente de verificación, mostrar esta tarjeta PRIMERO arriba de todo en Mi Perfil */}
+              {!isEmailVerified && (
+                <div
+                  ref={emailVerificationCardRef}
+                  className={`p-4 rounded-2xl border-2 text-xs space-y-2.5 bg-[#101114] text-white transition-all ${
+                    highlightEmailCard
+                      ? 'border-[#FFF19A] shadow-[0_0_20px_rgba(255,241,154,0.35)]'
+                      : 'border-[#FFF19A]/60'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5 font-black">
+                      <Mail className="w-4 h-4 text-[#FFF19A]" />
+                      <span className="text-[#FFF19A]">Email Pendiente de Verificación</span>
+                    </div>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase bg-[#FFF19A]/15 text-[#FFF19A] border border-[#FFF19A]/40">
+                      Pendiente
+                    </span>
+                  </div>
+
+                  <p className="text-[11px] text-[#9299A5] leading-relaxed">
+                    Correo ingresado:{' '}
+                    <strong className="text-white font-mono">{targetVerificationEmail}</strong>.{' '}
+                    Presioná <strong className="text-[#FFF19A]">Enviar mail de verificación</strong> y luego abrí el enlace en tu casilla (revisá también <strong className="text-white">Spam / Promociones</strong>).
+                  </p>
+
+                  {!needsReauthForEmail ? (
+                    <div className="flex flex-wrap items-center gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={handleResendVerification}
+                        disabled={isResendingEmail}
+                        title="Enviar correo de verificación a la casilla ingresada"
+                        className="px-3.5 min-h-[40px] rounded-xl uppa-cta-yellow font-black text-[11px] flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                      >
+                        {isResendingEmail ? (
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Send className="w-3.5 h-3.5" />
+                        )}
+                        <span>
+                          {emailVerificationSent || verificationSentNotice
+                            ? 'Reenviar mail de verificación'
+                            : 'Enviar mail de verificación'}
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleCheckVerification}
+                        disabled={isCheckingVerification}
+                        title="Comprobar en Firebase si ya confirmaste el enlace del correo"
+                        className="px-3 min-h-[40px] rounded-xl bg-[#202329] hover:bg-white/10 text-white font-bold text-[11px] flex items-center gap-1.5 cursor-pointer border border-white/15 disabled:opacity-50"
+                      >
+                        {isCheckingVerification ? (
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Check className="w-3.5 h-3.5 text-[#B7F36B]" />
+                        )}
+                        <span>Ya verifiqué · Comprobar</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <form onSubmit={handleReauthAndSendVerification} className="space-y-2 pt-1 border-t border-white/10">
+                      <label className="block text-[11px] font-bold text-[#FFF19A]">
+                        Ingresá tu contraseña para conectar con Firebase y enviar el correo:
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <div className="relative flex-1">
+                          <KeyRound className="w-3.5 h-3.5 text-[#9299A5] absolute left-3 top-1/2 -translate-y-1/2" />
+                          <input
+                            type={showReauthPassword ? 'text' : 'password'}
+                            value={reauthPassword}
+                            onChange={(e) => setReauthPassword(e.target.value)}
+                            placeholder="Tu contraseña de UPPA"
+                            className="w-full min-h-[38px] bg-[#202329] border border-white/20 rounded-xl pl-8 pr-8 py-1.5 text-xs text-white focus:outline-none focus:border-[#FFF19A] font-mono"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowReauthPassword((p) => !p)}
+                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#9299A5] hover:text-white cursor-pointer"
+                          >
+                            {showReauthPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                          </button>
+                        </div>
+                        <button
+                          type="submit"
+                          disabled={isResendingEmail}
+                          className="px-3 min-h-[38px] rounded-xl uppa-cta-yellow font-black text-[11px] flex items-center gap-1.5 cursor-pointer shrink-0 disabled:opacity-50"
+                        >
+                          {isResendingEmail ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                          <span>Enviar</span>
+                        </button>
+                      </div>
+                    </form>
+                  )}
+                </div>
+              )}
+
               {isDriverUser &&
                 (isHabilitado ? (
                   <div className="p-4 rounded-2xl border-2 bg-[#101114] border-[#B7F36B] text-white shadow-[4px_4px_0px_#000000]">
@@ -1116,75 +1276,27 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 </div>
               </div>
 
-              {/* Email Verification Status */}
-              <div
-                className={`p-3.5 rounded-2xl border text-xs space-y-2 ${
-                  isEmailVerified
-                    ? 'bg-[#101114] border-[#B7F36B]/45 text-white'
-                    : 'bg-[#101114] border-[#FFF19A]/45 text-white'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5 font-black">
-                    {isEmailVerified ? (
-                      <>
-                        <CheckCircle2 className="w-4 h-4 text-[#B7F36B]" />
-                        <span className="text-[#B7F36B]">Email Autenticado Oficial</span>
-                      </>
-                    ) : (
-                      <>
-                        <Mail className="w-4 h-4 text-[#FFF19A]" />
-                        <span className="text-[#FFF19A]">Email Pendiente de Autenticación</span>
-                      </>
-                    )}
+              {/* Email Verification Status (cuando ya está verificado) */}
+              {isEmailVerified && (
+                <div
+                  ref={emailVerificationCardRef}
+                  className="p-3.5 rounded-2xl border text-xs space-y-2 bg-[#101114] border-[#B7F36B]/45 text-white"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 font-black">
+                      <CheckCircle2 className="w-4 h-4 text-[#B7F36B]" />
+                      <span className="text-[#B7F36B]">Email Autenticado Oficial</span>
+                    </div>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase bg-[#B7F36B]/15 text-[#B7F36B]">
+                      Verificado
+                    </span>
                   </div>
-                  <span
-                    className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${
-                      isEmailVerified
-                        ? 'bg-[#B7F36B]/15 text-[#B7F36B]'
-                        : 'bg-[#FFF19A]/15 text-[#FFF19A]'
-                    }`}
-                  >
-                    {isEmailVerified ? 'Verificado' : 'No verificado'}
-                  </span>
+
+                  <p className="text-[11px] text-[#9299A5] leading-snug">
+                    Tu correo ({targetVerificationEmail}) está autenticado correctamente en Firebase Authentication.
+                  </p>
                 </div>
-
-                <p className="text-[11px] text-[#9299A5] leading-snug">
-                  {isEmailVerified
-                    ? `Tu correo (${firebaseUser?.email || currentUser.email}) está autenticado correctamente en Firebase Authentication.`
-                    : `Hemos enviado el correo para autenticar tu dirección (${firebaseUser?.email || currentUser.email}). Hacé clic en el enlace para habilitar todas las funciones.`}
-                </p>
-
-                {!isEmailVerified && (
-                  <div className="flex flex-wrap items-center gap-2 pt-1">
-                    <button
-                      type="button"
-                      onClick={handleResendVerification}
-                      disabled={isResendingEmail}
-                      title="Reenviar email de verificación"
-                      className="px-3 min-h-[38px] rounded-xl uppa-cta-yellow font-black text-[11px] flex items-center gap-1 cursor-pointer"
-                    >
-                      {isResendingEmail ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
-                      <span>Reenviar mail</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={handleCheckVerification}
-                      disabled={isCheckingVerification}
-                      title="Verificar ahora si tu correo fue validado"
-                      className="px-3 min-h-[38px] rounded-xl bg-[#202329] hover:bg-white/10 text-white font-bold text-[11px] flex items-center gap-1 cursor-pointer border border-white/15"
-                    >
-                      {isCheckingVerification ? (
-                        <RefreshCw className="w-3 h-3 animate-spin" />
-                      ) : (
-                        <Check className="w-3 h-3 text-[#B7F36B]" />
-                      )}
-                      <span>Comprobar estado</span>
-                    </button>
-                  </div>
-                )}
-              </div>
+              )}
 
               {/* Editable Profile Form */}
               <form onSubmit={handleSaveProfile} className="space-y-3 pt-1">

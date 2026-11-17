@@ -20,6 +20,7 @@ interface PedirTransporteModalProps {
   onClose: () => void;
   currentUserId?: string;
   currentUserName?: string;
+  currentUserPhone?: string;
   initialOrigin?: string;
   userLocation?: { lat: number; lng: number; address?: string } | null;
   onSuccess?: (solicitud: SolicitudTransporteFirestore) => void;
@@ -30,6 +31,7 @@ export const PedirTransporteModal: React.FC<PedirTransporteModalProps> = ({
   onClose,
   currentUserId = 'usr-anonimo',
   currentUserName = 'Pasajero Comunidad UPPA',
+  currentUserPhone = '',
   initialOrigin = 'Campana Centro (Plaza Eduardo Costa)',
   userLocation,
   onSuccess,
@@ -37,7 +39,7 @@ export const PedirTransporteModal: React.FC<PedirTransporteModalProps> = ({
   const [origen, setOrigen] = useState(initialOrigin);
   const [destino, setDestino] = useState('');
   const [tipoVehiculo, setTipoVehiculo] = useState<'moto' | 'auto'>('moto');
-  const [telefono, setTelefono] = useState('');
+  const [telefono, setTelefono] = useState(currentUserPhone || '');
   const [nombre, setNombre] = useState(currentUserName !== 'Pasajero' ? currentUserName : '');
   const [aceptaPoliticas, setAceptaPoliticas] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -52,13 +54,13 @@ export const PedirTransporteModal: React.FC<PedirTransporteModalProps> = ({
       setOrigen(initialOrigin || '');
       setDestino('');
       setNombre(currentUserName && currentUserName !== 'Pasajero' ? currentUserName : '');
-      setTelefono('');
+      setTelefono(currentUserPhone || '');
       setErrorMsg('');
       setSuccessMsg(null);
       setAceptaPoliticas(false);
     }
     prevIsOpenRef.current = isOpen;
-  }, [isOpen, initialOrigin, currentUserName]);
+  }, [isOpen, initialOrigin, currentUserName, currentUserPhone]);
 
   if (!isOpen) return null;
 

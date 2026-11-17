@@ -206,6 +206,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 fechaRegistro: fsDoc.fechaRegistro || new Date().toISOString(),
               };
 
+              if (fbUser.emailVerified && !fsDoc.emailVerificado) {
+                marcarEmailVerificadoEnFirestore(fbUser.uid).catch(() => {});
+              }
+
               setUser(mappedUser);
               saveStoredSessionUser(mappedUser);
             } else if (isMounted) {
@@ -373,18 +377,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       let usedResilientFallback = false;
 
       try {
+        auth.languageCode = 'es';
         const cred = await createUserWithEmailAndPassword(auth, cleanEmail, cleanPass);
         fbUid = cred.user.uid;
         fbVerified = cred.user.emailVerified;
-        updateProfile(cred.user, { displayName: cleanName }).catch(() => {});
+        await updateProfile(cred.user, { displayName: cleanName }).catch(() => {});
         setFirebaseUser({
           uid: cred.user.uid,
           email: cred.user.email || cleanEmail,
           displayName: cleanName,
           emailVerified: cred.user.emailVerified,
         });
-        sendEmailVerification(cred.user).catch(() => {});
-        setEmailVerificationSent(true);
+        if (!cred.user.emailVerified) {
+          try {
+            await sendEmailVerification(cred.user);
+            setEmailVerificationSent(true);
+            setAuthNotice(
+              `Correo de verificación enviado a ${cleanEmail}. Revisá tu bandeja de entrada o carpeta de spam.`
+            );
+          } catch (verErr: any) {
+            console.warn('[UPPA Auth] Error enviando mail de verificación inicial:', verErr?.code, verErr?.message);
+            setEmailVerificationSent(false);
+          }
+        }
       } catch (fbErr: any) {
         console.warn('Firebase Auth createUser notice:', fbErr?.code, fbErr?.message);
         if (fbErr?.code === 'auth/email-already-in-use') {
@@ -398,6 +413,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               displayName: loginCred.user.displayName || cleanName,
               emailVerified: loginCred.user.emailVerified,
             });
+            if (!loginCred.user.emailVerified) {
+              try {
+                auth.languageCode = 'es';
+                await sendEmailVerification(loginCred.user);
+                setEmailVerificationSent(true);
+                setAuthNotice(
+                  `Correo de verificación enviado a ${cleanEmail}. Revisá tu bandeja de entrada o spam.`
+                );
+              } catch (verErr: any) {
+                console.warn('[UPPA Auth] Reenvío en registro existente:', verErr?.code, verErr?.message);
+              }
+            }
           } catch {
             throw new Error(translateFirebaseAuthError('auth/email-already-in-use'));
           }
@@ -880,22 +907,71 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const sendVerificationEmail = async (): Promise<boolean> => {
-    if (auth.currentUser && !auth.currentUser.isAnonymous) {
-      try {
-        await sendEmailVerification(auth.currentUser);
-      } catch (err: any) {
-        if (err?.code === 'auth/too-many-requests') {
-          throw new Error('Ya enviamos un correo recientemente. Esperá un momento antes de reenviar.');
-        }
-        throw new Error(translateFirebaseAuthError(err?.code, 'No se pudo enviar el correo de verificación.'));
-      }
+    auth.languageCode = 'es';
+
+    if ((!auth.currentUser || auth.currentUser.isAnonymous) && typeof auth.authStateReady === 'function') {
+      await Promise.race([
+        auth.authStateReady(),
+        new Promise<void>((resolve) => setTimeout(resolve, 2000)),
+      ]).catch(() => {});
     }
+
+    if (!auth.currentUser || auth.currentUser.isAnonymous) {
+      throw new Error(
+        'REAUTH_REQUIRED: Tu sesión de correo no está conectada en Firebase Auth en este navegador. Ingresá tu contraseña abajo para autenticar y enviar el mail de verificación.'
+      );
+    }
+
+    await auth.currentUser.reload().catch(() => {});
+    if (auth.currentUser.emailVerified) {
+      await marcarEmailVerificadoEnFirestore(auth.currentUser.uid).catch(() => {});
+      setFirebaseUser({
+        uid: auth.currentUser.uid,
+        email: auth.currentUser.email || undefined,
+        displayName: auth.currentUser.displayName || undefined,
+        emailVerified: true,
+      });
+      if (user) {
+        const updatedUser = { ...user, emailVerificado: true };
+        setUser(updatedUser);
+        saveStoredSessionUser(updatedUser);
+      }
+      setEmailVerificationSent(false);
+      setAuthNotice('¡Tu correo electrónico ya figura como verificado!');
+      return true;
+    }
+
+    try {
+      await sendEmailVerification(auth.currentUser);
+    } catch (err: any) {
+      console.warn('[UPPA Auth] sendEmailVerification failed:', err?.code, err?.message);
+      if (err?.code === 'auth/too-many-requests') {
+        throw new Error(
+          'Ya enviamos un correo recientemente a tu casilla. Esperá unos minutos y revisá tu bandeja de entrada o carpeta de Spam.'
+        );
+      }
+      if (err?.code === 'auth/user-token-expired' || err?.code === 'auth/requires-recent-login') {
+        throw new Error(
+          'REAUTH_REQUIRED: Tu sesión expiró. Ingresá tu contraseña abajo para volver a conectar y enviar el correo.'
+        );
+      }
+      throw new Error(translateFirebaseAuthError(err?.code, 'No se pudo enviar el correo de verificación.'));
+    }
+
+    const targetMail = auth.currentUser.email || user?.email || 'tu correo';
     setEmailVerificationSent(true);
-    setAuthNotice('Correo de verificación enviado por Firebase.');
+    setAuthNotice(`Correo de verificación enviado a ${targetMail}. Revisá bandeja de entrada o Spam.`);
     return true;
   };
 
   const reloadAuthUser = async (): Promise<boolean> => {
+    if ((!auth.currentUser || auth.currentUser.isAnonymous) && typeof auth.authStateReady === 'function') {
+      await Promise.race([
+        auth.authStateReady(),
+        new Promise<void>((resolve) => setTimeout(resolve, 1500)),
+      ]).catch(() => {});
+    }
+
     if (auth.currentUser && !auth.currentUser.isAnonymous) {
       await auth.currentUser.reload();
       const verified = Boolean(auth.currentUser.emailVerified);
@@ -955,6 +1031,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     (firebaseUser && firebaseUser.email
       ? Boolean(firebaseUser.emailVerified)
       : undefined) ?? (user?.emailVerificado ?? true);
+
+  // Al regresar de hacer clic en el enlace del correo, sincronizar verificación automáticamente
+  useEffect(() => {
+    if (isEmailVerified) return;
+    if (typeof window === 'undefined') return;
+
+    const checkOnReturn = () => {
+      if (document.visibilityState === 'hidden') return;
+      if (auth.currentUser && !auth.currentUser.isAnonymous && !auth.currentUser.emailVerified) {
+        reloadAuthUser().catch(() => {});
+      }
+    };
+
+    window.addEventListener('focus', checkOnReturn);
+    document.addEventListener('visibilitychange', checkOnReturn);
+    return () => {
+      window.removeEventListener('focus', checkOnReturn);
+      document.removeEventListener('visibilitychange', checkOnReturn);
+    };
+  }, [isEmailVerified]);
 
   const effectiveFirebaseUser =
     firebaseUser?.email

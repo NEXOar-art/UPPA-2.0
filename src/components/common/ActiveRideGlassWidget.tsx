@@ -13,6 +13,9 @@ import {
   Navigation,
   Sparkles,
   X,
+  KeyRound,
+  CheckCircle2,
+  MessageCircle,
 } from 'lucide-react';
 
 export interface ActiveRideGlassWidgetProps {
@@ -327,6 +330,66 @@ export const ActiveRideGlassWidget: React.FC<ActiveRideGlassWidgetProps> = ({
           </div>
         </div>
       )}
+
+      {/* Código de Viaje para el Pasajero al concretarse la asignación */}
+      {!isDriverViewer &&
+        (solicitud.estado === 'aceptado' || solicitud.estado === 'en_camino') &&
+        solicitud.codigoSeguridad && (
+          <div
+            className={`rounded-2xl border-2 p-3 space-y-2 uppa-card-enter ${
+              solicitud.codigoValidado
+                ? 'bg-[#B7F36B]/15 border-[#B7F36B]'
+                : 'bg-[#101114]/90 border-[#FFF19A]'
+            }`}
+          >
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <span className="text-[10.5px] font-black uppercase tracking-wider text-[#FFF19A] flex items-center gap-1.5">
+                <KeyRound className="w-3.5 h-3.5 shrink-0" />
+                <span>Código de Viaje</span>
+              </span>
+              <span
+                className={`px-2 py-0.5 rounded text-[9.5px] font-black uppercase ${
+                  solicitud.codigoValidado
+                    ? 'bg-[#B7F36B] text-[#101114]'
+                    : 'bg-[#FFF19A] text-[#101114]'
+                }`}
+              >
+                {solicitud.codigoValidado ? 'Viaje verificado' : 'Verificá tu móvil'}
+              </span>
+            </div>
+
+            {solicitud.codigoValidado ? (
+              <div className="flex items-center gap-2 text-xs text-[#B7F36B] font-bold">
+                <CheckCircle2 className="w-4 h-4 shrink-0" />
+                <span>Código {solicitud.codigoSeguridad} validado · Es tu viaje indicado.</span>
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center gap-3">
+                  <div className="px-3.5 py-1.5 rounded-xl bg-[#202329] border-2 border-[#FFF19A] font-mono text-xl font-black tracking-widest text-[#FFF19A] select-all shrink-0">
+                    {solicitud.codigoSeguridad}
+                  </div>
+                  <p className="text-[11px] text-white/90 leading-snug">
+                    Mostrá o enviá este código a <strong className="text-[#B7F36B]">{driverName}</strong> para confirmar que es el viaje indicado.
+                  </p>
+                </div>
+                {solicitud.choferTelefono && (
+                  <a
+                    href={`https://wa.me/${solicitud.choferTelefono.replace(/\D/g, '')}?text=${encodeURIComponent(
+                      `Hola ${driverName}! Soy ${solicitud.nombrePasajero}. Mi código de viaje en UPPA es: ${solicitud.codigoSeguridad}`
+                    )}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full min-h-[38px] px-3 py-1.5 rounded-xl uppa-cta-green font-black text-[11px] flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <MessageCircle className="w-3.5 h-3.5 shrink-0" />
+                    <span>Enviar Código ({solicitud.codigoSeguridad}) por WhatsApp</span>
+                  </a>
+                )}
+              </>
+            )}
+          </div>
+        )}
 
       {/* Efecto Especial UPPA: Vehículo acercándose (🚗 ---------> 📍) */}
       {hasDriverAssigned && !solicitud.codigoValidado && solicitud.estado !== 'completado' && (

@@ -218,6 +218,8 @@ export default function App() {
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isTicketModalOpen, setIsTicketModalOpen] = useState(false);
   const [isShareQrModalOpen, setIsShareQrModalOpen] = useState(false);
+  const [authModalDefaultMode, setAuthModalDefaultMode] = useState<'register' | 'login' | 'profile' | undefined>(undefined);
+  const [emailVerificationFocusTick, setEmailVerificationFocusTick] = useState(0);
   const [sectionInfoModal, setSectionInfoModal] = useState<AppSectionId | null>(null);
   const [showSplash, setShowSplash] = useState(true);
   const [firestorePermissionAlert, setFirestorePermissionAlert] = useState<{
@@ -601,12 +603,8 @@ export default function App() {
   const [activeTrackingPassenger, setActiveTrackingPassenger] = useState<SolicitudTransporteFirestore | null>(null);
 
   useEffect(() => {
-    const handleAcceptedRide = (e: any) => {
+    const handleAcceptedRide = () => {
       setDriverDisponibilidadState('ocupado');
-      if (e?.detail?.solicitud) {
-        setActiveTrackingPassenger(e.detail.solicitud);
-        setActiveTab('map');
-      }
     };
     window.addEventListener('uppa-driver-accepted-ride', handleAcceptedRide);
     return () => window.removeEventListener('uppa-driver-accepted-ride', handleAcceptedRide);
@@ -911,6 +909,7 @@ export default function App() {
     });
 
     if (!assignedPendingCode) return;
+    if (activeTabRef.current === 'taxi') return;
 
     const solId = assignedPendingCode.id;
     let alreadyShown = shownDriverCodePopupIdsRef.current.has(solId);
@@ -1411,24 +1410,38 @@ export default function App() {
     return sorted[0] || null;
   }, [solicitudesList, currentUser.id, currentUser.uid]);
 
-  // Mostrar la tarjeta de viaje activo solo al pasajero creador durante 4 segundos por cada nuevo viaje
+  // Mostrar la tarjeta de viaje activo al pasajero: 4s mientras busca móvil, y permanente al confirmarse el viaje con su Código de Viaje
   useEffect(() => {
     if (activeTab !== 'map') return;
     if (!myLiveActiveSolicitud?.id) return;
     const solId = myLiveActiveSolicitud.id;
-    if (shownMapGlassRideIdsRef.current.has(solId)) return;
+    const isConfirmedRide =
+      myLiveActiveSolicitud.estado === 'aceptado' || myLiveActiveSolicitud.estado === 'en_camino';
+    const stateKey = `${solId}_${isConfirmedRide ? 'confirmado' : 'pendiente'}`;
 
-    shownMapGlassRideIdsRef.current.add(solId);
+    if (shownMapGlassRideIdsRef.current.has(stateKey)) return;
+
+    shownMapGlassRideIdsRef.current.add(stateKey);
     setActiveMapGlassRideId(solId);
 
     if (mapGlassAutoHideTimerRef.current) {
       clearTimeout(mapGlassAutoHideTimerRef.current);
-    }
-    mapGlassAutoHideTimerRef.current = setTimeout(() => {
-      setActiveMapGlassRideId((prev) => (prev === solId ? null : prev));
       mapGlassAutoHideTimerRef.current = null;
-    }, 4000);
-  }, [activeTab, myLiveActiveSolicitud?.id]);
+    }
+
+    if (!isConfirmedRide) {
+      mapGlassAutoHideTimerRef.current = setTimeout(() => {
+        setActiveMapGlassRideId((prev) => (prev === solId ? null : prev));
+        mapGlassAutoHideTimerRef.current = null;
+      }, 4000);
+    } else {
+      showToast(
+        myLiveActiveSolicitud.codigoSeguridad
+          ? `✅ ¡Viaje confirmado! Tu Código de Viaje es ${myLiveActiveSolicitud.codigoSeguridad}`
+          : '✅ ¡Viaje confirmado! Chofer en camino.'
+      );
+    }
+  }, [activeTab, myLiveActiveSolicitud?.id, myLiveActiveSolicitud?.estado, myLiveActiveSolicitud?.codigoSeguridad]);
 
   const matchedLiveDriver = useMemo(() => {
     if (!myLiveActiveSolicitud?.choferId) return null;
@@ -1734,19 +1747,35 @@ export default function App() {
       {/* Alerta / Recordatorio de email pendiente de autenticar */}
       {isLoggedIn &&
         !isEmailVerified &&
-        authUser?.email &&
-        !authUser.email.includes('guest') && (
-        <div className="bg-[#202329] border-b border-[#FFF19A]/40 px-3 py-1.5 flex items-center justify-between text-xs text-white z-40">
-          <div className="flex items-center gap-2 truncate">
-            <Mail className="w-3.5 h-3.5 text-[#FFF19A] shrink-0" />
-            <span className="truncate text-[#9299A5]">
-              Correo <strong className="text-white">{authUser.email}</strong> pendiente de autenticación.
-            </span>
-          </div>
+        (authUser?.email || currentUser.email) &&
+        !(authUser?.email || currentUser.email).includes('guest') && (
+        <div className="bg-[#202329] border-b border-[#FFF19A]/45 px-3 py-1.5 flex items-center justify-between gap-2 text-xs text-white z-40">
           <button
-            onClick={() => setIsAuthModalOpen(true)}
-            title="Abrir ventana para verificar o reenviar el correo de autenticación"
-            className="text-[11px] font-black text-[#FFF19A] hover:underline cursor-pointer shrink-0 ml-2 px-2 py-1 rounded-md"
+            type="button"
+            onClick={() => {
+              playMicroSound('ui_tap');
+              setAuthModalDefaultMode('profile');
+              setEmailVerificationFocusTick((n) => n + 1);
+              setIsAuthModalOpen(true);
+            }}
+            title="Abrir UPPA Mi Perfil en Email Pendiente de Verificación"
+            className="flex items-center gap-2 min-w-0 flex-1 text-left cursor-pointer group"
+          >
+            <Mail className="w-3.5 h-3.5 text-[#FFF19A] shrink-0" />
+            <span className="truncate text-[#9299A5] group-hover:text-white transition-colors">
+              Correo <strong className="text-white">{authUser?.email || currentUser.email}</strong> pendiente de verificación.
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              playMicroSound('ui_tap');
+              setAuthModalDefaultMode('profile');
+              setEmailVerificationFocusTick((n) => n + 1);
+              setIsAuthModalOpen(true);
+            }}
+            title="Ir a UPPA Mi Perfil para enviar el correo de verificación"
+            className="text-[11px] font-black bg-[#FFF19A] text-[#101114] hover:brightness-95 cursor-pointer shrink-0 px-2.5 py-1 rounded-lg border border-[#101114] active:scale-95 transition-all"
           >
             Verificar Mail
           </button>
@@ -2088,10 +2117,28 @@ export default function App() {
 
                   {/* Acciones generales del menú */}
                   <div className="pt-1 space-y-1.5 border-t border-white/10">
+                    {!isEmailVerified && (authUser?.email || currentUser.email) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsProfileDropdownOpen(false);
+                          setAuthModalDefaultMode('profile');
+                          setEmailVerificationFocusTick((n) => n + 1);
+                          setIsAuthModalOpen(true);
+                        }}
+                        title="Ir a verificar tu correo electrónico pendiente"
+                        className="w-full min-h-[42px] text-left px-3 py-2 rounded-xl text-xs font-black text-[#101114] bg-[#FFF19A] hover:brightness-95 border border-[#101114] flex items-center gap-2 transition-all cursor-pointer"
+                      >
+                        <Mail className="w-4 h-4 text-[#101114]" />
+                        <span>Verificar Email Pendiente</span>
+                      </button>
+                    )}
+
                     <button
                       type="button"
                       onClick={() => {
                         setIsProfileDropdownOpen(false);
+                        setAuthModalDefaultMode('profile');
                         setIsAuthModalOpen(true);
                       }}
                       title="Ver o editar mi información personal y preferencias de perfil"
@@ -2244,11 +2291,11 @@ export default function App() {
               <Info className="w-3.5 h-3.5" />
             </button>
 
-            {/* Tarjeta Glassmorphism iOS de Viaje Activo en Mapa (solo para el pasajero, visible 4 segundos) */}
+            {/* Tarjeta Glassmorphism iOS de Viaje Activo en Mapa (con Código de Viaje para el pasajero al confirmarse) */}
             {myLiveActiveSolicitud &&
-              myLiveActiveSolicitud.id === activeMapGlassRideId &&
               !activeTrackingPassenger &&
-              !activeTrackingTaxi && (
+              !activeTrackingTaxi &&
+              (myLiveActiveSolicitud.id === activeMapGlassRideId ? (
                 <div className="absolute top-16 left-3 right-3 sm:left-4 sm:right-auto sm:w-[375px] z-20 pointer-events-auto">
                   <ActiveRideGlassWidget
                     solicitud={myLiveActiveSolicitud}
@@ -2273,7 +2320,21 @@ export default function App() {
                     }}
                   />
                 </div>
-              )}
+              ) : (myLiveActiveSolicitud.estado === 'aceptado' || myLiveActiveSolicitud.estado === 'en_camino') &&
+                myLiveActiveSolicitud.codigoSeguridad ? (
+                <button
+                  type="button"
+                  onClick={() => setActiveMapGlassRideId(myLiveActiveSolicitud.id)}
+                  title="Tocar para ver el detalle y Código de Viaje"
+                  className="absolute top-14 left-3 z-20 px-3 py-2 rounded-2xl bg-[#101114]/95 border-2 border-[#FFF19A] text-white shadow-[0_6px_18px_rgba(0,0,0,0.65)] flex items-center gap-2 cursor-pointer active:scale-95 transition-all"
+                >
+                  <KeyRound className="w-4 h-4 text-[#FFF19A] shrink-0" />
+                  <span className="text-[11px] font-bold">Código de Viaje:</span>
+                  <span className="font-mono font-black text-sm text-[#FFF19A] tracking-wider">
+                    {myLiveActiveSolicitud.codigoSeguridad}
+                  </span>
+                </button>
+              ) : null)}
 
             {/* Pop-up global de 5 segundos en la sección principal del mapa cuando un vehículo queda DESOCUPADO */}
             {desocupadoMapPopup && (
@@ -2696,10 +2757,11 @@ export default function App() {
         onClose={() => setIsPedirTransporteOpen(false)}
         currentUserId={currentUser.id}
         currentUserName={currentUser.name}
+        currentUserPhone={currentUser.phone}
         initialOrigin={userLocation?.address || 'Campana Centro (Plaza Eduardo Costa)'}
         userLocation={userLocation}
         onSuccess={() => {
-          showToast('¡Aviso emitido! Choferes habilitados ordenados por cercanía GPS.');
+          showToast('¡Aviso emitido! Solo los choferes disponibles recibirán tu solicitud.');
           setActiveTab('taxi');
         }}
       />
@@ -2767,8 +2829,13 @@ export default function App() {
 
       <AuthModal
         isOpen={isAuthModalOpen}
-        onClose={() => setIsAuthModalOpen(false)}
+        onClose={() => {
+          setIsAuthModalOpen(false);
+          setAuthModalDefaultMode(undefined);
+        }}
         currentUser={currentUser}
+        defaultMode={authModalDefaultMode}
+        focusEmailVerificationTick={emailVerificationFocusTick}
         isHabilitado={isDriverHabilitado}
         onOpenPublishTaxi={() => {
           setPublishTaxiInitialTab('transfer');

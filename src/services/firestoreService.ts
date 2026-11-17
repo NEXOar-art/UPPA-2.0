@@ -178,11 +178,15 @@ export async function updateUserDocument(
 export async function marcarEmailVerificadoEnFirestore(uid: string): Promise<void> {
   try {
     const docRefU = doc(db, USUARIOS_COLLECTION, uid);
-    await updateDoc(docRefU, { emailVerificado: true, ultimaConexion: serverTimestamp() });
-    const docRefLegacy = doc(db, USERS_COLLECTION, uid);
-    await updateDoc(docRefLegacy, { emailVerificado: true });
+    await setDoc(docRefU, { emailVerificado: true, ultimaConexion: serverTimestamp() }, { merge: true });
   } catch (err) {
-    console.warn('Could not mark emailVerificado in Firestore:', err);
+    console.warn('Could not mark emailVerificado in usuarios:', err);
+  }
+  try {
+    const docRefLegacy = doc(db, USERS_COLLECTION, uid);
+    await setDoc(docRefLegacy, { emailVerificado: true }, { merge: true });
+  } catch (err) {
+    console.warn('Could not mark emailVerificado in users:', err);
   }
 }
 
