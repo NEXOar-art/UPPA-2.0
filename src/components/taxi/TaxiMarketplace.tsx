@@ -6,8 +6,6 @@ import {
   aceptarSolicitudTransporte,
   isSolicitudExpired,
   getSolicitudRemainingSeconds,
-  isSolicitudAceptadaExpired,
-  getSolicitudAceptadaRemainingSeconds,
   subscribeToRankingChoferes,
   getCalificacionInfo,
   getDriversDisponibilidadMap,
@@ -48,6 +46,7 @@ import {
   Info,
   Phone,
   Lock,
+  Flag,
 } from 'lucide-react';
 import { PoliticasTransporteModal } from './PoliticasTransporteModal';
 import { CalificarChoferModal } from './CalificarChoferModal';
@@ -316,7 +315,6 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
         return !isSolicitudExpired(sol, nowTimestamp);
       }
       if (sol.estado === 'aceptado' || sol.estado === 'en_camino') {
-        if (isSolicitudAceptadaExpired(sol, nowTimestamp)) return false;
         return doesSolicitudBelongToMeAsPassenger(sol) || doesSolicitudMatchMeAsDriver(sol);
       }
       return false;
@@ -583,7 +581,10 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
     [taxis, nowTimestamp]
   );
 
-  const handleToggleMyDisponibilidad = async (forceNext?: 'desocupado' | 'ocupado') => {
+  const handleToggleMyDisponibilidad = async (
+    forceNext?: 'desocupado' | 'ocupado',
+    targetSolicitudId?: string
+  ) => {
     const nextDisp: 'desocupado' | 'ocupado' =
       forceNext || (isLoggedDriverOcupado ? 'desocupado' : 'ocupado');
 
@@ -594,7 +595,11 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
 
     if (nextDisp === 'desocupado') {
       try {
-        await finalizarViajeDeChofer(currentUserId, currentUserName);
+        await finalizarViajeDeChofer(
+          currentUserId,
+          currentUserName,
+          targetSolicitudId || myAcceptedSolicitud?.id
+        );
       } catch {}
       await anunciarVehiculoDesocupado(currentUserId, currentUserName, driverVehicleType);
     }
@@ -1215,9 +1220,16 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
             {myAcceptedSolicitud &&
               (() => {
                 const sol = myAcceptedSolicitud;
-                const remainingAcceptedSec = getSolicitudAceptadaRemainingSeconds(sol, nowTimestamp);
-                const acceptedMins = Math.floor(remainingAcceptedSec / 60);
-                const acceptedSecs = remainingAcceptedSec % 60;
+                const rawStart = sol.fechaAceptado || sol.fechaSolicitud;
+                const startMs =
+                  typeof rawStart === 'number'
+                    ? rawStart
+                    : typeof (rawStart as { seconds?: number })?.seconds === 'number'
+                    ? (rawStart as { seconds: number }).seconds * 1000
+                    : nowTimestamp;
+                const elapsedSec = Math.max(0, Math.floor((nowTimestamp - startMs) / 1000));
+                const elapsedMins = Math.floor(elapsedSec / 60);
+                const elapsedSecs = elapsedSec % 60;
                 const pPhone = sol.telefonoPasajero || '';
                 const cleanPhone = pPhone.replace(/\D/g, '');
                 const hasPhone = cleanPhone.length >= 6;
@@ -1227,7 +1239,7 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                   : encodeURIComponent(sol.origen);
 
                 return (
-                  <div className="p-4 rounded-3xl bg-[#202329] border-2 border-[#B7F36B] shadow-[5px_5px_0px_rgba(0,0,0,0.65)] space-y-3 animate-in fade-in">
+                  <div className="p-4 rounded-3xl bg-[#202329] border-2 border-[#B7F36B] shadow-[5px_5px_0px_rgba(0,0,0,0.65)] space-y-3.5 animate-in fade-in">
                     <div className="flex items-center justify-between gap-2 flex-wrap">
                       <div className="flex items-center gap-2.5 min-w-0">
                         <div className="w-10 h-10 rounded-xl bg-[#B7F36B] text-[#101114] flex items-center justify-center shrink-0">
@@ -1249,11 +1261,24 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
 
                       <span
                         className="px-2.5 py-1 rounded-lg text-[10.5px] font-black uppercase bg-[#B7F36B] text-[#101114] font-mono shrink-0"
-                        title="Tiempo restante de seguimiento activo"
+                        title="Tiempo en curso del viaje activo"
                       >
-                        ✓ En curso · {acceptedMins}:{acceptedSecs.toString().padStart(2, '0')}
+                        ⏱ En curso · {elapsedMins}:{elapsedSecs.toString().padStart(2, '0')}
                       </span>
                     </div>
+
+                    {/* Animación inteligente en vivo del transcurso del viaje para el Prestador */}
+                    <ActiveRideGlassWidget
+                      solicitud={sol}
+                      matchedDriver={myActiveDriverCards[0] || null}
+                      userLocation={userLocation}
+                      isDriverViewer={true}
+                      nowTimestamp={nowTimestamp}
+                      onLocateOnMap={() => {
+                        activarGpsHaciaPasajero(sol.id);
+                        onLocatePassengerOnMap?.({ ...sol, gpsActivadoChofer: true });
+                      }}
+                    />
 
                     {/* Origen y Destino */}
                     <div className="p-3 rounded-2xl bg-[#101114] border border-white/15 space-y-1.5 text-xs">
@@ -1421,20 +1446,27 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                         )}
                       </div>
                     ) : (
-                      <div className="p-3 rounded-2xl bg-[#B7F36B]/15 border border-[#B7F36B] text-[#B7F36B] text-xs flex items-center justify-between gap-2 flex-wrap font-black">
-                        <div className="flex items-center gap-2">
-                          <CheckCircle2 className="w-4 h-4 shrink-0" />
-                          <span>Código verificado · Viaje en curso</span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => handleToggleMyDisponibilidad('desocupado')}
-                          className="min-h-[36px] px-3 py-1 rounded-xl bg-[#B7F36B] text-[#101114] text-[11px] font-black cursor-pointer"
-                        >
-                          Finalizar y pasar a DESOCUPADO
-                        </button>
+                      <div className="p-3 rounded-2xl bg-[#B7F36B]/15 border border-[#B7F36B] text-[#B7F36B] text-xs flex items-center gap-2 font-black">
+                        <CheckCircle2 className="w-4 h-4 shrink-0" />
+                        <span>Código verificado · Viaje en transcurso hacia destino</span>
                       </div>
                     )}
+
+                    {/* Botón maestro de cierre de viaje (la animación y estado persisten hasta presionarlo) */}
+                    <div className="pt-1 border-t border-white/10 space-y-1.5">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleMyDisponibilidad('desocupado', sol.id)}
+                        className="w-full min-h-[48px] py-2.5 px-4 rounded-2xl uppa-cta-green font-black text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer"
+                        title="Finalizar este viaje y volver a estar disponible para recibir nuevas solicitudes"
+                      >
+                        <Flag className="w-4 h-4 shrink-0" />
+                        <span>FINALIZAR Y PASAR A DESOCUPADO</span>
+                      </button>
+                      <p className="text-[10.5px] text-center text-[#9299A5] leading-snug">
+                        El seguimiento animado permanece activo para vos y el pasajero hasta que presiones este botón.
+                      </p>
+                    </div>
                   </div>
                 );
               })()}
@@ -1580,6 +1612,7 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                           solicitud={sol}
                           matchedDriver={matchedDriverObj}
                           userLocation={userLocation}
+                          nowTimestamp={nowTimestamp}
                           onLocateOnMap={
                             matchedDriverObj && onSelectTaxiOnMap
                               ? () => onSelectTaxiOnMap(matchedDriverObj)

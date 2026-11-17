@@ -16,6 +16,9 @@ import {
   KeyRound,
   CheckCircle2,
   MessageCircle,
+  Flag,
+  Clock,
+  Radio,
 } from 'lucide-react';
 
 export interface ActiveRideGlassWidgetProps {
@@ -23,6 +26,7 @@ export interface ActiveRideGlassWidgetProps {
   matchedDriver?: TaxiListing | null;
   userLocation?: { lat: number; lng: number; address?: string } | null;
   isDriverViewer?: boolean;
+  nowTimestamp?: number;
   onLocateOnMap?: () => void;
   onOpenTaxiTab?: () => void;
   onClose?: () => void;
@@ -30,24 +34,59 @@ export interface ActiveRideGlassWidgetProps {
 }
 
 const PROGRESS_STEPS = [
-  { id: 'searching', label: 'Buscando conductor' },
-  { id: 'found', label: 'Conductor encontrado' },
+  { id: 'searching', label: 'Buscando unidad' },
+  { id: 'found', label: 'Unidad asignada' },
   { id: 'en_route', label: 'En camino' },
-  { id: 'arriving', label: 'Llegando' },
-  { id: 'started', label: 'Viaje iniciado' },
+  { id: 'arriving', label: 'GPS / Llegando' },
+  { id: 'started', label: 'Viaje en curso' },
   { id: 'finished', label: 'Viaje finalizado' },
 ] as const;
+
+function resolveTimestampMs(ts: unknown): number {
+  if (typeof ts === 'number' && Number.isFinite(ts) && ts > 0) return ts;
+  if (ts && typeof ts === 'object') {
+    const maybeSeconds = (ts as { seconds?: unknown }).seconds;
+    if (typeof maybeSeconds === 'number' && Number.isFinite(maybeSeconds)) {
+      return maybeSeconds * 1000;
+    }
+    const maybeToMillis = (ts as { toMillis?: () => number }).toMillis;
+    if (typeof maybeToMillis === 'function') {
+      try {
+        return maybeToMillis();
+      } catch {}
+    }
+  }
+  return Date.now();
+}
+
+function formatElapsedMMSS(totalSeconds: number): string {
+  const safe = Math.max(0, Math.floor(totalSeconds));
+  const mins = Math.floor(safe / 60);
+  const secs = safe % 60;
+  return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+}
 
 export const ActiveRideGlassWidget: React.FC<ActiveRideGlassWidgetProps> = ({
   solicitud,
   matchedDriver,
   userLocation,
   isDriverViewer = false,
+  nowTimestamp,
   onLocateOnMap,
   onOpenTaxiTab,
   onClose,
   compact = false,
 }) => {
+  const [internalNow, setInternalNow] = useState<number>(() => Date.now());
+
+  useEffect(() => {
+    if (typeof nowTimestamp === 'number') return;
+    const id = setInterval(() => setInternalNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [nowTimestamp]);
+
+  const effectiveNow = typeof nowTimestamp === 'number' ? nowTimestamp : internalNow;
+
   const isMoto =
     solicitud.tipoVehiculoRequerido === 'moto' ||
     matchedDriver?.vehicleType === 'moto';
@@ -82,19 +121,33 @@ export const ActiveRideGlassWidget: React.FC<ActiveRideGlassWidgetProps> = ({
     };
   }, [solicitud.origenCoords, userLocation, matchedDriver, isMoto]);
 
+  const isTripInTransit = Boolean(solicitud.codigoValidado) && solicitud.estado !== 'completado';
+  const isWaitingForPassengerPickup =
+    (solicitud.estado === 'aceptado' || solicitud.estado === 'en_camino') &&
+    !solicitud.codigoValidado;
+
+  const elapsedSeconds = useMemo(() => {
+    const anchorMs =
+      solicitud.estado === 'pendiente'
+        ? resolveTimestampMs(solicitud.fechaSolicitud)
+        : resolveTimestampMs(solicitud.fechaAceptado || solicitud.fechaSolicitud);
+    return Math.max(0, Math.floor((effectiveNow - anchorMs) / 1000));
+  }, [effectiveNow, solicitud.estado, solicitud.fechaAceptado, solicitud.fechaSolicitud]);
+
   // Real 6-step intelligent progress index (0..5)
-  // Paso 5 (index 4 - Viaje iniciado): se cumple cuando el prestador presiona el botón de GPS hacia el pasajero.
-  // Paso 6 (index 5 - Viaje finalizado): SOLO queda completo cuando el prestador aprieta DESOCUPADO.
+  // Paso 5 (index 4 - Viaje en curso): activo con GPS o código validado.
+  // Paso 6 (index 5 - Viaje finalizado): SOLO queda completo cuando el prestador aprieta FINALIZAR Y PASAR A DESOCUPADO.
   const currentStepIndex = useMemo(() => {
     if (solicitud.estado === 'completado') return 5;
+    if (solicitud.codigoValidado) return 5; // Paso 5 completado, esperando que el chofer finalice al llegar
     if (solicitud.gpsActivadoChofer) return 4;
     if (solicitud.estado === 'aceptado' || solicitud.estado === 'en_camino') {
       if (isNear) return 3; // Llegando
       if (solicitud.estado === 'en_camino' || matchedDriver) return 2; // En camino
       return 1; // Conductor encontrado
     }
-    return 0; // Buscando conductor
-  }, [solicitud.estado, solicitud.gpsActivadoChofer, isNear, matchedDriver]);
+    return 0; // Buscando unidad
+  }, [solicitud.estado, solicitud.codigoValidado, solicitud.gpsActivadoChofer, isNear, matchedDriver]);
 
   // Trigger subtle micro-sound when progress advances or match happens
   const prevStepRef = useRef<number>(currentStepIndex);
@@ -147,10 +200,12 @@ export const ActiveRideGlassWidget: React.FC<ActiveRideGlassWidgetProps> = ({
       ? 'Buscando móvil'
       : solicitud.estado === 'completado'
       ? 'Finalizado'
+      : isTripInTransit
+      ? 'Viaje en transcurso'
       : solicitud.gpsActivadoChofer
-      ? 'Viaje iniciado'
+      ? 'GPS hacia pasajero'
       : etaMin !== null
-      ? `${etaMin} min`
+      ? `~${etaMin} min`
       : 'En camino';
 
   const realRatingText =
@@ -165,7 +220,12 @@ export const ActiveRideGlassWidget: React.FC<ActiveRideGlassWidgetProps> = ({
   const realLocationText =
     matchedDriver?.zone || solicitud.origen || 'Zárate ↔ Campana';
 
-  const progressPercent = Math.round(((currentStepIndex + 1) / PROGRESS_STEPS.length) * 100);
+  const progressPercent =
+    solicitud.estado === 'completado'
+      ? 100
+      : isTripInTransit
+      ? 88
+      : Math.round(((currentStepIndex + 1) / PROGRESS_STEPS.length) * 100);
 
   return (
     <motion.div
@@ -177,7 +237,7 @@ export const ActiveRideGlassWidget: React.FC<ActiveRideGlassWidgetProps> = ({
       {/* Subtle luminous top shimmer hairline */}
       <div className="absolute inset-x-6 top-0 h-[1px] bg-gradient-to-r from-transparent via-white/45 to-transparent pointer-events-none" />
 
-      {/* iOS Glass Header: Viaje activo · Nombre · ETA */}
+      {/* iOS Glass Header: Viaje activo · Nombre · Estado + Tiempo en curso */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
           <LottieMicroIcon
@@ -185,8 +245,14 @@ export const ActiveRideGlassWidget: React.FC<ActiveRideGlassWidgetProps> = ({
             className="w-5 h-5"
           />
           <div className="min-w-0">
-            <div className="text-[10px] font-black uppercase tracking-wider text-[#9299A5] leading-none">
-              {isDriverViewer ? 'Servicio activo' : 'Viaje activo'}
+            <div className="text-[10px] font-black uppercase tracking-wider text-[#9299A5] leading-none flex items-center gap-1.5">
+              <span>{isDriverViewer ? 'Servicio en transcurso' : 'Viaje en transcurso'}</span>
+              {solicitud.estado !== 'completado' && (
+                <span className="inline-flex items-center gap-0.5 text-[#FFF19A] font-mono">
+                  <Clock className="w-2.5 h-2.5" />
+                  <span>{formatElapsedMMSS(elapsedSeconds)}</span>
+                </span>
+              )}
             </div>
             <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
               <span className="text-sm font-black text-white truncate max-w-[160px]">
@@ -269,8 +335,8 @@ export const ActiveRideGlassWidget: React.FC<ActiveRideGlassWidgetProps> = ({
         </div>
       )}
 
-      {/* Avatar Vivo del Conductor (con Foto, Calificación, Vehículo, Ubicación) */}
-      {hasDriverAssigned && (
+      {/* Avatar Vivo del Conductor (solo vista Pasajero para no redundar al chofer consigo mismo) */}
+      {!isDriverViewer && hasDriverAssigned && (
         <div className="rounded-2xl bg-[#101114]/65 border border-white/15 p-2.5 sm:p-3 flex items-center justify-between gap-2.5 uppa-card-enter">
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="relative w-11 h-11 rounded-2xl bg-[#202329] border border-[#FFF19A]/50 overflow-hidden flex items-center justify-center shrink-0 shadow-md">
@@ -369,9 +435,9 @@ export const ActiveRideGlassWidget: React.FC<ActiveRideGlassWidgetProps> = ({
                   <div className="px-3.5 py-1.5 rounded-xl bg-[#202329] border-2 border-[#FFF19A] font-mono text-xl font-black tracking-widest text-[#FFF19A] select-all shrink-0">
                     {solicitud.codigoSeguridad}
                   </div>
-                  <p className="text-[11px] text-white/90 leading-snug">
+                  <div className="text-[11px] text-white/90 leading-snug">
                     Mostrá o enviá este código a <strong className="text-[#B7F36B]">{driverName}</strong> para confirmar que es el viaje indicado.
-                  </p>
+                  </div>
                 </div>
                 {solicitud.choferTelefono && (
                   <a
@@ -391,33 +457,140 @@ export const ActiveRideGlassWidget: React.FC<ActiveRideGlassWidgetProps> = ({
           </div>
         )}
 
-      {/* Efecto Especial UPPA: Vehículo acercándose (🚗 ---------> 📍) */}
-      {hasDriverAssigned && !solicitud.codigoValidado && solicitud.estado !== 'completado' && (
-        <div className="rounded-xl bg-[#101114]/60 border border-white/15 px-3 py-2 space-y-1">
-          <div className="flex items-center justify-between text-[10px] font-bold">
-            <span className="text-[#B7F36B]">
-              {isDriverViewer ? 'Acercándose al pasajero' : 'Vehículo acercándose'}
+      {/* ANIMACIÓN INTELIGENTE DEL TRANSCURSO DEL VIAJE (Buscando -> Acercándose al encuentro -> Viaje en Transcurso hacia Destino) */}
+      {solicitud.estado !== 'completado' && (
+        <div
+          className={`rounded-2xl border px-3 py-2.5 space-y-2 transition-colors ${
+            isTripInTransit
+              ? 'bg-[#B7F36B]/10 border-[#B7F36B]/55'
+              : solicitud.gpsActivadoChofer
+              ? 'bg-[#FFF19A]/10 border-[#FFF19A]/50'
+              : 'bg-[#101114]/70 border-white/15'
+          }`}
+        >
+          {/* Cabecera contextual inteligente */}
+          <div className="flex items-center justify-between gap-2 text-[10.5px] font-bold">
+            <span className="flex items-center gap-1.5 text-[#B7F36B] min-w-0 truncate">
+              <Radio className="w-3.5 h-3.5 animate-pulse shrink-0" />
+              <span className="truncate">
+                {solicitud.estado === 'pendiente'
+                  ? 'Buscando unidad disponible en tu zona...'
+                  : isTripInTransit
+                  ? isDriverViewer
+                    ? `En viaje hacia: ${solicitud.destino}`
+                    : `Viajando hacia: ${solicitud.destino}`
+                  : solicitud.gpsActivadoChofer
+                  ? isDriverViewer
+                    ? `GPS activo hacia ${solicitud.nombrePasajero}`
+                    : `${driverName} en camino con GPS en vivo`
+                  : isDriverViewer
+                  ? `Acercándose al punto de encuentro (${solicitud.nombrePasajero})`
+                  : `${driverName} acercándose al punto de encuentro`}
+              </span>
             </span>
-            <span className="text-[#FFF19A] font-mono">
-              {etaMin !== null ? `~${etaMin} min` : 'En trayecto'}
+            <span className="px-2 py-0.5 rounded-md bg-[#101114] border border-white/15 text-[#FFF19A] font-mono text-[10px] shrink-0">
+              {solicitud.estado === 'pendiente'
+                ? formatElapsedMMSS(elapsedSeconds)
+                : isTripInTransit
+                ? `En curso · ${formatElapsedMMSS(elapsedSeconds)}`
+                : etaMin !== null
+                ? `~${etaMin} min`
+                : formatElapsedMMSS(elapsedSeconds)}
             </span>
           </div>
-          <div className="relative h-6 flex items-center justify-between overflow-hidden px-1">
-            <div className="absolute inset-x-3 top-1/2 -translate-y-1/2 border-t-2 border-dashed border-[#FFF19A]/45" />
-            <div className="relative z-10 flex-1 pr-6 overflow-hidden">
-              <div className="w-full uppa-vehicle-approach-track">
-                <span
-                  className="text-base leading-none inline-block"
-                  aria-hidden="true"
-                >
-                  {isMoto ? '🛵' : '🚗'}
+
+          {/* Corredor animado acorde a la etapa real */}
+          {solicitud.estado === 'pendiente' && (
+            <div className="relative h-8 flex items-center justify-between px-2 rounded-xl bg-[#101114]/75 border border-white/10 overflow-hidden">
+              <div className="relative flex items-center justify-center w-6 h-6 shrink-0">
+                <span className="absolute inset-0 rounded-full bg-[#FFF19A]/40 uppa-beacon-ring" />
+                <span className="relative z-10 text-xs">📍</span>
+              </div>
+              <div className="flex-1 mx-2 h-1 rounded-full bg-white/10 overflow-hidden relative">
+                <motion.div
+                  className="h-full w-1/3 rounded-full bg-gradient-to-r from-transparent via-[#FFF19A] to-[#B7F36B]"
+                  animate={{ x: ['-100%', '300%'] }}
+                  transition={{ repeat: Infinity, duration: 1.8, ease: 'easeInOut' }}
+                />
+              </div>
+              <div className="flex items-center gap-1 text-[10px] font-black text-[#FFF19A] shrink-0">
+                <span>{isMoto ? '🛵' : '🚗'}</span>
+                <span>?</span>
+              </div>
+            </div>
+          )}
+
+          {isWaitingForPassengerPickup && (
+            <div className="relative h-8 flex items-center justify-between overflow-hidden px-2 rounded-xl bg-[#101114]/80 border border-white/10">
+              <div className="absolute inset-x-4 top-1/2 -translate-y-1/2 border-t-2 border-dashed border-[#FFF19A]/50" />
+              <div className="relative z-10 flex-1 pr-7 overflow-hidden">
+                <div className="w-full uppa-vehicle-approach-track">
+                  <span
+                    className="text-base leading-none inline-block"
+                    aria-hidden="true"
+                  >
+                    {isMoto ? '🛵' : '🚗'}
+                  </span>
+                </div>
+              </div>
+              <div className="relative z-10 w-6 h-6 flex items-center justify-center shrink-0">
+                <span className="absolute inset-0 rounded-full bg-[#B7F36B]/45 uppa-beacon-ring" />
+                <span className="relative text-sm leading-none" aria-hidden="true">
+                  📍
                 </span>
               </div>
             </div>
-            <span className="relative z-10 text-sm leading-none shrink-0" aria-hidden="true">
-              📍
-            </span>
-          </div>
+          )}
+
+          {isTripInTransit && (
+            <div className="space-y-1.5">
+              <div className="relative h-10 flex items-center justify-between px-2.5 rounded-xl bg-[#101114]/90 border border-[#B7F36B]/45 overflow-hidden">
+                {/* Ruta dinámica deslizándose bajo el vehículo */}
+                <div className="absolute inset-x-8 top-1/2 -translate-y-1/2 h-[3px] uppa-road-scroll opacity-90" />
+
+                {/* Origen */}
+                <div className="relative z-10 flex items-center gap-1 bg-[#202329] px-1.5 py-0.5 rounded-md border border-white/15 shrink-0">
+                  <span className="text-[11px]" aria-hidden="true">📍</span>
+                  <span className="text-[9px] font-black text-[#9299A5] uppercase">Inicio</span>
+                </div>
+
+                {/* Vehículo en movimiento continuo hacia Destino */}
+                <div className="relative z-10 flex-1 flex items-center justify-center">
+                  <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#202329]/90 border border-[#B7F36B]/50 shadow-[0_0_12px_rgba(183,243,107,0.3)]">
+                    <span className="uppa-vehicle-cruise text-base leading-none" aria-hidden="true">
+                      {isMoto ? '🛵' : '🚗'}
+                    </span>
+                    <span className="text-[9.5px] font-black uppercase tracking-wider text-[#B7F36B]">
+                      En curso
+                    </span>
+                  </div>
+                </div>
+
+                {/* Destino con pulso */}
+                <div className="relative z-10 flex items-center justify-center w-7 h-7 shrink-0">
+                  <span className="absolute inset-0 rounded-full bg-[#B7F36B]/45 uppa-beacon-ring" />
+                  <span className="relative z-10 w-6 h-6 rounded-lg bg-[#B7F36B] text-[#101114] flex items-center justify-center">
+                    <Flag className="w-3.5 h-3.5 stroke-[2.5]" />
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between gap-2 text-[10px] text-[#9299A5] px-0.5">
+                <span className="truncate">
+                  <strong className="text-white">Origen:</strong> {solicitud.origen}
+                </span>
+                <span className="truncate text-right text-[#FFF19A]">
+                  <strong>Destino:</strong> {solicitud.destino}
+                </span>
+              </div>
+
+              <p className="text-[10px] text-[#B7F36B]/95 font-semibold leading-tight">
+                {isDriverViewer
+                  ? 'El viaje permanece activo en pantalla hasta que presiones "FINALIZAR Y PASAR A DESOCUPADO".'
+                  : 'Tu viaje está en transcurso y permanecerá activo hasta que el chofer finalice el traslado.'}
+              </p>
+            </div>
+          )}
         </div>
       )}
 
@@ -446,11 +619,11 @@ export const ActiveRideGlassWidget: React.FC<ActiveRideGlassWidgetProps> = ({
           {PROGRESS_STEPS.map((step, idx) => {
             const isCompleted =
               idx < currentStepIndex ||
-              (idx === 4 && Boolean(solicitud.gpsActivadoChofer)) ||
+              (idx === 4 && (Boolean(solicitud.gpsActivadoChofer) || Boolean(solicitud.codigoValidado))) ||
               (idx === 5 && solicitud.estado === 'completado');
             const isCurrent =
               idx === currentStepIndex &&
-              !(idx === 4 && Boolean(solicitud.gpsActivadoChofer)) &&
+              !(idx === 4 && (Boolean(solicitud.gpsActivadoChofer) || Boolean(solicitud.codigoValidado))) &&
               !(idx === 5 && solicitud.estado === 'completado');
             return (
               <div

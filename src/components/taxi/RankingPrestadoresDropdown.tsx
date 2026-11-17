@@ -80,9 +80,9 @@ export const RankingPrestadoresDropdown: React.FC<RankingPrestadoresDropdownProp
 
       {isOpen && (
         <div
-          className={`absolute ${
-            placement === 'top' ? 'bottom-full mb-2' : 'top-full mt-2'
-          } left-1/2 -translate-x-1/2 sm:left-auto sm:right-0 sm:translate-x-0 w-80 sm:w-96 max-h-[70vh] rounded-3xl bg-[#202329] border-2 border-[#FFF19A]/45 shadow-[0_8px_0_rgba(0,0,0,0.65)] p-4 z-50 flex flex-col text-white animate-in fade-in zoom-in-95 duration-200`}
+          className={`fixed bottom-28 left-1/2 -translate-x-1/2 sm:absolute sm:bottom-auto ${
+            placement === 'top' ? 'sm:bottom-full sm:mb-2' : 'sm:top-full sm:mt-2'
+          } sm:left-auto sm:right-0 sm:translate-x-0 w-[calc(100vw-1.5rem)] max-w-sm sm:w-96 max-h-[70vh] rounded-3xl bg-[#202329] border-2 border-[#FFF19A]/45 shadow-[0_8px_0_rgba(0,0,0,0.65)] p-4 z-50 flex flex-col text-white animate-in fade-in zoom-in-95 duration-200`}
         >
           <div className="flex items-center justify-between pb-3 border-b border-white/10 shrink-0">
             <div className="flex items-center gap-2.5">

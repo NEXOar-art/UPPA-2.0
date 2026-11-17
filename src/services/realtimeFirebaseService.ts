@@ -2093,13 +2093,15 @@ export async function actualizarEstadoSolicitud(
  */
 export async function finalizarViajeDeChofer(
   choferId: string,
-  choferNombre?: string
+  choferNombre?: string,
+  solicitudId?: string
 ): Promise<{ finishedCount: number; finishedIds: string[] }> {
   const cached = getCached<SolicitudTransporteFirestore[]>('solicitudes', MOCK_INITIAL_SOLICITUDES);
   const normChoferNombre = choferNombre ? choferNombre.toLowerCase().trim() : '';
 
-  // Buscar solicitudes activas aceptadas asignadas a este chofer
+  // Buscar solicitudes activas aceptadas asignadas a este chofer (o por ID explícito)
   const matching = cached.filter((s) => {
+    if (solicitudId && s.id === solicitudId && s.estado !== 'completado') return true;
     if (s.estado !== 'aceptado' && s.estado !== 'en_camino') return false;
     if (choferId && s.choferId === choferId) return true;
     if (normChoferNombre && s.choferNombre && s.choferNombre.toLowerCase().trim() === normChoferNombre) return true;
@@ -2125,34 +2127,43 @@ export async function finalizarViajeDeChofer(
   });
   setCached('solicitudes', updatedList);
 
+  const targetIds = new Set<string>(matching.map((m) => m.id));
+  if (solicitudId) {
+    targetIds.add(solicitudId);
+    if (!finishedIds.includes(solicitudId)) {
+      finishedIds.push(solicitudId);
+    }
+  }
+
   // Broadcast y persistencia para cada solicitud completada
-  for (const item of matching) {
+  for (const targetId of targetIds) {
+    const item = matching.find((m) => m.id === targetId);
     try {
       solicitudesBroadcastChannel?.postMessage({
         type: 'UPDATE_SOLICITUD',
-        solicitudId: item.id,
+        solicitudId: targetId,
         patch,
       });
     } catch {}
 
     triggerInAppPushNotification(
       '🏁 ¡Viaje Completado!',
-      `${item.choferNombre || 'El chofer'} ha finalizado el viaje con éxito.`,
+      `${item?.choferNombre || choferNombre || 'El chofer'} ha finalizado el viaje con éxito.`,
       'transporte',
-      { solicitudId: item.id, choferId }
+      { solicitudId: targetId, choferId }
     );
 
     try {
       await ensureFirebaseAuthSession();
-      const docRef = doc(db, COL_SOLICITUDES, item.id);
+      const docRef = doc(db, COL_SOLICITUDES, targetId);
       await updateDoc(docRef, {
         ...patch,
         actualizadoEn: serverTimestamp(),
       });
-      notifyFirestoreSyncHealthy(`${COL_SOLICITUDES}/${item.id}`);
+      notifyFirestoreSyncHealthy(`${COL_SOLICITUDES}/${targetId}`);
     } catch (err) {
       console.warn('Firestore finalizarViajeDeChofer resilient mode:', err);
-      reportFirestorePermissionIssue(err, OperationType.UPDATE, `${COL_SOLICITUDES}/${item.id}`);
+      reportFirestorePermissionIssue(err, OperationType.UPDATE, `${COL_SOLICITUDES}/${targetId}`);
     }
   }
 
@@ -2171,7 +2182,7 @@ export async function finalizarViajeDeChofer(
   if (choferId) setDriverDisponibilidad(choferId, 'desocupado');
   if (choferNombre) setDriverDisponibilidad(choferNombre, 'desocupado');
 
-  return { finishedCount: matching.length, finishedIds };
+  return { finishedCount: targetIds.size, finishedIds };
 }
 
 // ---------------------------------------------------------------------------

@@ -14,7 +14,6 @@ import {
   MapPin,
   ExternalLink,
   Sparkles,
-  MoreVertical,
   Activity,
   Layers,
   Minimize2,
@@ -50,7 +49,6 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
   const [isExpanded, setIsExpanded] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedZone, setSelectedZone] = useState<string>('all');
-  const [isRankingDropdownOpen, setIsRankingDropdownOpen] = useState(false);
   const [isMapFreeMode, setIsMapFreeMode] = useState(false);
 
   useEffect(() => {
@@ -190,6 +188,12 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
             <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-[#B7F36B] border border-[#101114] animate-pulse" />
           </motion.button>
         )}
+
+        <RankingPrestadoresDropdown
+          placement="top"
+          onOpenTaxiTab={onOpenTaxis}
+          triggerButtonClassName="w-8 h-8 rounded-full uppa-glass-ios border border-white/25 hover:border-[#FFF19A] hover:shadow-[0_0_10px_rgba(255,241,154,0.45)] text-[#FFF19A] flex items-center justify-center cursor-pointer transition-colors"
+        />
       </div>
     );
   }
@@ -202,7 +206,7 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
         transition: dragOffsetY === 0 ? 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)' : 'none',
       }}
     >
-      <div className="uppa-glass-ios rounded-t-3xl sm:rounded-3xl overflow-hidden transition-all duration-300">
+      <div className="uppa-glass-ios rounded-t-3xl sm:rounded-3xl overflow-visible transition-all duration-300">
         {/* Barra superior de agarre */}
         <div
           onPointerDown={handlePointerDown}
@@ -210,7 +214,7 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
           onPointerUp={handlePointerUp}
           onPointerCancel={handlePointerCancel}
           style={{ touchAction: 'none' }}
-          className="w-full pt-2.5 pb-1 flex flex-col items-center justify-center cursor-grab active:cursor-grabbing hover:bg-white/[0.03] transition-colors select-none group"
+          className="w-full pt-2.5 pb-1 rounded-t-3xl flex flex-col items-center justify-center cursor-grab active:cursor-grabbing hover:bg-white/[0.03] transition-colors select-none group"
           title={
             isExpanded
               ? 'Tocar para contraer · Arrastrar hacia abajo para ocultar el panel'
@@ -255,6 +259,12 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
                 <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-[#B7F36B] border border-[#101114] animate-pulse" />
               </motion.button>
             )}
+
+            <RankingPrestadoresDropdown
+              placement="top"
+              onOpenTaxiTab={onOpenTaxis}
+              triggerButtonClassName="w-8 h-8 rounded-full uppa-glass-ios border border-white/25 hover:border-[#FFF19A] hover:shadow-[0_0_10px_rgba(255,241,154,0.45)] text-[#FFF19A] flex items-center justify-center transition-all cursor-pointer"
+            />
 
             <motion.button
               type="button"
@@ -330,55 +340,39 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
               </div>
             </motion.button>
 
-            {/* Card 2: Taxi & Motos con Ranking */}
-            <motion.div
+            {/* Card 2: Taxi & Motos */}
+            <motion.button
+              type="button"
               whileHover={{ y: -2, scale: 1.015 }}
+              whileTap={{ scale: 0.96 }}
               transition={{ type: 'spring', stiffness: 420, damping: 24 }}
-              className="relative min-h-[76px] p-2.5 rounded-2xl bg-[#101114] hover:border-[#B7F36B] border-2 border-[#B7F36B]/40 text-left transition-colors group flex flex-col justify-between"
+              onClick={() => {
+                playMicroSound('ui_tap');
+                onOpenTaxis();
+              }}
+              title="Ver prestadores habilitados en Taxis & Motos"
+              className="min-h-[76px] p-2.5 rounded-2xl bg-[#101114] hover:border-[#B7F36B] border-2 border-[#B7F36B]/40 text-left transition-colors group cursor-pointer flex flex-col justify-between"
             >
               <div className="flex items-center justify-between mb-1.5">
-                <motion.button
-                  type="button"
-                  whileTap={{ scale: 0.92 }}
-                  onClick={() => {
-                    playMicroSound('ui_tap');
-                    onOpenTaxis();
-                  }}
-                  className="w-8 h-8 rounded-xl bg-[#B7F36B] text-[#101114] flex items-center justify-center cursor-pointer"
-                  title="Abrir sección Taxis & Motos"
-                >
+                <div className="w-8 h-8 rounded-xl bg-[#B7F36B] text-[#101114] flex items-center justify-center">
                   <div className="flex items-center -space-x-1">
                     <Bike className="w-3.5 h-3.5" />
                     <Car className="w-3.5 h-3.5" />
                   </div>
-                </motion.button>
-
-                <RankingPrestadoresDropdown
-                  isOpen={isRankingDropdownOpen}
-                  onClose={() => setIsRankingDropdownOpen(false)}
-                  onOpenTaxiTab={onOpenTaxis}
-                  placement="top"
-                  triggerButtonClassName="w-7 h-7 rounded-lg bg-[#202329] hover:border-[#FFF19A] border border-white/15 text-[#FFF19A] flex items-center justify-center transition-all cursor-pointer"
-                />
+                </div>
+                <span className="px-1.5 py-0.5 rounded text-[8.5px] font-black uppercase tracking-wider bg-[#B7F36B]/15 text-[#B7F36B] border border-[#B7F36B]/40">
+                  En vivo
+                </span>
               </div>
-
-              <button
-                type="button"
-                onClick={() => {
-                  playMicroSound('ui_tap');
-                  onOpenTaxis();
-                }}
-                title="Ver prestadores habilitados en Taxis & Motos"
-                className="text-left w-full cursor-pointer"
-              >
+              <div>
                 <span className="text-[11px] sm:text-xs font-black text-white block leading-tight group-hover:text-[#B7F36B]">
                   Taxi & Motos
                 </span>
                 <span className="text-[9.5px] text-[#9299A5] block mt-0.5 truncate">
                   Prestadores en vivo
                 </span>
-              </button>
-            </motion.div>
+              </div>
+            </motion.button>
 
             {/* Card 3: Prestar Servicio */}
             <motion.button

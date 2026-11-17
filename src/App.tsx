@@ -48,7 +48,6 @@ import { TicketConsultaModal } from './components/common/TicketConsultaModal';
 import { ActiveRideGlassWidget } from './components/common/ActiveRideGlassWidget';
 import { SectionInfoSheetModal, AppSectionId } from './components/common/SectionInfoSheetModal';
 import { ShareQrModal } from './components/common/ShareQrModal';
-import { RankingPrestadoresDropdown } from './components/taxi/RankingPrestadoresDropdown';
 import { Linea228Stop } from './data/linea228Stops';
 import { useAuth } from './context/AuthContext';
 import { playMicroSound } from './utils/soundEffects';
@@ -63,7 +62,6 @@ import {
   subscribeToChat,
   subscribeToSolicitudesTransporte,
   isSolicitudExpired,
-  isSolicitudAceptadaExpired,
   onPushNotification,
   triggerInAppPushNotification,
   crearReporte,
@@ -1476,7 +1474,7 @@ export default function App() {
       if (sol.estado === 'cancelado' || sol.estado === 'expirada' || sol.estado === 'anulado' || sol.estado === 'completado') {
         return false;
       }
-      if (isSolicitudExpired(sol, now) || isSolicitudAceptadaExpired(sol, now)) return false;
+      if (isSolicitudExpired(sol, now)) return false;
       // Tarjeta de viaje activo exclusiva para el pasajero que creó el viaje
       const isMyPassengerRide =
         (currentUser.id && sol.pasajeroId === currentUser.id) ||
@@ -2739,46 +2737,33 @@ export default function App() {
             </span>
           </button>
 
-          {/* Tab 4: Taxi & Motos con acceso al Ranking de Prestadores */}
-          <div className="relative flex-[1.2] min-w-0 flex items-center justify-center">
-            <button
-              onClick={() => {
-                playMicroSound('ui_tap');
-                setActiveTab('taxi');
-              }}
-              title="Ir a Taxis & Motos para pedir o ver prestadores habilitados"
-              className={`min-h-[48px] py-1 px-0.5 sm:px-1 rounded-xl flex flex-col items-center justify-center transition-all cursor-pointer flex-1 min-w-0 group active:scale-95 ${
+          {/* Tab 4: Taxi & Motos */}
+          <button
+            onClick={() => {
+              playMicroSound('ui_tap');
+              setActiveTab('taxi');
+            }}
+            title="Ir a Taxis & Motos para pedir o ver prestadores habilitados"
+            className={`flex-1 min-w-0 min-h-[48px] py-1 px-0.5 sm:px-1 rounded-xl flex flex-col items-center justify-center transition-all cursor-pointer group active:scale-95 ${
+              activeTab === 'taxi'
+                ? 'text-[#B7F36B] font-black'
+                : 'text-[#9299A5] hover:text-white'
+            }`}
+          >
+            <div
+              className={`p-1.5 rounded-lg transition-all flex items-center -space-x-1 border ${
                 activeTab === 'taxi'
-                  ? 'text-[#B7F36B] font-black'
-                  : 'text-[#9299A5] hover:text-white'
+                  ? 'bg-[#B7F36B] border-[#B7F36B] text-[#101114] shadow-[0_0_10px_rgba(183,243,107,0.35)]'
+                  : 'bg-[#202329] border-white/20 text-[#9299A5] group-hover:text-[#FFF19A] group-hover:border-[#FFF19A] group-hover:shadow-[0_0_10px_rgba(255,241,154,0.45)]'
               }`}
             >
-              <div
-                className={`p-1.5 rounded-lg transition-all flex items-center -space-x-1 border ${
-                  activeTab === 'taxi'
-                    ? 'bg-[#B7F36B] border-[#B7F36B] text-[#101114] shadow-[0_0_10px_rgba(183,243,107,0.35)]'
-                    : 'bg-[#202329] border-white/20 text-[#9299A5] group-hover:text-[#FFF19A] group-hover:border-[#FFF19A] group-hover:shadow-[0_0_10px_rgba(255,241,154,0.45)]'
-                }`}
-              >
-                <Bike className="w-3.5 h-3.5" />
-                <Car className="w-3.5 h-3.5" />
-              </div>
-              <span className="text-[9.5px] tracking-tight mt-0.5 font-bold whitespace-nowrap">
-                Taxi & Motos
-              </span>
-            </button>
-
-            <div className="absolute right-0 top-1">
-              <RankingPrestadoresDropdown
-                placement="top"
-                onOpenTaxiTab={() => {
-                  playMicroSound('ui_tap');
-                  setActiveTab('taxi');
-                }}
-                triggerButtonClassName="w-5 h-5 rounded-md bg-[#202329] hover:border-[#FFF19A] hover:shadow-[0_0_10px_rgba(255,241,154,0.45)] border border-white/20 text-[#FFF19A] flex items-center justify-center transition-all cursor-pointer"
-              />
+              <Bike className="w-3.5 h-3.5" />
+              <Car className="w-3.5 h-3.5" />
             </div>
-          </div>
+            <span className="text-[9.5px] sm:text-[10px] tracking-tight mt-0.5 font-bold whitespace-nowrap">
+              Taxi &amp; Motos
+            </span>
+          </button>
 
           {/* Tab 5: Chat Comunitario */}
           <button
