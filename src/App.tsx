@@ -47,6 +47,7 @@ import { MobilityBottomSheet } from './components/common/MobilityBottomSheet';
 import { TicketConsultaModal } from './components/common/TicketConsultaModal';
 import { ActiveRideGlassWidget } from './components/common/ActiveRideGlassWidget';
 import { SectionInfoSheetModal, AppSectionId } from './components/common/SectionInfoSheetModal';
+import { ShareQrModal } from './components/common/ShareQrModal';
 import { RankingPrestadoresDropdown } from './components/taxi/RankingPrestadoresDropdown';
 import { Linea228Stop } from './data/linea228Stops';
 import { useAuth } from './context/AuthContext';
@@ -105,6 +106,7 @@ import {
   Ticket,
   Info,
   AlertTriangle,
+  QrCode,
 } from 'lucide-react';
 
 function GlobalHoverTooltip() {
@@ -215,6 +217,7 @@ export default function App() {
 
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isTicketModalOpen, setIsTicketModalOpen] = useState(false);
+  const [isShareQrModalOpen, setIsShareQrModalOpen] = useState(false);
   const [sectionInfoModal, setSectionInfoModal] = useState<AppSectionId | null>(null);
   const [showSplash, setShowSplash] = useState(true);
   const [firestorePermissionAlert, setFirestorePermissionAlert] = useState<{
@@ -2452,7 +2455,7 @@ export default function App() {
 
       {/* Barra de Navegación Inferior — Android-First Tap Targets */}
       <nav className="shrink-0 bg-[#101114] border-t-2 border-white/15 px-1 py-1.5 z-40 safe-area-pb">
-        <div className="max-w-2xl mx-auto grid grid-cols-7 gap-0.5 sm:gap-1">
+        <div className="max-w-2xl mx-auto flex items-center justify-between gap-0.5 sm:gap-1">
           {/* Tab 1: Mapa */}
           <button
             onClick={() => {
@@ -2460,7 +2463,7 @@ export default function App() {
               setActiveTab('map');
             }}
             title="Ver mapa en vivo, recorridos y colectivos"
-            className={`min-h-[48px] py-1 px-1 rounded-xl flex flex-col items-center justify-center transition-all cursor-pointer group active:scale-95 ${
+            className={`flex-1 min-w-0 min-h-[48px] py-1 px-0.5 sm:px-1 rounded-xl flex flex-col items-center justify-center transition-all cursor-pointer group active:scale-95 ${
               activeTab === 'map'
                 ? 'text-[#FFF19A] font-black'
                 : 'text-[#9299A5] hover:text-white'
@@ -2490,13 +2493,13 @@ export default function App() {
                 showToast('Centrando en tu ubicación GPS');
               }
             }}
-            className="min-h-[48px] py-1 px-1 rounded-xl flex flex-col items-center justify-center transition-all cursor-pointer text-[#9299A5] hover:text-white group active:scale-95"
+            className="flex-1 min-w-0 min-h-[48px] py-1 px-0.5 sm:px-1 rounded-xl flex flex-col items-center justify-center transition-all cursor-pointer text-[#9299A5] hover:text-white group active:scale-95"
             title="Centrar el mapa en mi ubicación GPS actual"
           >
             <div className="p-1.5 rounded-lg bg-[#202329] border border-white/20 group-hover:border-[#FFF19A] group-hover:shadow-[0_0_10px_rgba(255,241,154,0.45)] text-[#B7F36B] transition-all">
               <Navigation className="w-4 h-4" />
             </div>
-            <span className="text-[9.5px] tracking-tight mt-0.5 font-bold whitespace-nowrap text-[#9299A5] group-hover:text-white">
+            <span className="text-[9px] sm:text-[9.5px] tracking-tight mt-0.5 font-bold whitespace-nowrap text-[#9299A5] group-hover:text-white">
               Mi ubicacion
             </span>
           </button>
@@ -2509,26 +2512,26 @@ export default function App() {
               window.dispatchEvent(new CustomEvent('uppa-map-fit-route'));
               showToast('Enfocando traza completa Malvinas ↔ Zárate');
             }}
-            className="min-h-[48px] py-1 px-1 rounded-xl flex flex-col items-center justify-center transition-all cursor-pointer text-[#9299A5] hover:text-white group active:scale-95"
+            className="flex-1 min-w-0 min-h-[48px] py-1 px-0.5 sm:px-1 rounded-xl flex flex-col items-center justify-center transition-all cursor-pointer text-[#9299A5] hover:text-white group active:scale-95"
             title="Enfocar el recorrido completo en el mapa"
           >
             <div className="p-1.5 rounded-lg bg-[#202329] border border-white/20 group-hover:border-[#FFF19A] group-hover:shadow-[0_0_10px_rgba(255,241,154,0.45)] text-white group-hover:text-[#FFF19A] transition-all">
               <Maximize2 className="w-4 h-4" />
             </div>
-            <span className="text-[10px] tracking-tight mt-0.5 font-bold whitespace-nowrap text-[#9299A5] group-hover:text-white">
+            <span className="text-[9.5px] sm:text-[10px] tracking-tight mt-0.5 font-bold whitespace-nowrap text-[#9299A5] group-hover:text-white">
               Enfocar
             </span>
           </button>
 
           {/* Tab 4: Taxi & Motos con acceso al Ranking de Prestadores */}
-          <div className="relative flex items-center justify-center">
+          <div className="relative flex-[1.2] min-w-0 flex items-center justify-center">
             <button
               onClick={() => {
                 playMicroSound('ui_tap');
                 setActiveTab('taxi');
               }}
               title="Ir a Taxis & Motos para pedir o ver prestadores habilitados"
-              className={`min-h-[48px] py-1 px-1 rounded-xl flex flex-col items-center justify-center transition-all cursor-pointer flex-1 group active:scale-95 ${
+              className={`min-h-[48px] py-1 px-0.5 sm:px-1 rounded-xl flex flex-col items-center justify-center transition-all cursor-pointer flex-1 min-w-0 group active:scale-95 ${
                 activeTab === 'taxi'
                   ? 'text-[#B7F36B] font-black'
                   : 'text-[#9299A5] hover:text-white'
@@ -2568,7 +2571,7 @@ export default function App() {
               setActiveTab('chat');
             }}
             title="Abrir el chat comunitario de pasajeros y prestadores"
-            className={`min-h-[48px] py-1 px-1 rounded-xl flex flex-col items-center justify-center transition-all cursor-pointer relative group active:scale-95 ${
+            className={`flex-1 min-w-0 min-h-[48px] py-1 px-0.5 sm:px-1 rounded-xl flex flex-col items-center justify-center transition-all cursor-pointer relative group active:scale-95 ${
               activeTab === 'chat'
                 ? 'text-[#FFF19A] font-black'
                 : 'text-[#9299A5] hover:text-white'
@@ -2588,7 +2591,7 @@ export default function App() {
                 </span>
               )}
             </div>
-            <span className="text-[10px] tracking-tight mt-0.5 font-bold">Chat</span>
+            <span className="text-[9.5px] sm:text-[10px] tracking-tight mt-0.5 font-bold">Chat</span>
           </button>
 
           {/* Tab 6: Ticket de consulta */}
@@ -2600,7 +2603,7 @@ export default function App() {
             }}
             title="Ticket de consulta"
             aria-label="Ticket de consulta"
-            className={`min-h-[48px] py-1 px-0.5 rounded-xl flex flex-col items-center justify-center transition-all cursor-pointer group active:scale-95 ${
+            className={`flex-1 min-w-0 min-h-[48px] py-1 px-0.5 rounded-xl flex flex-col items-center justify-center transition-all cursor-pointer group active:scale-95 ${
               isTicketModalOpen
                 ? 'text-[#FFF19A] font-black'
                 : 'text-[#9299A5] hover:text-white'
@@ -2615,7 +2618,29 @@ export default function App() {
             >
               <Ticket className="w-4 h-4" />
             </div>
-            <span className="text-[10px] tracking-tight mt-0.5 font-bold whitespace-nowrap">Ticket</span>
+            <span className="text-[9.5px] sm:text-[10px] tracking-tight mt-0.5 font-bold whitespace-nowrap">Ticket</span>
+          </button>
+
+          {/* Botón Compartir QR (solo icono, sin texto, entre Ticket y Admin) */}
+          <button
+            type="button"
+            onClick={() => {
+              playMicroSound('ui_tap');
+              setIsShareQrModalOpen(true);
+            }}
+            title="Compartir App UPPA con código QR"
+            aria-label="Compartir App UPPA con código QR"
+            className="shrink-0 min-h-[48px] px-1 sm:px-1.5 rounded-xl flex items-center justify-center transition-all cursor-pointer group active:scale-95"
+          >
+            <div
+              className={`p-2 rounded-xl transition-all border ${
+                isShareQrModalOpen
+                  ? 'bg-[#B7F36B] border-[#B7F36B] text-[#101114] shadow-[0_0_12px_rgba(183,243,107,0.45)]'
+                  : 'bg-[#202329] border-[#B7F36B]/45 text-[#B7F36B] group-hover:border-[#B7F36B] group-hover:shadow-[0_0_12px_rgba(183,243,107,0.45)]'
+              }`}
+            >
+              <QrCode className="w-5 h-5" />
+            </div>
           </button>
 
           {/* Tab 7: Admin */}
@@ -2625,7 +2650,7 @@ export default function App() {
               setActiveTab('admin');
             }}
             title="Abrir el panel de Administración UPPA"
-            className={`min-h-[48px] py-1 px-0.5 rounded-xl flex flex-col items-center justify-center transition-all cursor-pointer group active:scale-95 ${
+            className={`flex-1 min-w-0 min-h-[48px] py-1 px-0.5 rounded-xl flex flex-col items-center justify-center transition-all cursor-pointer group active:scale-95 ${
               activeTab === 'admin'
                 ? 'text-[#FFF19A] font-black'
                 : 'text-[#9299A5] hover:text-white'
@@ -2640,7 +2665,7 @@ export default function App() {
             >
               <Shield className="w-4 h-4" />
             </div>
-            <span className="text-[10px] tracking-tight mt-0.5 font-bold whitespace-nowrap">Admin</span>
+            <span className="text-[9.5px] sm:text-[10px] tracking-tight mt-0.5 font-bold whitespace-nowrap">Admin</span>
           </button>
         </div>
       </nav>
@@ -2732,6 +2757,12 @@ export default function App() {
         isOpen={Boolean(sectionInfoModal)}
         initialSection={sectionInfoModal || 'map'}
         onClose={() => setSectionInfoModal(null)}
+      />
+
+      <ShareQrModal
+        isOpen={isShareQrModalOpen}
+        onClose={() => setIsShareQrModalOpen(false)}
+        onCopied={(msg) => showToast(msg)}
       />
 
       <AuthModal

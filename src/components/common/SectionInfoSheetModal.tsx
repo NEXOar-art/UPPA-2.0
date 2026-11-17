@@ -67,9 +67,9 @@ const SECTIONS: SectionConfig[] = [
         icon: <Navigation className="w-4 h-4 text-[#FFF19A]" />,
       },
       {
-        title: 'Panel Inferior y Viaje Activo (4s)',
+        title: 'Panel Inferior, QR Compartir y Viaje Activo (4s)',
         description:
-          'Accedé rápido a Pedir Transporte, Taxis & Motos, Chat o Ticket de consulta. Al iniciar un pedido, tu tarjeta de progreso aparece 4 segundos para despejar el mapa.',
+          'Accedé rápido a Pedir Transporte, Taxis & Motos, Chat, Ticket, compartir la app con el ícono QR (entre Ticket y Admin) o Admin. Al iniciar un pedido, tu tarjeta de progreso aparece 4 segundos para despejar el mapa.',
         icon: <Clock className="w-4 h-4 text-[#B7F36B]" />,
       },
       {
