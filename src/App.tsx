@@ -427,28 +427,30 @@ export default function App() {
     );
   }, [habilitacionesList, currentUser]);
 
-  // Verificar si el usuario es prestador de servicio (chofer registrado o con solicitud de servicio)
+  // Verificar si el usuario es prestador de servicio (habilitado por Admin, sesión activa o rol chofer)
   const isDriverUser = useMemo(() => {
-    // Si el usuario es pasajero o administrador, NUNCA debe ver herramientas de conductor
-    if (
-      currentUser.role === 'passenger' ||
-      currentUser.role === 'admin' ||
-      currentUser.rol === 'pasajero' ||
-      currentUser.rol === 'administrador'
-    ) {
-      if (!currentUser.esChofer && currentUser.rol !== 'chofer_moto' && currentUser.rol !== 'chofer_auto') {
-        return false;
-      }
+    // Administradores exclusivos no usan herramientas de chofer salvo habilitación explícita de conductor
+    if (currentUser.role === 'admin' || currentUser.rol === 'administrador') {
+      return false;
     }
+    const now = Date.now();
+    const hasActiveAdminHabilitacion = Boolean(
+      userHabilitacionRecord &&
+        userHabilitacionRecord.estado === 'activo' &&
+        (userHabilitacionRecord.activadoConClaveAdmin || userHabilitacionRecord.habilitadoPor) &&
+        (!userHabilitacionRecord.endsAt || userHabilitacionRecord.endsAt > now)
+    );
+    const hasActiveSession = Boolean(
+      driverSession && driverSession.endsAt > now && driverSession.activationCode
+    );
     const hasDriverRole = Boolean(
       currentUser.esChofer ||
-      currentUser.rol === 'chofer_moto' ||
-      currentUser.rol === 'chofer_auto' ||
-      currentUser.role === 'driver'
+        currentUser.rol === 'chofer_moto' ||
+        currentUser.rol === 'chofer_auto' ||
+        currentUser.role === 'driver'
     );
-    const hasDriverHabilitacion = Boolean(userHabilitacionRecord && userHabilitacionRecord.estado === 'activo');
-    return hasDriverRole && hasDriverHabilitacion;
-  }, [currentUser, userHabilitacionRecord]);
+    return hasActiveAdminHabilitacion || hasActiveSession || (hasDriverRole && Boolean(userHabilitacionRecord && userHabilitacionRecord.estado === 'activo'));
+  }, [currentUser, userHabilitacionRecord, driverSession]);
 
   // HABILITADO POR EL ADMINISTRADOR:
   // Condición lógica indispensable: Solo aparece como habilitado cuando el Administrador
@@ -2422,7 +2424,7 @@ export default function App() {
             currentUserId={currentUser.id}
             currentUserName={currentUser.name}
             currentUserPhone={currentUser.phone}
-            currentUserRole={currentUser.role}
+            currentUserRole={isDriverHabilitado ? 'driver' : currentUser.role}
             isDriverHabilitado={isDriverHabilitado}
             userLocation={userLocation}
             onOpenInfo={() => setSectionInfoModal('taxi')}

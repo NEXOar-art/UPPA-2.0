@@ -88,10 +88,16 @@ const SECTIONS: SectionConfig[] = [
     headerIcon: <Car className="w-5 h-5 text-[#B7F36B]" />,
     features: [
       {
+        title: 'Ficha Completa con Logos Auto Taxi y Moto Taxi',
+        description:
+          'Cambiá entre Auto Taxi y Moto Taxi desde los botones superiores, tocá el logo del vehículo para recorrer las unidades activas y consultá patente, confort, cercanía GPS y calificación.',
+        icon: <Car className="w-4 h-4 text-[#B7F36B]" />,
+      },
+      {
         title: 'Solicitudes Solo para Choferes Disponibles',
         description:
-          'Los pedidos de transporte alternativo aparecen únicamente a los choferes habilitados que se encuentren en estado DESOCUPADO, resguardando la privacidad de cada pasajero.',
-        icon: <Car className="w-4 h-4 text-[#B7F36B]" />,
+          'Los prestadores habilitados en estado DESOCUPADO ven en Taxis & Motos las solicitudes de pasajeros con su destino para aceptar el traslado.',
+        icon: <CheckCircle2 className="w-4 h-4 text-[#B7F36B]" />,
       },
       {
         title: 'Código de Viaje para el Pasajero',
@@ -110,12 +116,6 @@ const SECTIONS: SectionConfig[] = [
         description:
           'Una vez finalizado el viaje, el pasajero puede calificar de 1 a 5 estrellas al prestador para el ranking de las últimas 3 horas.',
         icon: <Star className="w-4 h-4 text-[#FFF19A]" />,
-      },
-      {
-        title: 'Estado DESOCUPADO / OCUPADO',
-        description:
-          'Los choferes habilitados aceptan viajes pasando automáticamente a OCUPADO y finalizan el traslado presionando DESOCUPADO para volver a recibir pedidos.',
-        icon: <CheckCircle2 className="w-4 h-4 text-[#B7F36B]" />,
       },
     ],
   },
