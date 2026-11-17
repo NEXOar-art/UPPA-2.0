@@ -130,6 +130,7 @@ export const authService = {
           telefono: partial.phone,
           barrio: partial.barrio,
           rol: partial.rol || partial.role,
+          esChofer: partial.esChofer,
           tipoVehiculo: partial.tipoVehiculo,
         },
       },

@@ -151,21 +151,34 @@ export async function updateUserDocument(
 ): Promise<void> {
   const path = `${USERS_COLLECTION}/${uid}`;
   try {
-    const docRef = doc(db, USERS_COLLECTION, uid);
-    await updateDoc(docRef, { ...partial });
+    const cleanPartial: Record<string, any> = {};
+    (Object.keys(partial) as Array<keyof typeof partial>).forEach((k) => {
+      const val = partial[k];
+      if (val !== undefined) {
+        cleanPartial[k as string] = val;
+      }
+    });
+
+    if (Object.keys(cleanPartial).length > 0) {
+      const docRef = doc(db, USERS_COLLECTION, uid);
+      await setDoc(docRef, cleanPartial, { merge: true });
+    }
 
     // Also sync usuarios collection
     try {
       const docRefU = doc(db, USUARIOS_COLLECTION, uid);
-      const uPatch: any = {};
+      const uPatch: Record<string, any> = {};
       if (partial.nombre !== undefined) uPatch.nombre = partial.nombre;
       if (partial.phone !== undefined) uPatch.telefono = partial.phone;
       if (partial.barrio !== undefined) uPatch.barrio = partial.barrio;
       if (partial.avatarUrl !== undefined) uPatch.fotoPerfil = partial.avatarUrl;
       if (partial.emailVerificado !== undefined) uPatch.emailVerificado = partial.emailVerificado;
       if (partial.rol !== undefined) uPatch.rol = partial.rol;
+      if (partial.esChofer !== undefined) uPatch.esChofer = partial.esChofer;
+      if (partial.tipoVehiculo !== undefined) uPatch.tipoVehiculo = partial.tipoVehiculo;
       if (Object.keys(uPatch).length > 0) {
-        await updateDoc(docRefU, uPatch);
+        uPatch.ultimaConexion = serverTimestamp();
+        await setDoc(docRefU, uPatch, { merge: true });
       }
     } catch (errSync) {
       console.warn('Sync to usuarios collection warning:', errSync);

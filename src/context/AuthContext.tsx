@@ -56,6 +56,7 @@ interface AuthContextType {
   sendVerificationEmail: () => Promise<boolean>;
   reloadAuthUser: () => Promise<boolean>;
   updateProfileData: (data: Partial<User>) => Promise<void>;
+  switchUserRole: (nextRol: 'pasajero' | 'chofer_moto' | 'chofer_auto') => Promise<User | null>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -1010,19 +1011,63 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       user.uid ||
       user.id;
 
-    await authService.updateProfile(user.id || targetFirestoreUid, data).catch(() => {});
-    if (targetFirestoreUid) {
-      await updateUserDocument(targetFirestoreUid, {
-        nombre: data.name || data.nombre,
-        phone: data.phone || data.telefono,
-        barrio: data.barrio,
-        rol: data.rol || data.role,
-      }).catch(() => {});
-    }
-
     const merged: User = { ...user, ...data };
     setUser(merged);
     saveStoredSessionUser(merged);
+
+    await authService.updateProfile(user.id || targetFirestoreUid, merged).catch(() => {});
+    if (targetFirestoreUid) {
+      await updateUserDocument(targetFirestoreUid, {
+        nombre: data.name ?? data.nombre,
+        phone: data.phone ?? data.telefono,
+        barrio: data.barrio,
+        rol: data.rol,
+        esChofer: data.esChofer,
+        tipoVehiculo: data.tipoVehiculo,
+      }).catch(() => {});
+    }
+  };
+
+  const switchUserRole = async (
+    nextRol: 'pasajero' | 'chofer_moto' | 'chofer_auto'
+  ): Promise<User | null> => {
+    if (!user) return null;
+    if (user.role === 'admin' || user.rol === 'administrador') {
+      return user;
+    }
+
+    const isChofer = nextRol === 'chofer_moto' || nextRol === 'chofer_auto';
+    const appRole: 'driver' | 'passenger' = isChofer ? 'driver' : 'passenger';
+    const tipoVehiculo: 'moto' | 'auto' | null =
+      nextRol === 'chofer_moto' ? 'moto' : nextRol === 'chofer_auto' ? 'auto' : null;
+
+    const patch: Partial<User> = {
+      rol: nextRol,
+      role: appRole,
+      esChofer: isChofer,
+      tipoVehiculo,
+    };
+
+    const merged: User = { ...user, ...patch };
+    setUser(merged);
+    saveStoredSessionUser(merged);
+
+    const targetFirestoreUid =
+      (auth.currentUser && !auth.currentUser.isAnonymous ? auth.currentUser.uid : null) ||
+      auth.currentUser?.uid ||
+      user.uid ||
+      user.id;
+
+    authService.updateProfile(user.id || targetFirestoreUid || '', merged).catch(() => {});
+    if (targetFirestoreUid) {
+      updateUserDocument(targetFirestoreUid, {
+        rol: nextRol,
+        esChofer: isChofer,
+        tipoVehiculo,
+      }).catch(() => {});
+    }
+
+    return merged;
   };
 
   const isAuthenticated = Boolean(user);
@@ -1087,6 +1132,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         sendVerificationEmail,
         reloadAuthUser,
         updateProfileData,
+        switchUserRole,
       }}
     >
       {children}

@@ -186,6 +186,7 @@ export default function App() {
     isAdmin: isFirebaseAdmin,
     logout: firebaseLogout,
     isLoading: isAuthLoading,
+    switchUserRole,
   } = useAuth();
 
   // Authentication state - Requerida al inicio para acceder a todas las funcionalidades
@@ -253,6 +254,16 @@ export default function App() {
     };
   }, []);
 
+  // Sobrescritura manual en sesión cuando un usuario habilitado elige operar temporalmente como Pasajero
+  const [manualPasajeroOverride, setManualPasajeroOverride] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('uppa_manual_pasajero_override') === '1';
+    } catch {
+      return false;
+    }
+  });
+  const [isSwitchingRole, setIsSwitchingRole] = useState<boolean>(false);
+
   // Driver Activation Session with paid countdown timer
   const [driverSession, setDriverSession] = useState<ActiveDriverSession | null>(() => getActiveDriverSession());
 
@@ -268,7 +279,9 @@ export default function App() {
   // Sync Firebase Auth session with App state
   useEffect(() => {
     if (authUser) {
-      const isDriverMode = Boolean(driverSession && driverSession.endsAt > Date.now());
+      const explicitPasajero =
+        manualPasajeroOverride || (authUser.rol === 'pasajero' && authUser.esChofer === false);
+      const isDriverMode = !explicitPasajero && Boolean(driverSession && driverSession.endsAt > Date.now());
       const computedRole = mapFirestoreRolToAppRole(authUser.rol, Boolean(authUser.esChofer || isDriverMode));
       const synchedUser: User = {
         ...currentUser,
@@ -280,7 +293,15 @@ export default function App() {
         role: computedRole,
         rol: authUser.rol,
         esChofer: authUser.esChofer || computedRole === 'driver',
-        tipoVehiculo: authUser.tipoVehiculo ?? currentUser.tipoVehiculo ?? (authUser.rol === 'chofer_moto' ? 'moto' : authUser.rol === 'chofer_auto' ? 'auto' : null),
+        tipoVehiculo:
+          authUser.rol === 'pasajero'
+            ? null
+            : authUser.tipoVehiculo ??
+              (authUser.rol === 'chofer_moto'
+                ? 'moto'
+                : authUser.rol === 'chofer_auto'
+                ? 'auto'
+                : currentUser.tipoVehiculo ?? null),
         estado: authUser.estado,
         fechaRegistro: authUser.fechaRegistro,
         barrio: authUser.barrio || currentUser.barrio,
@@ -433,6 +454,9 @@ export default function App() {
     if (currentUser.role === 'admin' || currentUser.rol === 'administrador') {
       return false;
     }
+    if (manualPasajeroOverride) {
+      return false;
+    }
     const now = Date.now();
     const hasActiveAdminHabilitacion = Boolean(
       userHabilitacionRecord &&
@@ -449,8 +473,55 @@ export default function App() {
         currentUser.rol === 'chofer_auto' ||
         currentUser.role === 'driver'
     );
-    return hasActiveAdminHabilitacion || hasActiveSession || (hasDriverRole && Boolean(userHabilitacionRecord && userHabilitacionRecord.estado === 'activo'));
-  }, [currentUser, userHabilitacionRecord, driverSession]);
+    return hasDriverRole || hasActiveAdminHabilitacion || hasActiveSession;
+  }, [currentUser, userHabilitacionRecord, driverSession, manualPasajeroOverride]);
+
+  const handleSwitchRoleInSession = async (
+    nextRol: 'pasajero' | 'chofer_moto' | 'chofer_auto'
+  ) => {
+    if (currentUser.role === 'admin' || currentUser.rol === 'administrador' || isSwitchingRole) {
+      return;
+    }
+    const isChofer = nextRol === 'chofer_moto' || nextRol === 'chofer_auto';
+    const tipoVehiculo: 'moto' | 'auto' | null =
+      nextRol === 'chofer_moto' ? 'moto' : nextRol === 'chofer_auto' ? 'auto' : null;
+
+    setIsSwitchingRole(true);
+    try {
+      const nextOverride = nextRol === 'pasajero';
+      setManualPasajeroOverride(nextOverride);
+      try {
+        if (nextOverride) {
+          localStorage.setItem('uppa_manual_pasajero_override', '1');
+        } else {
+          localStorage.removeItem('uppa_manual_pasajero_override');
+        }
+      } catch {}
+
+      const updated = await switchUserRole(nextRol);
+      const nextUser: User = updated || {
+        ...currentUser,
+        rol: nextRol,
+        role: isChofer ? 'driver' : 'passenger',
+        esChofer: isChofer,
+        tipoVehiculo,
+      };
+      setCurrentUser(nextUser);
+      try {
+        localStorage.setItem('uppa_session_user', JSON.stringify(nextUser));
+      } catch {}
+
+      if (isChofer) {
+        setIsHabilitacionCardExpanded(true);
+        const label = nextRol === 'chofer_moto' ? 'Moto Taxi' : 'Auto Taxi';
+        showToast(`Rol cambiado a Prestador (${label}) sin cerrar sesión`);
+      } else {
+        showToast('Rol cambiado a Pasajero sin cerrar sesión');
+      }
+    } finally {
+      setIsSwitchingRole(false);
+    }
+  };
 
   // HABILITADO POR EL ADMINISTRADOR:
   // Condición lógica indispensable: Solo aparece como habilitado cuando el Administrador
@@ -1985,6 +2056,63 @@ export default function App() {
                     </div>
                   </div>
 
+                  {/* Selector Rápido de Rol sin cerrar sesión */}
+                  {currentUser.role !== 'admin' && currentUser.rol !== 'administrador' && (
+                    <div className="p-2.5 rounded-xl bg-[#101114] border border-white/15 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[10.5px] font-black uppercase tracking-wide text-white flex items-center gap-1">
+                          <Zap className="w-3.5 h-3.5 text-[#FFF19A]" />
+                          <span>Cambiar Rol en Sesión</span>
+                        </span>
+                        <span className="text-[9.5px] font-bold text-[#9299A5]">Sin salir</span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-1.5">
+                        <button
+                          type="button"
+                          disabled={isSwitchingRole}
+                          onClick={() => handleSwitchRoleInSession('pasajero')}
+                          title="Operar como Pasajero sin cerrar sesión"
+                          className={`py-2 px-1.5 rounded-lg border text-[10.5px] font-black flex flex-col items-center justify-center gap-0.5 transition-all cursor-pointer disabled:opacity-60 ${
+                            !isDriverUser
+                              ? 'bg-[#FFF19A] text-[#101114] border-[#101114]'
+                              : 'bg-[#202329] text-white border-white/15 hover:border-[#FFF19A]/60'
+                          }`}
+                        >
+                          <UserIcon className="w-3.5 h-3.5" />
+                          <span>Pasajero</span>
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isSwitchingRole}
+                          onClick={() => handleSwitchRoleInSession('chofer_auto')}
+                          title="Cambiar a Prestador de Servicio Auto Taxi sin cerrar sesión"
+                          className={`py-2 px-1.5 rounded-lg border text-[10.5px] font-black flex flex-col items-center justify-center gap-0.5 transition-all cursor-pointer disabled:opacity-60 ${
+                            isDriverUser && currentUser.rol !== 'chofer_moto' && currentUser.tipoVehiculo !== 'moto'
+                              ? 'bg-[#B7F36B] text-[#101114] border-[#101114]'
+                              : 'bg-[#202329] text-white border-white/15 hover:border-[#B7F36B]/60'
+                          }`}
+                        >
+                          <Car className="w-3.5 h-3.5" />
+                          <span>Auto Taxi</span>
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isSwitchingRole}
+                          onClick={() => handleSwitchRoleInSession('chofer_moto')}
+                          title="Cambiar a Prestador de Servicio Moto Taxi sin cerrar sesión"
+                          className={`py-2 px-1.5 rounded-lg border text-[10.5px] font-black flex flex-col items-center justify-center gap-0.5 transition-all cursor-pointer disabled:opacity-60 ${
+                            isDriverUser && (currentUser.rol === 'chofer_moto' || currentUser.tipoVehiculo === 'moto')
+                              ? 'bg-[#B7F36B] text-[#101114] border-[#101114]'
+                              : 'bg-[#202329] text-white border-white/15 hover:border-[#B7F36B]/60'
+                          }`}
+                        >
+                          <Bike className="w-3.5 h-3.5" />
+                          <span>Moto Taxi</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Sección para Prestador Pendiente de Habilitación con Desplegable */}
                   {isDriverUser && !isDriverHabilitado && (
                     <div className="p-3 rounded-xl bg-[#101114] border border-[#FFF19A]/40 space-y-2 text-left">
@@ -2155,11 +2283,13 @@ export default function App() {
                       onClick={async () => {
                         setIsProfileDropdownOpen(false);
                         await firebaseLogout();
+                        setManualPasajeroOverride(false);
                         setCurrentUser(INITIAL_USER);
                         setIsLoggedIn(false);
                         setIsAdminPinUnlocked(false);
                         try {
                           localStorage.removeItem('uppa_session_user');
+                          localStorage.removeItem('uppa_manual_pasajero_override');
                           sessionStorage.removeItem('uppa_admin_unlocked');
                         } catch {}
                         showToast('Sesión cerrada');
@@ -2775,10 +2905,17 @@ export default function App() {
         onSubmit={handlePublishTaxi}
         onActivateDriverSession={(session) => {
           playMicroSound('payment_done');
+          setManualPasajeroOverride(false);
+          try {
+            localStorage.removeItem('uppa_manual_pasajero_override');
+          } catch {}
           setDriverSession(session);
           setCurrentUser((prev) => ({
             ...prev,
             role: 'driver',
+            rol: session.vehicleType === 'moto' ? 'chofer_moto' : 'chofer_auto',
+            esChofer: true,
+            tipoVehiculo: session.vehicleType,
             name: session.driverName,
             phone: session.whatsapp,
           }));
@@ -2844,10 +2981,33 @@ export default function App() {
           setIsPublishTaxiOpen(true);
         }}
         onUpdateUser={(updated) => {
-          const roleChanged = updated.role !== currentUser.role;
+          const roleChanged =
+            updated.role !== currentUser.role || updated.rol !== currentUser.rol;
+          if (updated.rol === 'pasajero' && !updated.esChofer) {
+            setManualPasajeroOverride(true);
+            try {
+              localStorage.setItem('uppa_manual_pasajero_override', '1');
+            } catch {}
+          } else if (
+            updated.esChofer ||
+            updated.rol === 'chofer_moto' ||
+            updated.rol === 'chofer_auto' ||
+            updated.role === 'driver'
+          ) {
+            setManualPasajeroOverride(false);
+            try {
+              localStorage.removeItem('uppa_manual_pasajero_override');
+            } catch {}
+          }
           setCurrentUser(updated);
-          if (roleChanged) setIsLocationModalOpen(true);
-          showToast(`Perfil: ${updated.role}`);
+          if (roleChanged && !userLocation) setIsLocationModalOpen(true);
+          showToast(
+            updated.esChofer || updated.rol?.includes('chofer')
+              ? `Rol activo: Prestador (${updated.tipoVehiculo === 'moto' ? 'Moto Taxi' : 'Auto Taxi'})`
+              : updated.role === 'admin'
+              ? 'Rol activo: Administrador UPPA'
+              : 'Rol activo: Pasajero'
+          );
         }}
       />
 

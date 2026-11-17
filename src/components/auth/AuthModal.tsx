@@ -69,6 +69,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     sendVerificationEmail,
     reloadAuthUser,
     updateProfileData,
+    switchUserRole,
     authError,
     setAuthError,
     authNotice,
@@ -108,6 +109,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [reauthPassword, setReauthPassword] = useState('');
   const [showReauthPassword, setShowReauthPassword] = useState(false);
   const [highlightEmailCard, setHighlightEmailCard] = useState(false);
+  const [isSwitchingRole, setIsSwitchingRole] = useState(false);
   const emailVerificationCardRef = useRef<HTMLDivElement | null>(null);
 
   const [driverDisponibilidad, setDriverDisponibilidadState] = useState<'desocupado' | 'ocupado'>('desocupado');
@@ -197,23 +199,67 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     authUser?.rol || currentUser?.rol || (currentUser?.role === 'admin' ? 'administrador' : 'pasajero');
   const currentEstado = authUser?.estado || currentUser?.estado || 'activo';
   const currentFecha = authUser?.fechaRegistro || currentUser?.fechaRegistro || 'Reciente';
+  const effectiveEsChofer = authUser ? Boolean(authUser.esChofer) : Boolean(currentUser.esChofer);
+  const effectiveAppRole = authUser?.role || currentUser.role;
 
   // Verificación estricta de rol: pasajeros y administradores nunca ven paneles exclusivos de chofer
   const activeDriverSession = getActiveDriverSession();
   const isNonDriverRole =
-    currentUser.role === 'admin' ||
-    currentUser.rol === 'administrador' ||
-    (currentUser.role === 'passenger' && !currentUser.esChofer && !currentUser.rol?.includes('chofer'));
+    effectiveAppRole === 'admin' ||
+    currentRol === 'administrador' ||
+    (currentRol === 'pasajero' && !effectiveEsChofer);
 
   const isDriverUser = Boolean(
     !isNonDriverRole &&
-      (currentUser.esChofer ||
-        currentUser.rol === 'chofer_moto' ||
-        currentUser.rol === 'chofer_auto' ||
-        currentUser.role === 'driver' ||
+      (effectiveEsChofer ||
+        currentRol === 'chofer_moto' ||
+        currentRol === 'chofer_auto' ||
+        effectiveAppRole === 'driver' ||
         Boolean(activeDriverSession) ||
         isHabilitado)
   );
+
+  const handleSelectRoleInProfile = async (
+    nextRol: 'pasajero' | 'chofer_moto' | 'chofer_auto'
+  ) => {
+    const alreadyInTargetMode =
+      nextRol === 'pasajero'
+        ? currentRol === 'pasajero' && !effectiveEsChofer && effectiveAppRole === 'passenger' && !isDriverUser
+        : currentRol === nextRol && effectiveEsChofer && effectiveAppRole === 'driver';
+    if (alreadyInTargetMode || isSwitchingRole) return;
+    setIsSwitchingRole(true);
+    setAuthError(null);
+    setSuccessMessage(null);
+    try {
+      const updated = await switchUserRole(nextRol);
+      const isChofer = nextRol === 'chofer_moto' || nextRol === 'chofer_auto';
+      const tipoVehiculo: 'moto' | 'auto' | null =
+        nextRol === 'chofer_moto' ? 'moto' : nextRol === 'chofer_auto' ? 'auto' : null;
+      const mergedFallback: User = updated || {
+        ...currentUser,
+        rol: nextRol,
+        role: isChofer ? 'driver' : 'passenger',
+        esChofer: isChofer,
+        tipoVehiculo,
+      };
+      onUpdateUser(mergedFallback);
+      if (isChofer && !isHabilitado) {
+        setIsHabilitacionCardExpanded(true);
+      }
+      setSuccessMessage(
+        nextRol === 'pasajero'
+          ? '¡Rol cambiado a Pasajero sin cerrar sesión! Ya estás operando en modo usuario.'
+          : nextRol === 'chofer_moto'
+          ? '¡Rol cambiado a Prestador (Moto Taxi)! Toda la lógica de chofer está activa sin salir de tu cuenta.'
+          : '¡Rol cambiado a Prestador (Auto Taxi)! Toda la lógica de chofer está activa sin salir de tu cuenta.'
+      );
+    } catch (err) {
+      console.error('Error al cambiar rol en Mi Perfil:', err);
+      setAuthError('No se pudo cambiar el rol en este momento. Intentá nuevamente.');
+    } finally {
+      setIsSwitchingRole(false);
+    }
+  };
 
   const handleToggleDriverDisponibilidad = async () => {
     const nextState = driverDisponibilidad === 'ocupado' ? 'desocupado' : 'ocupado';
@@ -1066,6 +1112,76 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       </div>
                     </form>
                   )}
+                </div>
+              )}
+
+              {/* Selector de Cambio de Rol en Sesión (Sin cerrar sesión) */}
+              {currentRol !== 'administrador' && effectiveAppRole !== 'admin' && (
+                <div className="p-4 rounded-2xl border-2 bg-[#101114] border-white/15 text-white space-y-2.5">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <span className="text-xs font-black text-white uppercase tracking-wide flex items-center gap-1.5">
+                      <Zap className="w-4 h-4 text-[#FFF19A]" />
+                      <span>Cambiar Rol (Sin cerrar sesión)</span>
+                    </span>
+                    <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-[#202329] border border-white/15 text-[#FFF19A]">
+                      {currentRol === 'chofer_auto'
+                        ? 'Auto Taxi'
+                        : currentRol === 'chofer_moto'
+                        ? 'Moto Taxi'
+                        : 'Pasajero'}
+                    </span>
+                  </div>
+
+                  <p className="text-[11px] text-[#9299A5] leading-snug">
+                    Elegí cómo querés operar en UPPA en este momento. El cambio se aplica al instante sin salir ni desloguearte.
+                  </p>
+
+                  <div className="grid grid-cols-3 gap-2 pt-0.5">
+                    <button
+                      type="button"
+                      disabled={isSwitchingRole}
+                      onClick={() => handleSelectRoleInProfile('pasajero')}
+                      className={`p-2.5 rounded-xl border-2 text-center flex flex-col items-center justify-center gap-1 transition-all cursor-pointer disabled:opacity-60 ${
+                        currentRol === 'pasajero' || (!currentRol?.includes('chofer') && effectiveAppRole !== 'driver')
+                          ? 'bg-[#FFF19A] text-[#101114] border-[#101114] shadow-[0_0_0_2px_#FFF19A]'
+                          : 'bg-[#202329] text-white border-white/15 hover:border-[#FFF19A]/60'
+                      }`}
+                    >
+                      <UserIcon className="w-4 h-4" />
+                      <span className="text-[11px] font-black leading-tight">Pasajero</span>
+                      <span className="text-[9px] opacity-80 leading-tight">Pedir viajes</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={isSwitchingRole}
+                      onClick={() => handleSelectRoleInProfile('chofer_auto')}
+                      className={`p-2.5 rounded-xl border-2 text-center flex flex-col items-center justify-center gap-1 transition-all cursor-pointer disabled:opacity-60 ${
+                        currentRol === 'chofer_auto'
+                          ? 'bg-[#B7F36B] text-[#101114] border-[#101114] shadow-[0_0_0_2px_#B7F36B]'
+                          : 'bg-[#202329] text-white border-white/15 hover:border-[#B7F36B]/60'
+                      }`}
+                    >
+                      <Car className="w-4 h-4" />
+                      <span className="text-[11px] font-black leading-tight">Prestador Auto</span>
+                      <span className="text-[9px] opacity-80 leading-tight">Auto Taxi</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={isSwitchingRole}
+                      onClick={() => handleSelectRoleInProfile('chofer_moto')}
+                      className={`p-2.5 rounded-xl border-2 text-center flex flex-col items-center justify-center gap-1 transition-all cursor-pointer disabled:opacity-60 ${
+                        currentRol === 'chofer_moto'
+                          ? 'bg-[#B7F36B] text-[#101114] border-[#101114] shadow-[0_0_0_2px_#B7F36B]'
+                          : 'bg-[#202329] text-white border-white/15 hover:border-[#B7F36B]/60'
+                      }`}
+                    >
+                      <Bike className="w-4 h-4" />
+                      <span className="text-[11px] font-black leading-tight">Prestador Moto</span>
+                      <span className="text-[9px] opacity-80 leading-tight">Moto Taxi</span>
+                    </button>
+                  </div>
                 </div>
               )}
 
