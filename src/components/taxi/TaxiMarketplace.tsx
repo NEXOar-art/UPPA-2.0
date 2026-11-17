@@ -623,31 +623,6 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
           </div>
         </div>
 
-        {!isDriverHabilitado &&
-          (currentUserRole === 'driver' ||
-            currentUserRole === 'chofer' ||
-            currentUserRole === 'chofer_auto' ||
-            currentUserRole === 'chofer_moto') && (
-            <div className="mt-3 p-3 rounded-2xl bg-[#101114] border-2 border-[#FFF19A]/45 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
-              <div className="space-y-0.5">
-                <div className="font-black text-[#FFF19A] flex items-center gap-1.5">
-                  <KeyRound className="w-3.5 h-3.5 shrink-0" />
-                  <span>Tu cuenta de Chofer está Pendiente de Habilitación</span>
-                </div>
-                <p className="text-[11px] text-[#9299A5]">
-                  Una vez aprobado por Administración UPPA y en estado DESOCUPADO, verás aquí las solicitudes de pasajeros en vivo.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => onOpenPublishModal('transfer')}
-                className="min-h-[40px] px-3.5 py-2 rounded-xl uppa-cta-yellow font-black text-xs shrink-0 cursor-pointer"
-              >
-                Completar Solicitud de Turno
-              </button>
-            </div>
-          )}
-
         {rideSuccessNotice && (
           <div className="mt-2.5 p-2.5 rounded-xl bg-[#B7F36B]/15 border-2 border-[#B7F36B] text-[#B7F36B] text-xs font-bold flex items-center gap-2 animate-in fade-in">
             <Check className="w-4 h-4 shrink-0" />
