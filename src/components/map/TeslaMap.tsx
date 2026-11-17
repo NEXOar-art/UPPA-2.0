@@ -1,8 +1,17 @@
 import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import { TransitRoute, MapEvent, LiveBus, TaxiListing, BusStop, EventType, SolicitudTransporteFirestore } from '../../types';
-import { UserLocation, getDistanceKm } from '../../utils/geolocation';
+import { UserLocation, getDistanceKm, isCoordinateAddress } from '../../utils/geolocation';
 import { calculateRealBusSpeed } from '../../utils/busSpeedEstimator';
+
+function escapeHtml(raw: unknown): string {
+  return String(raw ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 import {
   playMicroSound,
   startPassengerApproachAlarm,
@@ -1253,7 +1262,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
           className: 'custom-bus-location-marker',
           html: `
             <div class="relative flex flex-col items-center justify-center cursor-pointer group" style="transform: translate(-50%, -50%);">
-              <div class="relative w-9 h-9 rounded-2xl bg-cyan-500 text-white shadow-[0_0_20px_rgba(6,182,212,0.85)] flex items-center justify-center text-lg font-black ring-2 ring-cyan-300 hover:scale-115 transition-transform" title="Ubicación de colectivo ahora (${dirLabel})">
+              <div class="relative w-9 h-9 rounded-2xl bg-cyan-500 text-white shadow-[0_0_20px_rgba(6,182,212,0.85)] flex items-center justify-center text-lg font-black ring-2 ring-cyan-300 hover:scale-115 transition-transform">
                 📍
                 <span class="absolute -bottom-1 -right-1 flex h-3 w-3">
                   <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-80"></span>
@@ -1293,6 +1302,53 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
       }
 
       const marker = L.marker([ev.lat, ev.lng], { icon: eventIcon });
+
+      const badge = getEventBadge(ev.type);
+      const hasResolvedStreet = Boolean(ev.streetAddress && !isCoordinateAddress(ev.streetAddress));
+      const streetText = hasResolvedStreet
+        ? escapeHtml(ev.streetAddress)
+        : 'Obteniendo dirección exacta...';
+      const coordsLabel = `${ev.lat.toFixed(5)}, ${ev.lng.toFixed(5)}`;
+      const safeTitle = escapeHtml(ev.title || 'Evento en ruta');
+      const safeReporter = escapeHtml(ev.reportedBy || 'Vecino UPPA');
+      const safeDesc =
+        ev.description && ev.description.trim() !== ev.title.trim()
+          ? escapeHtml(ev.description.trim())
+          : '';
+      const busMetaHtml =
+        ev.type === 'bus_location'
+          ? `<div style="display:flex;align-items:center;gap:6px;margin-top:4px;font-size:10.5px;font-weight:800;color:#67e8f9;">
+              <span>${ev.direction === 'hacia_zarate' ? '➡️ Hacia Zárate' : '⬅️ Hacia Malvinas'}</span>
+              ${ev.velocidadKmH ? `<span style="color:#B7F36B;">· ${ev.velocidadKmH} km/h</span>` : ''}
+            </div>`
+          : '';
+
+      marker.bindTooltip(
+        `<div style="min-width:185px;max-width:250px;line-height:1.3;">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:4px;">
+            <span style="font-size:11.5px;font-weight:900;color:#FFFFFF;">${badge.icon} ${safeTitle}</span>
+            <span style="background:rgba(183,243,107,0.2);color:#B7F36B;font-family:monospace;font-size:9.5px;font-weight:900;padding:1px 5px;border-radius:6px;border:1px solid rgba(183,243,107,0.45);flex-shrink:0;">+${ev.confirmations}</span>
+          </div>
+          <div style="background:rgba(255,241,154,0.12);border:1px solid rgba(255,241,154,0.35);border-radius:8px;padding:5px 7px;margin-bottom:4px;">
+            <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.05em;color:#9299A5;font-weight:800;">Dirección exacta (GPS)</div>
+            <div style="font-size:11px;font-weight:800;color:#FFF19A;">📍 ${streetText}</div>
+            <div style="font-size:9px;font-family:monospace;color:#9299A5;margin-top:2px;">${coordsLabel}</div>
+          </div>
+          ${busMetaHtml}
+          ${safeDesc ? `<div style="font-size:10.5px;color:#E2E8F0;margin-top:3px;">${safeDesc}</div>` : ''}
+          <div style="margin-top:4px;font-size:9.5px;color:#9299A5;display:flex;justify-content:space-between;gap:6px;">
+            <span>Por <strong style="color:#FFFFFF;">${safeReporter}</strong></span>
+            <span style="color:#FFF19A;font-weight:700;">Clic p/ detalle</span>
+          </div>
+        </div>`,
+        {
+          direction: 'top',
+          offset: [0, ev.type === 'bus_location' ? -22 : -16],
+          opacity: 0.98,
+          className: 'uppa-map-tooltip',
+        }
+      );
+
       marker.on('click', () => {
         onSelectEvent(ev);
       });
@@ -1356,7 +1412,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
               isOcupado
                 ? 'bg-amber-600/30 border-2 border-amber-400 shadow-[0_0_12px_rgba(245,158,11,0.6)]'
                 : 'bg-emerald-600/30 border-2 border-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.6)]'
-            } flex items-center justify-center text-xs hover:scale-115 transition-transform" title="${taxi.driverName} (${isOcupado ? 'Ocupado' : 'Desocupado'} · a ${distStr})">
+            } flex items-center justify-center text-xs hover:scale-115 transition-transform">
               ${isMoto ? '🏍️' : '🚕'}
               <span class="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full ${
                 isOcupado ? 'bg-amber-400 animate-ping' : 'bg-emerald-400 animate-pulse'
@@ -1372,6 +1428,41 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
       });
 
       const marker = L.marker([taxi.lat, taxi.lng], { icon: taxiIcon });
+
+      const safeDriver = escapeHtml(taxi.driverName || 'Prestador UPPA');
+      const safeModel = escapeHtml(taxi.vehicleModel || (isMoto ? 'Moto Taxi' : 'Auto Taxi'));
+      const safePatente = escapeHtml(taxi.patente || taxi.plate || '');
+      const safeZone = escapeHtml(taxi.zone || 'Zárate ↔ Campana');
+      const ratingLabel = taxi.rating > 0 ? `⭐ ${taxi.rating.toFixed(1)}` : '⭐ Nuevo';
+
+      marker.bindTooltip(
+        `<div style="min-width:175px;max-width:240px;line-height:1.3;">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:4px;">
+            <span style="font-size:12px;font-weight:900;color:#FFFFFF;">${isMoto ? '🏍️' : '🚕'} ${safeDriver}</span>
+            <span style="background:${isOcupado ? '#FFF19A' : '#B7F36B'};color:#101114;font-size:9px;font-weight:900;padding:1px 6px;border-radius:6px;flex-shrink:0;">
+              ${isOcupado ? 'OCUPADO' : 'DESOCUPADO'}
+            </span>
+          </div>
+          <div style="font-size:10.5px;color:#E2E8F0;font-weight:700;margin-bottom:4px;">
+            ${safeModel}${safePatente ? ` · <span style="font-family:monospace;color:#FFF19A;">${safePatente}</span>` : ''}
+          </div>
+          <div style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.14);border-radius:8px;padding:4px 6px;margin-bottom:4px;">
+            <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.05em;color:#9299A5;font-weight:800;">Ubicación GPS actual</div>
+            <div style="font-size:10.5px;font-weight:700;color:#B7F36B;">📍 ${safeZone}</div>
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;font-size:10px;color:#9299A5;">
+            <span style="color:#FFF19A;font-weight:800;">${ratingLabel} · ${taxi.completedRides} viajes</span>
+            <span style="font-family:monospace;color:#FFFFFF;font-weight:800;">a ${distStr}</span>
+          </div>
+        </div>`,
+        {
+          direction: 'top',
+          offset: [0, -22],
+          opacity: 0.98,
+          className: 'uppa-map-tooltip',
+        }
+      );
+
       marker.on('click', () => {
         onSelectTaxi(taxi);
       });

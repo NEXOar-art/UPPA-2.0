@@ -592,12 +592,14 @@ export async function crearReporte(data: {
   tipo: ReporteFirestore['tipo'];
   descripcion: string;
   ubicacion: { lat: number; lng: number };
+  calle?: string;
   ruta?: string;
   sentido?: 'hacia_malvinas' | 'hacia_zarate';
   velocidadKmH?: number;
 }): Promise<ReporteFirestore> {
   const path = COL_REPORTES;
   const now = Date.now();
+  const cleanCalle = data.calle?.trim() || undefined;
   try {
     await ensureFirebaseAuthSession();
     const colRef = collection(db, COL_REPORTES);
@@ -610,6 +612,7 @@ export async function crearReporte(data: {
       tipo: data.tipo,
       descripcion: data.descripcion,
       ubicacion: data.ubicacion,
+      ...(cleanCalle ? { calle: cleanCalle } : {}),
       ruta: data.ruta || 'campana-zarate',
       sentido: data.sentido || (data.ruta === 'campana-zarate' ? 'hacia_zarate' : 'hacia_malvinas'),
       velocidadKmH: data.velocidadKmH,
@@ -637,11 +640,12 @@ export async function crearReporte(data: {
         ? '🚗 Tráfico denso'
         : '⏳ Demora en el recorrido';
 
+    const streetSuffix = cleanCalle ? ` · 📍 ${cleanCalle}` : '';
     triggerInAppPushNotification(
       `${typeLabel} (${data.ruta || 'Zárate ↔ Campana'})`,
-      `${data.nombreUsuario}: ${data.descripcion}`,
+      `${data.nombreUsuario}: ${data.descripcion}${streetSuffix}`,
       'reporte',
-      { reporteId: newDoc.id, ubicacion: data.ubicacion }
+      { reporteId: newDoc.id, ubicacion: data.ubicacion, calle: cleanCalle }
     );
 
     return { id: newDoc.id, ...nuevoReporte, creadoEn: now };
@@ -656,6 +660,7 @@ export async function crearReporte(data: {
       tipo: data.tipo,
       descripcion: data.descripcion,
       ubicacion: data.ubicacion,
+      ...(cleanCalle ? { calle: cleanCalle } : {}),
       ruta: data.ruta || 'campana-zarate',
       sentido: data.sentido || (data.ruta === 'campana-zarate' ? 'hacia_zarate' : 'hacia_malvinas'),
       velocidadKmH: data.velocidadKmH,
@@ -682,11 +687,12 @@ export async function crearReporte(data: {
         ? '🚗 Tráfico denso'
         : '⏳ Demora en el recorrido';
 
+    const streetSuffix = cleanCalle ? ` · 📍 ${cleanCalle}` : '';
     triggerInAppPushNotification(
       `${typeLabel} (${data.ruta || 'Zárate ↔ Campana'})`,
-      `${data.nombreUsuario}: ${data.descripcion}`,
+      `${data.nombreUsuario}: ${data.descripcion}${streetSuffix}`,
       'reporte',
-      { reporteId: localId, ubicacion: data.ubicacion }
+      { reporteId: localId, ubicacion: data.ubicacion, calle: cleanCalle }
     );
 
     return fallbackReport;
@@ -2789,6 +2795,7 @@ export async function actualizarUbicacionChoferGps(
     speed?: number | null;
     heading?: number | null;
     accuracy?: number;
+    zone?: string;
   }
 ): Promise<void> {
   if (!Number.isFinite(coords.lat) || !Number.isFinite(coords.lng)) return;
@@ -2798,6 +2805,7 @@ export async function actualizarUbicacionChoferGps(
   if (normalizedIds.size === 0) return;
 
   const now = Date.now();
+  const cleanZone = coords.zone?.trim() || undefined;
   const currentList = getCached<HabilitacionChofer[]>('habilitaciones', MOCK_INITIAL_HABILITACIONES);
   const matchingIds: string[] = [];
 
@@ -2817,6 +2825,7 @@ export async function actualizarUbicacionChoferGps(
         heading: coords.heading ?? null,
         gpsAccuracy: coords.accuracy ?? 15,
         gpsUpdatedAt: now,
+        ...(cleanZone ? { zone: cleanZone } : {}),
       };
     }
     return h;
@@ -2838,6 +2847,7 @@ export async function actualizarUbicacionChoferGps(
         heading: coords.heading ?? null,
         gpsAccuracy: coords.accuracy ?? 15,
         gpsUpdatedAt: now,
+        ...(cleanZone ? { zone: cleanZone } : {}),
         actualizadoEn: serverTimestamp(),
       });
     }

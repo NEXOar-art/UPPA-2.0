@@ -196,7 +196,10 @@ export const CommunityChat: React.FC<CommunityChatProps> = ({
 
   useEffect(() => {
     if (activeContextEvent) {
-      setInputText(`Consulta sobre reporte en ${activeContextEvent.title}: `);
+      const streetPart = activeContextEvent.streetAddress
+        ? ` (📍 ${activeContextEvent.streetAddress})`
+        : '';
+      setInputText(`Consulta sobre reporte en ${activeContextEvent.title}${streetPart}: `);
       inputRef.current?.focus();
     }
   }, [activeContextEvent]);
@@ -676,17 +679,24 @@ export const CommunityChat: React.FC<CommunityChatProps> = ({
       {/* Context Event Pin Banner */}
       {activeContextEvent && (
         <div className="p-2.5 bg-[#202329] border-b border-[#FFF19A]/30 px-4 flex items-center justify-between text-xs text-white">
-          <div className="flex items-center gap-2 truncate">
+          <div className="flex items-center gap-2 min-w-0">
             <Zap className="w-3.5 h-3.5 text-[#FFF19A] shrink-0" />
-            <span className="truncate">
-              Comentando sobre reporte: <strong className="text-[#FFF19A]">{activeContextEvent.title}</strong>
-            </span>
+            <div className="min-w-0 truncate">
+              <span className="truncate">
+                Comentando sobre reporte: <strong className="text-[#FFF19A]">{activeContextEvent.title}</strong>
+              </span>
+              {activeContextEvent.streetAddress && (
+                <span className="ml-2 text-[11px] font-bold text-[#B7F36B]">
+                  📍 {activeContextEvent.streetAddress}
+                </span>
+              )}
+            </div>
           </div>
           {onClearContextEvent && (
             <button
               type="button"
               onClick={onClearContextEvent}
-              className="text-[#9299A5] hover:text-white p-1.5 rounded cursor-pointer"
+              className="text-[#9299A5] hover:text-white p-1.5 rounded cursor-pointer shrink-0"
               title="Quitar contexto del reporte"
             >
               <X className="w-4 h-4" />

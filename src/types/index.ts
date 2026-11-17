@@ -90,6 +90,7 @@ export interface MapEvent {
   isVerified?: boolean;
   ruta?: string;
   estado?: 'activo' | 'resuelto' | 'oculto';
+  streetAddress?: string;
 }
 
 export interface ReporteFirestore {
@@ -102,6 +103,7 @@ export interface ReporteFirestore {
     lat: number;
     lng: number;
   };
+  calle?: string;
   ruta: string; // 'campana-zarate' | 'zarate-campana' | 'vigalondo-mcdonalds' | 'general'
   sentido?: 'hacia_malvinas' | 'hacia_zarate';
   velocidadKmH?: number;

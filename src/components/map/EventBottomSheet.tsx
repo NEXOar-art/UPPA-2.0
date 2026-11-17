@@ -1,6 +1,7 @@
 import React from 'react';
 import { MapEvent } from '../../types';
-import { ThumbsUp, MessageSquare, AlertCircle, CheckCircle2, X, Flag, Share2 } from 'lucide-react';
+import { ThumbsUp, MessageSquare, X, MapPin } from 'lucide-react';
+import { isCoordinateAddress } from '../../utils/geolocation';
 
 interface EventBottomSheetProps {
   event: MapEvent | null;
@@ -102,6 +103,24 @@ export const EventBottomSheet: React.FC<EventBottomSheetProps> = ({
             </p>
           </div>
         )}
+
+        {/* Dirección exacta determinada por geocodificación inversa */}
+        <div className="px-3 py-2 rounded-xl bg-[#101114] border border-[#FFF19A]/25 flex items-center gap-2 text-xs">
+          <MapPin className="w-3.5 h-3.5 text-[#FFF19A] shrink-0" />
+          <div className="min-w-0 flex-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-[#9299A5] block leading-none">
+              Dirección exacta (Geocodificación inversa)
+            </span>
+            <span className="text-xs font-extrabold text-[#FFF19A] truncate block mt-0.5">
+              {event.streetAddress && !isCoordinateAddress(event.streetAddress)
+                ? event.streetAddress
+                : 'Obteniendo dirección exacta...'}
+            </span>
+            <span className="text-[10px] font-mono text-[#9299A5] block">
+              {event.lat.toFixed(5)}, {event.lng.toFixed(5)}
+            </span>
+          </div>
+        </div>
 
         {event.description && (
           <p className="text-xs text-[#9299A5] bg-[#101114] p-3 rounded-xl border border-white/10">

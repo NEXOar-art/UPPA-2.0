@@ -28,6 +28,9 @@ import { computeLineSentiment } from './utils/sentiment';
 import {
   UserLocation,
   reverseGeocode,
+  getCachedStreetName,
+  isCoordinateAddress,
+  isFallbackZoneAddress,
   getDistanceKm,
   GPS_UPDATE_INTERVAL_MS,
 } from './utils/geolocation';
@@ -872,6 +875,10 @@ export default function App() {
             expiresAtMs: evType === 'bus_location' ? createdMs + 60000 : r.expiresAtMs,
             isVerified: true,
             estado: r.estado,
+            streetAddress:
+              (r.calle && !isFallbackZoneAddress(r.calle) ? r.calle : null) ||
+              getCachedStreetName(r.ubicacion.lat, r.ubicacion.lng) ||
+              undefined,
           };
         });
 
@@ -915,6 +922,7 @@ export default function App() {
           indiceSeguridad: h.indiceSeguridad,
           activationCode: h.activationCode,
           isOnline: true,
+          disponibilidad: h.disponibilidad || 'desocupado',
           asientos: h.asientos,
           aireAcondicionado: h.aireAcondicionado,
           baul: h.baul,
@@ -1183,7 +1191,11 @@ export default function App() {
     const movedKm = cachedGeo
       ? getDistanceKm(cachedGeo.lat, cachedGeo.lng, latitude, longitude)
       : Infinity;
-    const needsGeocode = !cachedGeo || movedKm >= 0.05 || now - cachedGeo.at > 25000;
+    const needsGeocode =
+      !cachedGeo ||
+      isFallbackZoneAddress(cachedGeo.address) ||
+      movedKm >= 0.05 ||
+      now - cachedGeo.at > 25000;
 
     setUserLocation((prev) => ({
       lat: latitude,
@@ -1216,6 +1228,50 @@ export default function App() {
       } catch {}
     }
   }, []);
+
+  // Auto-activar GPS del dispositivo cada vez que cualquier usuario (pasajero, prestador o admin) inicia sesión
+  const prevLoggedInRef = useRef<boolean>(false);
+  const lastGpsLoginUserIdRef = useRef<string | null>(null);
+
+  const activateDeviceGpsOnLogin = useCallback(() => {
+    if (!('geolocation' in navigator)) {
+      setIsLocationModalOpen(true);
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        await applyFreshGpsFix(pos);
+        setIsLocationModalOpen(false);
+        showToast('📡 GPS del dispositivo activado automáticamente');
+      },
+      () => {
+        // Si el navegador requiere permiso manual o falla el sensor, mostrar asistente de GPS
+        setIsLocationModalOpen(true);
+      },
+      {
+        enableHighAccuracy: true,
+        maximumAge: 0,
+        timeout: 6500,
+      }
+    );
+  }, [applyFreshGpsFix]);
+
+  useEffect(() => {
+    const wasLoggedIn = prevLoggedInRef.current;
+    prevLoggedInRef.current = isLoggedIn;
+
+    if (!isLoggedIn) {
+      lastGpsLoginUserIdRef.current = null;
+      return;
+    }
+
+    const activeUid = currentUser.id || currentUser.uid || 'usr';
+    if (!wasLoggedIn || lastGpsLoginUserIdRef.current !== activeUid) {
+      lastGpsLoginUserIdRef.current = activeUid;
+      activateDeviceGpsOnLogin();
+    }
+  }, [isLoggedIn, currentUser.id, currentUser.uid, activateDeviceGpsOnLogin]);
 
   // Continuous GPS Watcher + Active 3-Second Polling - Available freely for all users
   useEffect(() => {
@@ -1347,8 +1403,84 @@ export default function App() {
     showToast('Reporte ocultado');
   };
 
-  const handleCreateEvent = (newEventData: Omit<MapEvent, 'id' | 'confirmations' | 'confirmedByUserIds' | 'reportedAt'>) => {
+  const [resolvedEventStreets, setResolvedEventStreets] = useState<Record<string, string>>({});
+  const resolvingEventStreetsRef = useRef<Set<string>>(new Set());
+
+  // Determinar automáticamente en segundo plano la dirección exacta de cada evento mediante geocodificación inversa
+  useEffect(() => {
+    let cancelled = false;
+    events.forEach((ev) => {
+      const hasValidExisting = Boolean(ev.streetAddress && !isFallbackZoneAddress(ev.streetAddress));
+      const hasValidResolved = Boolean(
+        resolvedEventStreets[ev.id] && !isFallbackZoneAddress(resolvedEventStreets[ev.id])
+      );
+      if (hasValidExisting || hasValidResolved || resolvingEventStreetsRef.current.has(ev.id)) {
+        return;
+      }
+      const cached = getCachedStreetName(ev.lat, ev.lng);
+      if (cached && !isFallbackZoneAddress(cached)) {
+        setResolvedEventStreets((prev) => (prev[ev.id] === cached ? prev : { ...prev, [ev.id]: cached }));
+        return;
+      }
+      resolvingEventStreetsRef.current.add(ev.id);
+      reverseGeocode(ev.lat, ev.lng)
+        .then((street) => {
+          if (cancelled || !street) return;
+          if (!isCoordinateAddress(street)) {
+            setResolvedEventStreets((prev) => (prev[ev.id] === street ? prev : { ...prev, [ev.id]: street }));
+          }
+        })
+        .catch(() => {})
+        .finally(() => {
+          resolvingEventStreetsRef.current.delete(ev.id);
+        });
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [events, resolvedEventStreets]);
+
+  const eventsWithStreet = useMemo(() => {
+    return events.map((ev) => {
+      const resolved =
+        (resolvedEventStreets[ev.id] && !isCoordinateAddress(resolvedEventStreets[ev.id])
+          ? resolvedEventStreets[ev.id]
+          : undefined) ||
+        getCachedStreetName(ev.lat, ev.lng) ||
+        (ev.streetAddress && !isCoordinateAddress(ev.streetAddress) ? ev.streetAddress : undefined);
+      return resolved && resolved !== ev.streetAddress ? { ...ev, streetAddress: resolved } : ev;
+    });
+  }, [events, resolvedEventStreets]);
+
+  const selectedEventWithStreet = useMemo(() => {
+    if (!selectedEvent) return null;
+    const matched = eventsWithStreet.find((e) => e.id === selectedEvent.id);
+    if (matched) return matched;
+    const street =
+      resolvedEventStreets[selectedEvent.id] ||
+      getCachedStreetName(selectedEvent.lat, selectedEvent.lng) ||
+      (selectedEvent.streetAddress && !isCoordinateAddress(selectedEvent.streetAddress)
+        ? selectedEvent.streetAddress
+        : undefined);
+    return street ? { ...selectedEvent, streetAddress: street } : selectedEvent;
+  }, [selectedEvent, eventsWithStreet, resolvedEventStreets]);
+
+  const handleCreateEvent = async (
+    newEventData: Omit<MapEvent, 'id' | 'confirmations' | 'confirmedByUserIds' | 'reportedAt'>
+  ) => {
     const now = Date.now();
+    const isNearUserLoc =
+      Boolean(userLocation?.address) &&
+      !isFallbackZoneAddress(userLocation?.address) &&
+      getDistanceKm(userLocation!.lat, userLocation!.lng, newEventData.lat, newEventData.lng) < 0.04;
+    const quickStreetCandidate =
+      (newEventData.streetAddress && !isFallbackZoneAddress(newEventData.streetAddress)
+        ? newEventData.streetAddress
+        : undefined) ||
+      getCachedStreetName(newEventData.lat, newEventData.lng) ||
+      (isNearUserLoc ? userLocation?.address : undefined);
+
     const created: MapEvent = {
       ...newEventData,
       id: `ev-${now}`,
@@ -1357,6 +1489,7 @@ export default function App() {
       reportedAt: 'Recién',
       createdAtMs: newEventData.createdAtMs || now,
       expiresAtMs: newEventData.type === 'bus_location' ? now + 60000 : newEventData.expiresAtMs,
+      streetAddress: quickStreetCandidate,
     };
     setEvents((prev) => [created, ...prev]);
     openAutoDismissEvent(created);
@@ -1368,6 +1501,26 @@ export default function App() {
       showToast(`📍 Ubicación de colectivo ahora (${dirText}${speedText}) registrada`);
     } else {
       showToast(`✅ ${created.title} registrado en el mapa`);
+    }
+
+    // Obtener la dirección exacta mediante geocodificación inversa (Nominatim / Photon) para hover, reporte y chat
+    let resolvedStreet = quickStreetCandidate;
+    if (!resolvedStreet || isFallbackZoneAddress(resolvedStreet)) {
+      try {
+        resolvedStreet = await reverseGeocode(newEventData.lat, newEventData.lng);
+      } catch {
+        resolvedStreet = `${newEventData.lat.toFixed(4)}, ${newEventData.lng.toFixed(4)}`;
+      }
+    }
+
+    if (resolvedStreet && !isCoordinateAddress(resolvedStreet)) {
+      setResolvedEventStreets((prev) => ({ ...prev, [created.id]: resolvedStreet! }));
+      setEvents((prev) =>
+        prev.map((ev) => (ev.id === created.id ? { ...ev, streetAddress: resolvedStreet } : ev))
+      );
+      setSelectedEvent((prev) =>
+        prev && prev.id === created.id ? { ...prev, streetAddress: resolvedStreet } : prev
+      );
     }
 
     const firestoreType: any =
@@ -1391,18 +1544,24 @@ export default function App() {
       tipo: firestoreType,
       descripcion: newEventData.description || newEventData.title,
       ubicacion: { lat: newEventData.lat, lng: newEventData.lng },
+      calle: resolvedStreet,
       ruta: newEventData.routeId === 'route-vigalondo-mcdonalds' ? 'vigalondo-mcdonalds' : 'campana-zarate',
       sentido: newEventData.direction === 'hacia_zarate' ? 'hacia_zarate' : 'hacia_malvinas',
       velocidadKmH: newEventData.velocidadKmH,
     }).catch((err) => console.warn('Firestore report write notice:', err));
 
-    // Publicar automáticamente el evento en el chat comunitario en tiempo real
+    // Publicar automáticamente el evento en el chat comunitario con la dirección exacta obtenida por geocodificación inversa
+    const streetChatPart = resolvedStreet
+      ? ` · 📍 Dirección: ${resolvedStreet}`
+      : ` · 📍 Coordenadas: ${newEventData.lat.toFixed(5)}, ${newEventData.lng.toFixed(5)}`;
+    const descChatPart =
+      created.description && created.description !== created.title ? `: ${created.description}` : '';
     const eventChatText =
       newEventData.type === 'bus_location'
         ? `📍 [UBICACIÓN COLECTIVO AHORA] Colectivo reportado por ${currentUser.name}: ${
             newEventData.direction === 'hacia_zarate' ? '➡️ Hacia Zárate' : '⬅️ Hacia Malvinas'
-          }${newEventData.velocidadKmH ? ` · Velocidad: ${newEventData.velocidadKmH} km/h` : ''}. Visible en el mapa.`
-        : `📢 [EVENTO EN VIVO] ${created.title}: ${created.description || created.title}. Reportado por ${currentUser.name}. Ya plasmado en el mapa.`;
+          }${streetChatPart}${newEventData.velocidadKmH ? ` · Velocidad: ${newEventData.velocidadKmH} km/h` : ''}. Visible en el mapa.`
+        : `📢 [EVENTO EN VIVO] ${created.title}${descChatPart}${streetChatPart}. Reportado por ${currentUser.name}. Ya plasmado en el mapa.`;
 
     enviarMensajeChat('todos', {
       usuarioId: currentUser.id || 'sistema-alertas',
@@ -1486,6 +1645,7 @@ export default function App() {
           completedRides: (hab as any).completedRides || (hab as any).viajesRealizados || 0,
           indiceSeguridad: hab.indiceSeguridad,
           activationCode: hab.activationCode,
+          disponibilidad: hab.disponibilidad || 'desocupado',
           asientos: hab.asientos,
           aireAcondicionado: hab.aireAcondicionado,
           baul: hab.baul,
@@ -1691,6 +1851,7 @@ export default function App() {
           speed: loc.speed,
           heading: loc.heading,
           accuracy: loc.accuracy,
+          zone: loc.address,
         });
       }
 
@@ -1792,7 +1953,12 @@ export default function App() {
   };
 
   const handleOpenContextualChat = (event: MapEvent) => {
-    setContextEventForChat(event);
+    const resolvedStreet =
+      event.streetAddress ||
+      resolvedEventStreets[event.id] ||
+      getCachedStreetName(event.lat, event.lng) ||
+      undefined;
+    setContextEventForChat(resolvedStreet ? { ...event, streetAddress: resolvedStreet } : event);
     setActiveTab('chat');
   };
 
@@ -1826,7 +1992,6 @@ export default function App() {
             } catch {}
             setCurrentUser(user);
             setIsLoggedIn(true);
-            setIsLocationModalOpen(true);
             showToast(`¡Bienvenido a UPPA, ${user.name}!`);
           }}
           onExploreGuest={() => {
@@ -2566,10 +2731,10 @@ export default function App() {
             <div className="flex-1 w-full h-full">
               <TeslaMap
                 routes={routes}
-                events={events}
+                events={eventsWithStreet}
                 liveBuses={liveBuses}
                 taxis={marketplaceTaxis}
-                selectedEvent={selectedEvent}
+                selectedEvent={selectedEventWithStreet}
                 onSelectEvent={(ev) => {
                   clearSelectedEventAutoClose();
                   setSelectedEvent(ev);
@@ -2720,7 +2885,7 @@ export default function App() {
             </div>
 
             <EventBottomSheet
-              event={selectedEvent}
+              event={selectedEventWithStreet}
               currentUserId={currentUser.id}
               onClose={() => {
                 clearSelectedEventAutoClose();
@@ -2771,7 +2936,7 @@ export default function App() {
 
         {activeTab === 'admin' && (
           <AdminPanel
-            events={events}
+            events={eventsWithStreet}
             ads={ads}
             taxis={taxis}
             onDeleteEvent={handleDeleteEvent}
@@ -3112,7 +3277,7 @@ export default function App() {
         isOpen={isApiModalOpen}
         onClose={() => setIsApiModalOpen(false)}
         routes={routes}
-        events={events}
+        events={eventsWithStreet}
         taxis={taxis}
       />
 
@@ -3207,7 +3372,6 @@ export default function App() {
                 setCurrentUser(user);
                 setIsLoggedIn(true);
                 setIsLoginModalOpen(false);
-                setIsLocationModalOpen(true);
                 showToast(`¡Hola, ${user.name}!`);
               }}
               onExploreGuest={() => {

@@ -228,6 +228,29 @@
   border-top-color: rgba(255, 241, 154, 0.45) !important;
 }
 
+.leaflet-tooltip.uppa-map-tooltip {
+  background: rgba(16, 17, 20, 0.96) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1.5px solid rgba(255, 241, 154, 0.55) !important;
+  color: #FFFFFF !important;
+  border-radius: 14px !important;
+  padding: 8px 10px !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.78), 0 3px 0 rgba(0, 0, 0, 0.65) !important;
+  font-family: var(--font-body) !important;
+  max-width: 260px !important;
+  white-space: normal !important;
+  pointer-events: none !important;
+}
+
+.leaflet-tooltip-top.uppa-map-tooltip:before {
+  border-top-color: rgba(255, 241, 154, 0.55) !important;
+}
+
+.leaflet-tooltip-bottom.uppa-map-tooltip:before {
+  border-bottom-color: rgba(255, 241, 154, 0.55) !important;
+}
+
 @keyframes titilando-amber {
   0% {
     transform: scale(0.96);

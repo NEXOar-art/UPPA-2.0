@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { EventType, TransitRoute, MapEvent } from '../../types';
 import { X, MapPin, Send } from 'lucide-react';
-import { crearReporte } from '../../services/realtimeFirebaseService';
 import { calculateRealBusSpeed } from '../../utils/busSpeedEstimator';
 
 interface ReportEventModalProps {
@@ -71,29 +70,6 @@ export const ReportEventModal: React.FC<ReportEventModalProps> = ({
       expiresAtMs: isBusLocation ? now + 60000 : undefined,
       isVerified: false,
     });
-
-    const firestoreType: any = isBusLocation
-      ? 'ubicacion_colectivo'
-      : selectedType === 'accident'
-      ? 'accidente'
-      : selectedType === 'late'
-      ? 'demora'
-      : selectedType === 'traffic'
-      ? 'congestion'
-      : selectedType === 'danger'
-      ? 'corte'
-      : 'alerta';
-
-    crearReporte({
-      usuarioId: currentUserId || 'usr-anon',
-      nombreUsuario: currentUserName || 'Vecino UPPA',
-      tipo: firestoreType,
-      descripcion: comment.trim() || eventTitle,
-      ubicacion: { lat: initialLat, lng: initialLng },
-      ruta: selectedRouteId === 'route-vigalondo-mcdonalds' ? 'vigalondo-mcdonalds' : 'campana-zarate',
-      sentido: isBusLocation ? busDirection : undefined,
-      velocidadKmH: speedData.speedKmH,
-    }).catch((err) => console.warn('Firestore report write:', err));
 
     onClose();
     setComment('');
