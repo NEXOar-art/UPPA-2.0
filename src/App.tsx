@@ -476,6 +476,34 @@ export default function App() {
     return hasDriverRole || hasActiveAdminHabilitacion || hasActiveSession;
   }, [currentUser, userHabilitacionRecord, driverSession, manualPasajeroOverride]);
 
+  // Verifica si el usuario tiene actualmente un abono y habilitación vigente aprobada por Administración
+  const hasActivePaidDriverHabilitacion = useMemo(() => {
+    if (currentUser.role === 'admin' || currentUser.rol === 'administrador') {
+      return false;
+    }
+    const now = Date.now();
+    if (userHabilitacionRecord) {
+      const isActivo = userHabilitacionRecord.estado === 'activo';
+      const isApprovedByAdmin = Boolean(
+        userHabilitacionRecord.activadoConClaveAdmin || userHabilitacionRecord.habilitadoPor
+      );
+      const isWithinTime = (userHabilitacionRecord.endsAt || 0) > now;
+      return isActivo && isApprovedByAdmin && isWithinTime;
+    }
+    if (driverSession && driverSession.endsAt > now && driverSession.activationCode) {
+      const sessionHab = habilitacionesList.find(
+        (h) =>
+          h.activationCode === driverSession.activationCode ||
+          (driverSession.driverName && h.driverName === driverSession.driverName)
+      );
+      if (sessionHab) {
+        return sessionHab.estado === 'activo' && (sessionHab.endsAt || 0) > now;
+      }
+      return true;
+    }
+    return false;
+  }, [currentUser.role, currentUser.rol, userHabilitacionRecord, driverSession, habilitacionesList]);
+
   const handleSwitchRoleInSession = async (
     nextRol: 'pasajero' | 'chofer_moto' | 'chofer_auto'
   ) => {
@@ -512,9 +540,20 @@ export default function App() {
       } catch {}
 
       if (isChofer) {
-        setIsHabilitacionCardExpanded(true);
         const label = nextRol === 'chofer_moto' ? 'Moto Taxi' : 'Auto Taxi';
-        showToast(`Rol cambiado a Prestador (${label}) sin cerrar sesión`);
+        setIsHabilitacionCardExpanded(true);
+        if (!hasActivePaidDriverHabilitacion) {
+          // Obliga a iniciar el proceso de abono y habilitación para prestar servicio sin evadir el pago
+          setPublishTaxiInitialTab('transfer');
+          setPublishTaxiInitialVehicle(nextRol === 'chofer_moto' ? 'moto' : 'auto');
+          setIsProfileDropdownOpen(false);
+          setIsPublishTaxiOpen(true);
+          showToast(
+            `Para prestar servicio como ${label}, iniciá y completá el abono de turno obligatorio.`
+          );
+        } else {
+          showToast(`Rol cambiado a Prestador Habilitado (${label}) sin cerrar sesión`);
+        }
       } else {
         showToast('Rol cambiado a Pasajero sin cerrar sesión');
       }
@@ -529,33 +568,8 @@ export default function App() {
   // y mientras esté dentro del período de tiempo abonado (endsAt > now).
   const isDriverHabilitado = useMemo(() => {
     if (!isDriverUser) return false;
-    const now = Date.now();
-
-    // 1. Verificación primaria: Registro de Habilitación aprobado por el Administrador
-    if (userHabilitacionRecord) {
-      const isActivo = userHabilitacionRecord.estado === 'activo';
-      const isApprovedByAdmin = Boolean(
-        userHabilitacionRecord.activadoConClaveAdmin || userHabilitacionRecord.habilitadoPor
-      );
-      const isWithinTime = (userHabilitacionRecord.endsAt || 0) > now;
-      return isActivo && isApprovedByAdmin && isWithinTime;
-    }
-
-    // 2. Si tiene sesión activa de chofer, validar que esté respaldada por código y tiempo vigente
-    if (driverSession && driverSession.endsAt > now && driverSession.activationCode) {
-      const sessionHab = habilitacionesList.find(
-        (h) =>
-          h.activationCode === driverSession.activationCode ||
-          (driverSession.driverName && h.driverName === driverSession.driverName)
-      );
-      if (sessionHab) {
-        return sessionHab.estado === 'activo' && (sessionHab.endsAt || 0) > now;
-      }
-      return true;
-    }
-
-    return false;
-  }, [isDriverUser, userHabilitacionRecord, driverSession, habilitacionesList]);
+    return hasActivePaidDriverHabilitacion;
+  }, [isDriverUser, hasActivePaidDriverHabilitacion]);
 
   // Conductor en línea transmitiendo GPS: SOLO si está habilitado por el administrador y tiene moto o auto
   const isPrestandoServicioTaxi = useMemo(() => {
@@ -713,6 +727,7 @@ export default function App() {
   const [isPedirTransporteOpen, setIsPedirTransporteOpen] = useState(false);
   const [isPublishTaxiOpen, setIsPublishTaxiOpen] = useState(false);
   const [publishTaxiInitialTab, setPublishTaxiInitialTab] = useState<'transfer' | 'enter-code'>('transfer');
+  const [publishTaxiInitialVehicle, setPublishTaxiInitialVehicle] = useState<'auto' | 'moto'>('auto');
   const [isContactAdOpen, setIsContactAdOpen] = useState(false);
   const [isApiModalOpen, setIsApiModalOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
@@ -2099,7 +2114,7 @@ export default function App() {
                           type="button"
                           disabled={isSwitchingRole}
                           onClick={() => handleSwitchRoleInSession('chofer_moto')}
-                          title="Cambiar a Prestador de Servicio Moto Taxi sin cerrar sesión"
+                          title="Cambiar a Prestador de Servicio Moto Taxi (inicia abono obligatorio si no está habilitado)"
                           className={`py-2 px-1.5 rounded-lg border text-[10.5px] font-black flex flex-col items-center justify-center gap-0.5 transition-all cursor-pointer disabled:opacity-60 ${
                             isDriverUser && (currentUser.rol === 'chofer_moto' || currentUser.tipoVehiculo === 'moto')
                               ? 'bg-[#B7F36B] text-[#101114] border-[#101114]'
@@ -2110,6 +2125,9 @@ export default function App() {
                           <span>Moto Taxi</span>
                         </button>
                       </div>
+                      <p className="text-[9.5px] text-[#9299A5] leading-tight">
+                        Pasar a <strong className="text-white">Auto/Moto Taxi</strong> inicia el abono para prestar servicio.
+                      </p>
                     </div>
                   )}
 
@@ -2152,13 +2170,18 @@ export default function App() {
                             type="button"
                             onClick={() => {
                               setPublishTaxiInitialTab('transfer');
+                              setPublishTaxiInitialVehicle(
+                                currentUser.rol === 'chofer_moto' || currentUser.tipoVehiculo === 'moto'
+                                  ? 'moto'
+                                  : 'auto'
+                              );
                               setIsPublishTaxiOpen(true);
                               setIsProfileDropdownOpen(false);
                             }}
                             className="w-full min-h-[42px] py-2 px-3 rounded-xl uppa-cta-yellow font-black text-xs flex items-center justify-center gap-1.5 cursor-pointer"
                           >
                             <KeyRound className="w-4 h-4" />
-                            <span>Solicitar Habilitación de Turno</span>
+                            <span>Abonar y Solicitar Habilitación de Turno</span>
                           </button>
                           <a
                             href={`https://wa.me/5493489690058?text=${encodeURIComponent(
@@ -2901,6 +2924,7 @@ export default function App() {
       <PublishTaxiModal
         isOpen={isPublishTaxiOpen}
         initialTab={publishTaxiInitialTab}
+        initialVehicleType={publishTaxiInitialVehicle}
         onClose={() => setIsPublishTaxiOpen(false)}
         onSubmit={handlePublishTaxi}
         onActivateDriverSession={(session) => {
@@ -2975,9 +2999,16 @@ export default function App() {
         currentUser={currentUser}
         defaultMode={authModalDefaultMode}
         focusEmailVerificationTick={emailVerificationFocusTick}
-        isHabilitado={isDriverHabilitado}
-        onOpenPublishTaxi={() => {
+        isHabilitado={hasActivePaidDriverHabilitacion}
+        onOpenPublishTaxi={(vehicleType) => {
           setPublishTaxiInitialTab('transfer');
+          if (vehicleType) {
+            setPublishTaxiInitialVehicle(vehicleType);
+          } else if (currentUser.rol === 'chofer_moto' || currentUser.tipoVehiculo === 'moto') {
+            setPublishTaxiInitialVehicle('moto');
+          } else {
+            setPublishTaxiInitialVehicle('auto');
+          }
           setIsPublishTaxiOpen(true);
         }}
         onUpdateUser={(updated) => {

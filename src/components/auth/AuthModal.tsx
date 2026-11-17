@@ -44,7 +44,7 @@ interface AuthModalProps {
   defaultMode?: 'register' | 'login' | 'profile';
   focusEmailVerificationTick?: number;
   isHabilitado?: boolean;
-  onOpenPublishTaxi?: () => void;
+  onOpenPublishTaxi?: (vehicleType?: 'auto' | 'moto') => void;
 }
 
 export const AuthModal: React.FC<AuthModalProps> = ({
@@ -245,6 +245,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       onUpdateUser(mergedFallback);
       if (isChofer && !isHabilitado) {
         setIsHabilitacionCardExpanded(true);
+        if (onOpenPublishTaxi) {
+          onClose();
+          onOpenPublishTaxi(nextRol === 'chofer_moto' ? 'moto' : 'auto');
+          return;
+        }
       }
       setSuccessMessage(
         nextRol === 'pasajero'
@@ -1133,7 +1138,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   </div>
 
                   <p className="text-[11px] text-[#9299A5] leading-snug">
-                    Elegí cómo querés operar en UPPA en este momento. El cambio se aplica al instante sin salir ni desloguearte.
+                    Elegí cómo querés operar en UPPA sin salir de tu cuenta. Al pasar de <strong className="text-white">Pasajero</strong> a <strong className="text-[#B7F36B]">Auto Taxi</strong> o <strong className="text-[#B7F36B]">Moto Taxi</strong> se inicia el proceso obligatorio de abono y habilitación para prestar servicio.
                   </p>
 
                   <div className="grid grid-cols-3 gap-2 pt-0.5">
@@ -1325,12 +1330,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                             type="button"
                             onClick={() => {
                               onClose();
-                              onOpenPublishTaxi();
+                              onOpenPublishTaxi(currentRol === 'chofer_moto' ? 'moto' : 'auto');
                             }}
                             className="w-full min-h-[42px] px-3 rounded-xl uppa-cta-yellow font-black text-xs flex items-center justify-center gap-2 cursor-pointer"
                           >
                             <KeyRound className="w-4 h-4 shrink-0" />
-                            <span>Completar / Enviar Solicitud de Turno</span>
+                            <span>Completar Abono / Solicitud de Turno</span>
                           </button>
                         )}
 

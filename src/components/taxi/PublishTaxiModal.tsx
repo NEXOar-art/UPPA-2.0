@@ -35,6 +35,7 @@ import {
 interface PublishTaxiModalProps {
   isOpen: boolean;
   initialTab?: 'transfer' | 'enter-code';
+  initialVehicleType?: 'auto' | 'moto';
   onClose: () => void;
   onSubmit: (
     listing: Omit<TaxiListing, 'id' | 'startsAt' | 'endsAt' | 'status' | 'rating' | 'completedRides'>,
@@ -56,6 +57,7 @@ const PRESET_TIERS = [
 export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
   isOpen,
   initialTab = 'transfer',
+  initialVehicleType = 'auto',
   onClose,
   onSubmit,
   onActivateDriverSession,
@@ -104,6 +106,7 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
           : '';
       setDriverName(validDefaultName);
       setWhatsapp(currentUserPhone || '');
+      setVehicleType(initialVehicleType || 'auto');
       setVehicleModel('');
       setPatente('');
       setZone('');
@@ -114,7 +117,7 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
       setAceptaMascotas(false);
       setCascoExtra(true);
     }
-  }, [isOpen, currentUserName, currentUserPhone]);
+  }, [isOpen, initialVehicleType, currentUserName, currentUserPhone]);
 
   if (!isOpen) return null;
 
@@ -291,11 +294,14 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
 
         {/* Título: Transferir para prestar servicio */}
         {!generatedCodeResult && (
-          <div className="py-2.5 px-3 rounded-xl bg-[#101114] border-2 border-[#FFF19A]/40 text-center my-3 shrink-0">
+          <div className="py-2.5 px-3 rounded-xl bg-[#101114] border-2 border-[#FFF19A]/40 text-center my-3 shrink-0 space-y-0.5">
             <h3 className="text-xs sm:text-sm font-black text-[#FFF19A] tracking-wider uppercase font-display flex items-center justify-center gap-2">
               <Sparkles className="w-4 h-4 text-[#FFF19A]" />
               <span>TRANSFERIR PARA PRESTAR SERVICIO</span>
             </h3>
+            <p className="text-[10.5px] text-[#9299A5]">
+              Abono obligatorio de turno para habilitar tu unidad de transporte alternativo en UPPA
+            </p>
           </div>
         )}
 
