@@ -230,8 +230,15 @@ export default function App() {
         anonymousAuthBlocked: detail?.anonymousAuthBlocked,
       });
     };
-    const handleSyncOk = () => {
-      setFirestorePermissionAlert(null);
+    const handleSyncOk = (ev: Event) => {
+      const okPath = (ev as CustomEvent)?.detail?.path as string | undefined;
+      setFirestorePermissionAlert((prev) => {
+        if (!prev) return null;
+        if (!prev.path || !okPath) return null;
+        const prevRoot = prev.path.split('/')[0];
+        const okRoot = okPath.split('/')[0];
+        return prevRoot === okRoot ? null : prev;
+      });
     };
     window.addEventListener('uppa-firestore-permission-error', handlePermErr);
     window.addEventListener('uppa-firestore-sync-ok', handleSyncOk);
@@ -2156,7 +2163,9 @@ export default function App() {
             <div className="flex items-center gap-2 min-w-0">
               <AlertTriangle className="w-4 h-4 text-amber-300 shrink-0" />
               <p className="text-[11px] leading-snug truncate">
-                <strong className="text-amber-200 font-black">Permisos de Firestore bloqueados:</strong>{' '}
+                <strong className="text-amber-200 font-black">
+                  Permisos de Firestore bloqueados{firestorePermissionAlert.path ? ` (${firestorePermissionAlert.path})` : ''}:
+                </strong>{' '}
                 {firestorePermissionAlert.anonymousAuthBlocked
                   ? 'Habilitá el inicio Anónimo en Firebase Auth o ingresá con Google/Correo.'
                   : 'Revisá las reglas de Firestore para habilitar reportes, chat y viajes para todos.'}

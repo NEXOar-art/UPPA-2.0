@@ -125,11 +125,22 @@ function subscribeWithAuthResync(
   ensureFirebaseAuthSession()
     .then((uid) => {
       if (disposed) return;
-      currentUid = uid || auth.currentUser?.uid;
-      reattach();
+      const effectiveUid = uid || auth.currentUser?.uid;
+      currentUid = effectiveUid;
+      if (effectiveUid) {
+        reattach();
+        return;
+      }
+      // Si aún no hay sesión Firebase Auth (p.ej. pantalla de Login con Auth anónimo deshabilitado),
+      // esperar a que Firebase Auth complete el login o que exista sesión local explícita.
+      const hasLocalSession =
+        typeof window !== 'undefined' && Boolean(window.localStorage?.getItem('uppa_session_user'));
+      if (hasLocalSession) {
+        reattach();
+      }
     })
     .catch(() => {
-      if (!disposed) reattach();
+      if (!disposed && auth.currentUser) reattach();
     });
 
   // Re-suscribir automáticamente si cambia la sesión Firebase (login/logout)
@@ -1063,13 +1074,17 @@ export async function enviarMensajeChat(
   // 4. Guardar en Firestore asegurando sesión Firebase Auth y existencia del documento padre salas_chat/{salaId}
   try {
     const authUid = await ensureFirebaseAuthSession();
+    const safeTexto = cleanText.slice(0, 1500);
+    const safeNombre = (data.nombreUsuario || 'Vecino UPPA').trim().slice(0, 100) || 'Vecino UPPA';
+    const safeUsuarioId = (data.usuarioId || authUid || 'usr-comunidad').trim().slice(0, 128) || 'usr-comunidad';
+
     const firestorePayload: any = {
       id: generatedId,
       salaId: safeSala,
-      usuarioId: data.usuarioId,
+      usuarioId: safeUsuarioId,
       authUid: authUid || null,
-      nombreUsuario: data.nombreUsuario || 'Vecino UPPA',
-      texto: cleanText,
+      nombreUsuario: safeNombre,
+      texto: safeTexto,
       rol: data.rol || 'pasajero',
       enviadoEn: now,
       timestampMs: now,
@@ -1081,13 +1096,17 @@ export async function enviarMensajeChat(
       firestorePayload.replyTo = data.replyTo;
     }
 
-    // Asegurar documentos padre en salas_chat para cumplir reglas con exists()
+    // Asegurar documentos padre en salas_chat para sincronización ordenada de la sala
     const todosRoomRef = doc(db, COL_SALAS_CHAT, 'todos');
-    await setDoc(todosRoomRef, { salaId: 'todos', activa: true, ultimoMensajeEn: now }, { merge: true }).catch(() => {});
+    await setDoc(todosRoomRef, { salaId: 'todos', activa: true, ultimoMensajeEn: now }, { merge: true }).catch((roomErr) => {
+      reportFirestorePermissionIssue(roomErr, OperationType.WRITE, `${COL_SALAS_CHAT}/todos`);
+    });
 
     if (safeSala !== 'todos') {
       const specificRoomRef = doc(db, COL_SALAS_CHAT, safeSala);
-      await setDoc(specificRoomRef, { salaId: safeSala, activa: true, ultimoMensajeEn: now }, { merge: true }).catch(() => {});
+      await setDoc(specificRoomRef, { salaId: safeSala, activa: true, ultimoMensajeEn: now }, { merge: true }).catch((roomErr) => {
+        reportFirestorePermissionIssue(roomErr, OperationType.WRITE, `${COL_SALAS_CHAT}/${safeSala}`);
+      });
     }
 
     const writes: Promise<void>[] = [];
@@ -1166,26 +1185,44 @@ export async function reaccionarMensajeChat(
     updateCache('chat_todos');
   } catch {}
 
-  // Actualizar en Firestore en las tres colecciones
+  // Actualizar en Firestore solo en los documentos existentes para evitar falsos permission-denied
+  if (mensajeId.startsWith('msg_local_')) return;
   try {
     await ensureFirebaseAuthSession();
     const fieldKey = `reacciones.${emoji}`;
-    const todosDocRef = doc(db, COL_SALAS_CHAT, 'todos', COL_MENSAJES, mensajeId);
-    updateDoc(todosDocRef, { [fieldKey]: increment(1) }).catch((e) => {
-      reportFirestorePermissionIssue(e, OperationType.UPDATE, `${COL_SALAS_CHAT}/todos/${COL_MENSAJES}/${mensajeId}`);
-    });
+    const safeUpdateReaction = async (docRef: ReturnType<typeof doc>, pathStr: string) => {
+      try {
+        const snap = await getDoc(docRef);
+        if (!snap.exists()) return;
+        await updateDoc(docRef, { [fieldKey]: increment(1) });
+      } catch (e: any) {
+        if (e?.code !== 'not-found') {
+          reportFirestorePermissionIssue(e, OperationType.UPDATE, pathStr);
+        }
+      }
+    };
+
+    const tasks: Promise<void>[] = [
+      safeUpdateReaction(
+        doc(db, COL_SALAS_CHAT, 'todos', COL_MENSAJES, mensajeId),
+        `${COL_SALAS_CHAT}/todos/${COL_MENSAJES}/${mensajeId}`
+      ),
+      safeUpdateReaction(
+        doc(db, COL_MENSAJES_GLOBAL, mensajeId),
+        `${COL_MENSAJES_GLOBAL}/${mensajeId}`
+      ),
+    ];
 
     if (safeSala !== 'todos') {
-      const specificDocRef = doc(db, COL_SALAS_CHAT, safeSala, COL_MENSAJES, mensajeId);
-      updateDoc(specificDocRef, { [fieldKey]: increment(1) }).catch((e) => {
-        reportFirestorePermissionIssue(e, OperationType.UPDATE, `${COL_SALAS_CHAT}/${safeSala}/${COL_MENSAJES}/${mensajeId}`);
-      });
+      tasks.push(
+        safeUpdateReaction(
+          doc(db, COL_SALAS_CHAT, safeSala, COL_MENSAJES, mensajeId),
+          `${COL_SALAS_CHAT}/${safeSala}/${COL_MENSAJES}/${mensajeId}`
+        )
+      );
     }
 
-    const rootDocRef = doc(db, COL_MENSAJES_GLOBAL, mensajeId);
-    updateDoc(rootDocRef, { [fieldKey]: increment(1) }).catch((e) => {
-      reportFirestorePermissionIssue(e, OperationType.UPDATE, `${COL_MENSAJES_GLOBAL}/${mensajeId}`);
-    });
+    await Promise.allSettled(tasks);
   } catch {}
 }
 

@@ -98,7 +98,8 @@ service cloud.firestore {
 
     function isValidMensajeUpdate() {
       let d = request.resource.data;
-      return d.texto == resource.data.texto &&
+      return resource != null &&
+             d.texto == resource.data.texto &&
              d.usuarioId == resource.data.usuarioId &&
              d.diff(resource.data).affectedKeys().hasOnly(['reacciones', 'reportado']);
     }

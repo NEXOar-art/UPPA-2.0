@@ -72,31 +72,42 @@ export async function ensureFirebaseAuthSession(): Promise<string | null> {
 
   pendingAuthReadyPromise = (async () => {
     try {
-      await new Promise<void>((resolve) => {
-        let settled = false;
-        const timer = setTimeout(() => {
-          if (!settled) {
-            settled = true;
-            unsub();
-            resolve();
-          }
-        }, 1400);
+      // Esperar a que Firebase Auth termine de restaurar la sesión persistida (Google/Email/Anónima)
+      if (typeof auth.authStateReady === 'function') {
+        await Promise.race([
+          auth.authStateReady(),
+          new Promise<void>((resolve) => setTimeout(resolve, 2500)),
+        ]);
+      } else {
+        await new Promise<void>((resolve) => {
+          let settled = false;
+          const timer = setTimeout(() => {
+            if (!settled) {
+              settled = true;
+              unsub();
+              resolve();
+            }
+          }, 2500);
 
-        const unsub = onAuthStateChanged(auth, () => {
-          if (!settled) {
-            settled = true;
-            clearTimeout(timer);
-            unsub();
-            resolve();
-          }
+          const unsub = onAuthStateChanged(auth, () => {
+            if (!settled) {
+              settled = true;
+              clearTimeout(timer);
+              unsub();
+              resolve();
+            }
+          });
         });
-      });
+      }
 
       if (auth.currentUser) {
         return auth.currentUser.uid;
       }
 
-      if (lastAnonymousAuthErrorCode === 'auth/operation-not-allowed' || lastAnonymousAuthErrorCode === 'auth/admin-restricted-operation') {
+      if (
+        lastAnonymousAuthErrorCode === 'auth/operation-not-allowed' ||
+        lastAnonymousAuthErrorCode === 'auth/admin-restricted-operation'
+      ) {
         return null;
       }
 

@@ -143,16 +143,31 @@ export const CommunityChat: React.FC<CommunityChatProps> = ({
   }, []);
 
   useEffect(() => {
+    const isChatPath = (p?: string | null) =>
+      Boolean(p && (p.includes('salas_chat') || p.includes('mensajes_comunitarios')));
+
     const onPermError = (ev: Event) => {
       const detail = (ev as CustomEvent)?.detail;
+      if (!isChatPath(detail?.path)) return;
       setFirestoreSyncIssue({
         path: detail?.path,
         anonymousAuthBlocked: detail?.anonymousAuthBlocked,
         hasAuthUser: detail?.hasAuthUser,
       });
     };
-    const onSyncOk = () => {
-      setFirestoreSyncIssue(null);
+    const onSyncOk = (ev: Event) => {
+      const detail = (ev as CustomEvent)?.detail;
+      const okPath = detail?.path as string | undefined;
+      if (!isChatPath(okPath)) return;
+      setFirestoreSyncIssue((prev) => {
+        if (!prev) return null;
+        if (!prev.path || !okPath) return null;
+        // Limpiar si el mismo canal o prefijo volvió a sincronizar correctamente
+        const sameTarget =
+          (okPath.includes('mensajes_comunitarios') && prev.path.includes('mensajes_comunitarios')) ||
+          (okPath.includes('salas_chat') && prev.path.includes('salas_chat'));
+        return sameTarget ? null : prev;
+      });
     };
     window.addEventListener('uppa-firestore-permission-error', onPermError);
     window.addEventListener('uppa-firestore-sync-ok', onSyncOk);
@@ -639,11 +654,12 @@ export const CommunityChat: React.FC<CommunityChatProps> = ({
             <div className="min-w-0 leading-snug">
               <p className="font-black text-[11px] text-amber-200">
                 Sincronización bloqueada por reglas de Firestore
+                {firestoreSyncIssue.path ? ` (${firestoreSyncIssue.path})` : ''}
               </p>
               <p className="text-[10.5px] text-amber-100/90">
-                {firestoreSyncIssue.anonymousAuthBlocked
+                {firestoreSyncIssue.anonymousAuthBlocked && !firestoreSyncIssue.hasAuthUser
                   ? 'Habilitá el acceso Anónimo en Firebase Authentication o ingresá con Google/Correo, y verificá las reglas en Firestore.'
-                  : 'Las reglas actuales de Firestore están bloqueando la lectura/escritura comunitaria de mensajes.'}
+                  : 'Las reglas publicadas actualmente en Firestore están bloqueando la lectura/escritura comunitaria de mensajes en esa colección.'}
               </p>
             </div>
           </div>
@@ -925,6 +941,7 @@ export const CommunityChat: React.FC<CommunityChatProps> = ({
         <input
           ref={inputRef}
           type="text"
+          maxLength={1500}
           value={inputText}
           onChange={(e) => setInputText(e.target.value)}
           placeholder={`Escribí un mensaje visible para toda la comunidad como ${currentUser.name}...`}
