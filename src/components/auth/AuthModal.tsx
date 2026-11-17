@@ -43,6 +43,7 @@ interface AuthModalProps {
   onUpdateUser: (updated: User) => void;
   defaultMode?: 'register' | 'login' | 'profile';
   isHabilitado?: boolean;
+  onOpenPublishTaxi?: () => void;
 }
 
 export const AuthModal: React.FC<AuthModalProps> = ({
@@ -52,6 +53,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onUpdateUser,
   defaultMode,
   isHabilitado,
+  onOpenPublishTaxi,
 }) => {
   const {
     user: authUser,
@@ -1036,11 +1038,25 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     </button>
 
                     {isHabilitacionCardExpanded && (
-                      <div className="space-y-3 pt-2 border-t border-white/10 animate-in fade-in duration-200">
+                      <div className="space-y-2.5 pt-2 border-t border-white/10 animate-in fade-in duration-200">
                         <div className="text-xs font-black text-[#FFF19A]">Habilitación por Administrador</div>
                         <p className="text-[11px] text-[#9299A5] leading-relaxed">
                           Para figurar como <strong className="text-white">Habilitado</strong> en Taxis & Motos, el Administrador debe validar tu comprobante y activar tu unidad. En ese momento comenzará tu temporizador en vivo.
                         </p>
+
+                        {onOpenPublishTaxi && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onClose();
+                              onOpenPublishTaxi();
+                            }}
+                            className="w-full min-h-[42px] px-3 rounded-xl uppa-cta-yellow font-black text-xs flex items-center justify-center gap-2 cursor-pointer"
+                          >
+                            <KeyRound className="w-4 h-4 shrink-0" />
+                            <span>Completar / Enviar Solicitud de Turno</span>
+                          </button>
+                        )}
 
                         <a
                           href={`https://wa.me/5493489690058?text=${encodeURIComponent(

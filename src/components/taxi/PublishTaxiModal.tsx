@@ -84,28 +84,37 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
   const [cascoExtra, setCascoExtra] = useState<boolean>(true);
 
   // Generated code presentation state
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [generatedCodeResult, setGeneratedCodeResult] = useState<string | null>(null);
   const [createdHabId, setCreatedHabId] = useState<string | null>(null);
   const [codeSuccessMsg, setCodeSuccessMsg] = useState<string | null>(null);
 
   useEffect(() => {
     if (isOpen) {
+      setIsSubmitting(false);
       setGeneratedCodeResult(null);
       setCreatedHabId(null);
       setErrorMsg('');
       setCodeSuccessMsg(null);
-      setDriverName('');
-      setWhatsapp('');
+      const validDefaultName =
+        currentUserName &&
+        currentUserName.trim() !== 'Comunidad UPPA' &&
+        currentUserName.trim() !== 'Pasajero'
+          ? currentUserName.trim()
+          : '';
+      setDriverName(validDefaultName);
+      setWhatsapp(currentUserPhone || '');
       setVehicleModel('');
       setPatente('');
       setZone('');
+      setProofFileName('');
       setAsientos(4);
       setAireAcondicionado(true);
       setBaul(true);
       setAceptaMascotas(false);
       setCascoExtra(true);
     }
-  }, [isOpen]);
+  }, [isOpen, currentUserName, currentUserPhone]);
 
   if (!isOpen) return null;
 
@@ -146,14 +155,16 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
   // Step 1: Submit Transfer and automatically record in Firestore & Administración UPPA
   const handleTransferSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+    if (isSubmitting) return;
     setErrorMsg('');
 
+    const cleanWhatsapp = whatsapp.replace(/\D/g, '');
     if (!driverName.trim()) {
       setErrorMsg('Por favor ingresá tu nombre o apodo para el servicio.');
       return;
     }
-    if (!whatsapp.trim()) {
-      setErrorMsg('Ingresá el número de WhatsApp donde te contactarán los pasajeros.');
+    if (cleanWhatsapp.length < 8) {
+      setErrorMsg('Ingresá un número de WhatsApp válido (mínimo 8 dígitos, ej: 3487 55-2190).');
       return;
     }
     if (!vehicleModel.trim()) {
@@ -165,27 +176,28 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
       return;
     }
 
-    const cleanWhatsapp = whatsapp.replace(/\D/g, '');
     const cleanPatente = patente.trim().toUpperCase();
+    const formattedWhatsapp = cleanWhatsapp.startsWith('54') ? cleanWhatsapp : `549${cleanWhatsapp}`;
 
-    // 1. Generate unique Activation Code
-    const generatedCodeObj = generateActivationCode({
-      driverName: driverName.trim(),
-      vehicleType,
-      vehicleModel: vehicleModel.trim(),
-      whatsapp: cleanWhatsapp,
-      hours: selectedHours,
-    });
-
-    // 2. Register driver request in Firestore and notify Administración UPPA immediately
+    setIsSubmitting(true);
     try {
+      // 1. Generate unique Activation Code
+      const generatedCodeObj = generateActivationCode({
+        driverName: driverName.trim(),
+        vehicleType,
+        vehicleModel: vehicleModel.trim(),
+        whatsapp: cleanWhatsapp,
+        hours: selectedHours,
+      });
+
+      // 2. Register driver request in Firestore and notify Administración UPPA immediately
       const createdHab = await solicitarHabilitacionChofer({
         driverId: currentUserId || `usr-driver-${Date.now()}`,
         driverName: driverName.trim(),
         vehicleType,
         vehicleModel: vehicleModel.trim(),
         patente: cleanPatente,
-        whatsapp: cleanWhatsapp.startsWith('54') ? cleanWhatsapp : `549${cleanWhatsapp}`,
+        whatsapp: formattedWhatsapp,
         zone: zone.trim() || 'Zárate ↔ Campana',
         horas: selectedHours,
         comprobanteFileName: proofFileName || 'Comprobante WhatsApp 3489690058',
@@ -197,50 +209,53 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
         indiceSeguridad: currentSafetyIndex,
       });
       if (createdHab?.id) setCreatedHabId(createdHab.id);
-    } catch (err) {
-      console.warn('Sync driver request warning:', err);
+
+      // 3. Submit payment proof
+      onSubmit(
+        {
+          userId: currentUserId,
+          driverName: driverName.trim(),
+          vehicleType,
+          vehicleModel: vehicleModel.trim(),
+          patente: cleanPatente,
+          whatsapp: formattedWhatsapp,
+          zone: zone.trim() || 'Zárate ↔ Campana',
+          lat: -34.175 + (Math.random() - 0.5) * 0.03,
+          lng: -58.965 + (Math.random() - 0.5) * 0.03,
+          hoursPaid: selectedHours,
+          activationCode: generatedCodeObj.code,
+          asientos: vehicleType === 'auto' ? asientos : 1,
+          aireAcondicionado: vehicleType === 'auto' ? aireAcondicionado : false,
+          baul,
+          aceptaMascotas: vehicleType === 'auto' ? aceptaMascotas : false,
+          cascoExtra: vehicleType === 'moto' ? cascoExtra : false,
+          indiceSeguridad: currentSafetyIndex,
+        },
+        {
+          userId: currentUserId,
+          userName: driverName.trim(),
+          whatsapp: cleanWhatsapp,
+          vehicleType,
+          vehicleModel: vehicleModel.trim(),
+          zone: zone.trim() || 'Zárate ↔ Campana',
+          amount: totalAmount,
+          hours: selectedHours,
+          proofUrl: 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?auto=format&fit=crop&w=600&q=80',
+          proofFileName: proofFileName || 'comprobante_luciaveronicag.pdf',
+          alias: 'luciaveronicag',
+          activationCode: generatedCodeObj.code,
+        }
+      );
+
+      // Show generated code and direct WhatsApp anchor to user
+      playMicroSound('payment_done');
+      setGeneratedCodeResult(generatedCodeObj.code);
+    } catch (err: any) {
+      console.error('Error al registrar solicitud de chofer:', err);
+      setErrorMsg(err?.message || 'No se pudo registrar la solicitud. Intentá nuevamente.');
+    } finally {
+      setIsSubmitting(false);
     }
-
-    // 3. Submit payment proof
-    onSubmit(
-      {
-        userId: currentUserId,
-        driverName: driverName.trim(),
-        vehicleType,
-        vehicleModel: vehicleModel.trim(),
-        patente: cleanPatente,
-        whatsapp: cleanWhatsapp.startsWith('54') ? cleanWhatsapp : `549${cleanWhatsapp}`,
-        zone: zone.trim() || 'Zárate ↔ Campana',
-        lat: -34.175 + (Math.random() - 0.5) * 0.03,
-        lng: -58.965 + (Math.random() - 0.5) * 0.03,
-        hoursPaid: selectedHours,
-        activationCode: generatedCodeObj.code,
-        asientos: vehicleType === 'auto' ? asientos : 1,
-        aireAcondicionado: vehicleType === 'auto' ? aireAcondicionado : false,
-        baul,
-        aceptaMascotas: vehicleType === 'auto' ? aceptaMascotas : false,
-        cascoExtra: vehicleType === 'moto' ? cascoExtra : false,
-        indiceSeguridad: currentSafetyIndex,
-      },
-      {
-        userId: currentUserId,
-        userName: driverName.trim(),
-        whatsapp: cleanWhatsapp,
-        vehicleType,
-        vehicleModel: vehicleModel.trim(),
-        zone: zone.trim() || 'Zárate ↔ Campana',
-        amount: totalAmount,
-        hours: selectedHours,
-        proofUrl: 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?auto=format&fit=crop&w=600&q=80',
-        proofFileName: proofFileName || 'comprobante_luciaveronicag.pdf',
-        alias: 'luciaveronicag',
-        activationCode: generatedCodeObj.code,
-      }
-    );
-
-    // Show generated code and direct WhatsApp anchor to user
-    playMicroSound('payment_done');
-    setGeneratedCodeResult(generatedCodeObj.code);
   };
 
 
@@ -345,11 +360,9 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
                   <span className="font-mono text-white">+{whatsapp}</span>
                 </div>
                 <div className="flex justify-between text-white pt-1.5 border-t border-white/10 gap-2">
-                  <span className="text-[#9299A5] shrink-0">Confort / Capacidad:</span>
-                  <span className="text-[#B7F36B] font-semibold text-right">
-                    {vehicleType === 'moto'
-                      ? `${cascoExtra ? 'Casco extra' : 'Sin casco'}${baul ? ' · Baúl' : ''}`
-                      : `${asientos} asientos${aireAcondicionado ? ' · Aire' : ''}${baul ? ' · Baúl' : ''}${aceptaMascotas ? ' · Mascotas' : ''}`}
+                  <span className="text-[#9299A5] shrink-0">Estado en Admin UPPA:</span>
+                  <span className="text-[#FFF19A] font-black text-right">
+                    Pendiente ({createdHabId || 'Registrada'})
                   </span>
                 </div>
               </div>
@@ -380,10 +393,10 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
               <div className="p-3.5 rounded-2xl bg-[#101114] border border-white/15 text-[11px] text-[#9299A5] max-w-sm mx-auto text-left space-y-1.5">
                 <div className="flex items-center gap-2 font-black text-white">
                   <KeyRound className="w-4 h-4 text-[#FFF19A] shrink-0" />
-                  <span>Habilitación por Administrador</span>
+                  <span>Visible en Administración UPPA · Solicitudes Pendientes</span>
                 </div>
                 <p className="text-[#9299A5] text-[11px] leading-relaxed">
-                  El servicio y temporizador en vivo lo activa exclusivamente el Administrador tras corroborar la transferencia a <strong className="text-white">luciaveronicag</strong> enviada al WhatsApp <strong className="text-[#B7F36B]">3489690058</strong>.
+                  Tu solicitud ya figura como <strong className="text-[#FFF19A]">Pendiente</strong> en <strong className="text-white">Administración UPPA</strong>. El Administrador verifica tu transferencia a <strong className="text-white">luciaveronicag</strong> (WhatsApp <strong className="text-[#B7F36B]">3489690058</strong>) e inicia tu temporizador en vivo.
                 </p>
               </div>
 
@@ -399,7 +412,7 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
               </div>
             </div>
           ) : (
-            <form onSubmit={handleTransferSubmit} className="space-y-3.5">
+            <form onSubmit={handleTransferSubmit} noValidate className="space-y-3.5">
               {/* Vehicle Type Choice */}
               <div>
                 <label className="block text-[11px] font-bold text-[#9299A5] mb-1.5 uppercase tracking-wider">
@@ -733,11 +746,16 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
                 <div className="pt-2 space-y-2">
                   <button
                     type="submit"
+                    disabled={isSubmitting}
                     title="Registrar solicitud de chofer y abrir WhatsApp 3489690058 para adjuntar comprobante"
-                    className="w-full min-h-[48px] flex items-center justify-center gap-2 px-4 py-3 uppa-cta-green font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer text-center leading-snug"
+                    className="w-full min-h-[48px] flex items-center justify-center gap-2 px-4 py-3 uppa-cta-green font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer text-center leading-snug disabled:opacity-60"
                   >
                     <MessageCircle className="w-4 h-4 shrink-0" />
-                    <span>Enviar Solicitud y Adjuntar Comprobante (WhatsApp 3489690058)</span>
+                    <span>
+                      {isSubmitting
+                        ? 'Registrando solicitud...'
+                        : 'Enviar Solicitud y Adjuntar Comprobante (WhatsApp 3489690058)'}
+                    </span>
                   </button>
 
                   <div className="flex items-center justify-between text-[11px] text-[#9299A5] px-1 pt-0.5">

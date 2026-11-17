@@ -55,8 +55,9 @@ export const COL_ANALYTICS = 'analytics';
 // Master Admin Security PIN
 export const ADMIN_MASTER_PIN = '0608';
 
-// Tiempo de exposición en pantalla de eventos push (reporte, chat): 7 segundos exactos para mantener el mapa despejado
+// Tiempo de exposición en pantalla de eventos push: 7s reportes/transporte, 4.5s chat para mantener la pantalla despejada
 export const PUSH_EVENT_EXPOSURE_TIME_MS = 7 * 1000;
+export const PUSH_CHAT_EVENT_EXPOSURE_TIME_MS = 4500;
 
 // Registro de eventos activos para deduplicación: si se repiten, solo se toma 1
 const activePushEventsMap = new Map<string, number>();
@@ -64,7 +65,8 @@ const activePushEventsMap = new Map<string, number>();
 function cleanExpiredPushDeduplicationCache() {
   const now = Date.now();
   for (const [key, timestamp] of activePushEventsMap.entries()) {
-    if (now - timestamp > PUSH_EVENT_EXPOSURE_TIME_MS) {
+    const ttl = key.endsWith('::chat') ? PUSH_CHAT_EVENT_EXPOSURE_TIME_MS : PUSH_EVENT_EXPOSURE_TIME_MS;
+    if (now - timestamp > ttl) {
       activePushEventsMap.delete(key);
     }
   }
@@ -195,17 +197,20 @@ export function triggerInAppPushNotification(
   cleanExpiredPushDeduplicationCache();
   const now = Date.now();
 
+  const exposureDurationMs =
+    type === 'chat' ? PUSH_CHAT_EVENT_EXPOSURE_TIME_MS : PUSH_EVENT_EXPOSURE_TIME_MS;
+
   // Clave de deduplicación: si se repiten eventos idénticos durante la ventana de exposición, solo se toma 1
   const dedupeKey = `${title.trim().toLowerCase()}::${body.trim().toLowerCase()}::${type}`;
   if (activePushEventsMap.has(dedupeKey)) {
     const previousTime = activePushEventsMap.get(dedupeKey)!;
-    if (now - previousTime < PUSH_EVENT_EXPOSURE_TIME_MS) {
+    if (now - previousTime < exposureDurationMs) {
       // Ignorar evento repetido para no saturar la pantalla
       return null;
     }
   }
 
-  // Registrar momento de publicación con tiempo de exposición de 7 segundos
+  // Registrar momento de publicación con tiempo de exposición correspondiente (4.5s chat / 7s otros)
   activePushEventsMap.set(dedupeKey, now);
 
   const notif: PushNotificationPayload = {
@@ -214,7 +219,7 @@ export function triggerInAppPushNotification(
     body,
     type,
     timestamp: now,
-    exposureExpiresAt: now + PUSH_EVENT_EXPOSURE_TIME_MS,
+    exposureExpiresAt: now + exposureDurationMs,
     data,
     read: false,
   };
@@ -2205,6 +2210,59 @@ export function obtenerHabilitacionesActuales(): HabilitacionChofer[] {
   return cached.filter((h) => h.id !== 'hab-2' && h.driverId !== 'drv-carlos');
 }
 
+function normalizeHabilitacionDoc(id: string, data: Record<string, any>): HabilitacionChofer {
+  const toMs = (val: any): number | undefined => {
+    if (typeof val === 'number') return val;
+    if (val?.toMillis) return val.toMillis();
+    if (typeof val?.seconds === 'number') return val.seconds * 1000;
+    if (typeof val === 'string') {
+      const parsed = new Date(val).getTime();
+      if (!isNaN(parsed)) return parsed;
+    }
+    return undefined;
+  };
+
+  const createdMs = toMs(data.createdAt) ?? toMs(data.startsAt) ?? Date.now();
+  return {
+    id,
+    ...(data as Omit<HabilitacionChofer, 'id'>),
+    createdAt: createdMs,
+    startsAt: toMs(data.startsAt) ?? data.startsAt,
+    endsAt: toMs(data.endsAt) ?? data.endsAt,
+  };
+}
+
+export async function sincronizarHabilitacionesDesdeFirestore(): Promise<HabilitacionChofer[]> {
+  try {
+    await ensureFirebaseAuthSession();
+    const colRef = collection(db, COL_HABILITACIONES);
+    const snapshot = await getDocs(colRef);
+    notifyFirestoreSyncHealthy(COL_HABILITACIONES);
+
+    const firestoreList: HabilitacionChofer[] = snapshot.docs
+      .map((d) => normalizeHabilitacionDoc(d.id, d.data()))
+      .filter((h) => h.id !== 'hab-2' && h.driverId !== 'drv-carlos');
+
+    const currentCache = getCached<HabilitacionChofer[]>('habilitaciones', MOCK_INITIAL_HABILITACIONES).filter(
+      (h) => h.id !== 'hab-2' && h.driverId !== 'drv-carlos'
+    );
+    const mergedMap = new Map<string, HabilitacionChofer>();
+    currentCache.forEach((h) => mergedMap.set(h.id, h));
+    firestoreList.forEach((h) => mergedMap.set(h.id, h));
+    const merged = Array.from(mergedMap.values()).sort(
+      (a, b) => (Number(b.createdAt || b.startsAt || 0)) - (Number(a.createdAt || a.startsAt || 0))
+    );
+
+    setCached('habilitaciones', merged);
+    notifyHabilitacionesListeners(merged);
+    return merged;
+  } catch (err) {
+    console.warn('Firestore sincronizarHabilitacionesDesdeFirestore fallback:', err);
+    reportFirestorePermissionIssue(err, OperationType.LIST, COL_HABILITACIONES);
+    return obtenerHabilitacionesActuales();
+  }
+}
+
 export function subscribeToHabilitacionesChofer(
   callback: (habilitaciones: HabilitacionChofer[]) => void,
   onError?: (error: any) => void
@@ -2228,36 +2286,29 @@ export function subscribeToHabilitacionesChofer(
     window.addEventListener('uppa_habilitaciones_change', windowHandler);
   }
 
-  // 4. Suscripción en tiempo real a Firestore con resincronización tras Auth
+  // 4. Suscripción en tiempo real a Firestore (sin orderBy obligatorio para no excluir documentos sin createdAt)
   const colRef = collection(db, COL_HABILITACIONES);
-  const q = query(colRef, orderBy('createdAt', 'desc'));
 
   const unsubFirestore = subscribeWithAuthResync(
     () =>
       onSnapshot(
-        q,
+        colRef,
         (snapshot) => {
           notifyFirestoreSyncHealthy(COL_HABILITACIONES);
-          const firestoreList: HabilitacionChofer[] = snapshot.docs.map((d) => {
-            const data = d.data();
-            const createdMs = typeof data.createdAt === 'number'
-              ? data.createdAt
-              : typeof data.createdAt?.seconds === 'number'
-              ? data.createdAt.seconds * 1000
-              : Date.now();
-            return {
-              id: d.id,
-              ...(data as Omit<HabilitacionChofer, 'id'>),
-              createdAt: createdMs,
-            };
-          });
+          const firestoreList: HabilitacionChofer[] = snapshot.docs
+            .map((d) => normalizeHabilitacionDoc(d.id, d.data()))
+            .filter((h) => h.id !== 'hab-2' && h.driverId !== 'drv-carlos');
 
           // Fusionar inteligentemente con solicitudes pendientes locales
-          const currentCache = getCached<HabilitacionChofer[]>('habilitaciones', MOCK_INITIAL_HABILITACIONES);
+          const currentCache = getCached<HabilitacionChofer[]>('habilitaciones', MOCK_INITIAL_HABILITACIONES).filter(
+            (h) => h.id !== 'hab-2' && h.driverId !== 'drv-carlos'
+          );
           const mergedMap = new Map<string, HabilitacionChofer>();
           currentCache.forEach((h) => mergedMap.set(h.id, h));
           firestoreList.forEach((h) => mergedMap.set(h.id, h));
-          const merged = Array.from(mergedMap.values()).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+          const merged = Array.from(mergedMap.values()).sort(
+            (a, b) => (Number(b.createdAt || b.startsAt || 0)) - (Number(a.createdAt || a.startsAt || 0))
+          );
 
           setCached('habilitaciones', merged);
           notifyHabilitacionesListeners(merged);
@@ -2266,7 +2317,7 @@ export function subscribeToHabilitacionesChofer(
           console.warn('Firestore habilitaciones onSnapshot offline fallback:', err);
           reportFirestorePermissionIssue(err, OperationType.LIST, COL_HABILITACIONES);
           if (onError) onError(err);
-          callback(getCached<HabilitacionChofer[]>('habilitaciones', MOCK_INITIAL_HABILITACIONES));
+          callback(obtenerHabilitacionesActuales());
         }
       ),
     COL_HABILITACIONES
@@ -2281,7 +2332,7 @@ export function subscribeToHabilitacionesChofer(
   };
 }
 
-export const HABILITACION_PENDIENTE_TIMEOUT_MS = 25 * 60 * 1000; // 25 minutos ventana de habilitación
+export const HABILITACION_PENDIENTE_TIMEOUT_MS = 25 * 60 * 1000; // Referencia histórica de espera
 
 export async function solicitarHabilitacionChofer(data: {
   driverId: string;
@@ -2301,38 +2352,68 @@ export async function solicitarHabilitacionChofer(data: {
   cascoExtra?: boolean;
   indiceSeguridad?: number;
 }): Promise<HabilitacionChofer> {
+  const effectiveDriverId = (data.driverId || '').trim() || `drv-${Date.now()}`;
+  const isInitialPlaceholder = Boolean(data.comprobanteFileName?.startsWith('Registro inicial'));
+  const current = getCached<HabilitacionChofer[]>('habilitaciones', MOCK_INITIAL_HABILITACIONES);
+
+  // Si es un placeholder automático de registro y ya existe una solicitud pendiente/activa del mismo chofer, no duplicar
+  if (isInitialPlaceholder) {
+    const existingForDriver = current.find(
+      (h) =>
+        h.driverId === effectiveDriverId &&
+        (h.estado === 'pendiente' || (h.estado === 'activo' && Boolean(h.endsAt && h.endsAt > Date.now())))
+    );
+    if (existingForDriver) {
+      return existingForDriver;
+    }
+  }
+
   const localId = `hab-${Date.now()}`;
-  const cleanWhatsapp = data.whatsapp.replace(/\D/g, '');
+  const rawDigits = (data.whatsapp || '').replace(/\D/g, '');
+  const formattedWhatsapp =
+    rawDigits.length >= 6
+      ? (rawDigits.startsWith('54') ? rawDigits : `549${rawDigits}`).slice(0, 30)
+      : '54900000000';
+  const safeDriverName = (data.driverName || '').trim().slice(0, 100) || 'Chofer UPPA';
   const now = Date.now();
   const cleanPatente = (data.patente || '').trim().toUpperCase();
 
   // Calcular índice de seguridad real según ítems cargados
   const isAuto = data.vehicleType === 'auto';
+  const resolvedAsientos = isAuto ? (data.asientos || 4) : 1;
+  const resolvedAire = isAuto ? (data.aireAcondicionado ?? true) : false;
+  const resolvedBaul = data.baul ?? true;
+  const resolvedMascotas = isAuto ? Boolean(data.aceptaMascotas) : false;
+  const resolvedCasco = !isAuto ? (data.cascoExtra ?? true) : false;
+
   let completedCount = 0;
   const totalCount = isAuto ? 6 : 4;
   if (cleanPatente) completedCount++;
   if (isAuto) {
-    if ((data.asientos || 0) >= 1) completedCount++;
-    if (data.aireAcondicionado !== false) completedCount++;
-    if (data.baul !== false) completedCount++;
-    if (data.aceptaMascotas) completedCount++;
-    if (cleanWhatsapp) completedCount++;
+    if (resolvedAsientos >= 1) completedCount++;
+    if (resolvedAire) completedCount++;
+    if (resolvedBaul) completedCount++;
+    if (resolvedMascotas) completedCount++;
+    if (rawDigits.length >= 6) completedCount++;
   } else {
-    if (data.cascoExtra !== false) completedCount++;
-    if (data.baul !== false) completedCount++;
-    if (cleanWhatsapp) completedCount++;
+    if (resolvedCasco) completedCount++;
+    if (resolvedBaul) completedCount++;
+    if (rawDigits.length >= 6) completedCount++;
   }
-  const indiceSeguridad = Math.round((completedCount / totalCount) * 100);
+  const indiceSeguridad =
+    typeof data.indiceSeguridad === 'number'
+      ? data.indiceSeguridad
+      : Math.round((completedCount / totalCount) * 100);
 
   const newHab: HabilitacionChofer = {
     id: localId,
-    driverId: data.driverId || `drv-${Date.now()}`,
-    driverName: data.driverName.trim(),
+    driverId: effectiveDriverId,
+    driverName: safeDriverName,
     vehicleType: data.vehicleType,
-    vehicleModel: data.vehicleModel.trim(),
+    vehicleModel: (data.vehicleModel || '').trim() || (data.vehicleType === 'moto' ? 'Moto Taxi UPPA' : 'Auto Taxi UPPA'),
     patente: cleanPatente,
-    whatsapp: cleanWhatsapp.startsWith('54') ? cleanWhatsapp : `549${cleanWhatsapp}`,
-    zone: data.zone.trim() || 'Zárate ↔ Campana',
+    whatsapp: formattedWhatsapp,
+    zone: (data.zone || '').trim() || 'Zárate ↔ Campana',
     horas: data.horas || 12,
     estado: 'pendiente',
     activadoConClaveAdmin: false,
@@ -2343,18 +2424,26 @@ export async function solicitarHabilitacionChofer(data: {
     comprobanteFileName: data.comprobanteFileName || 'comprobante_luciaveronicag_whatsapp.pdf',
     createdAt: now,
     adminNotes: 'Solicitud para prestar servicio recibida. En espera de habilitación con clave 0608 en Administración UPPA.',
-    // Confort y capacidad
-    asientos: data.asientos,
-    aireAcondicionado: data.aireAcondicionado,
-    baul: data.baul,
-    aceptaMascotas: data.aceptaMascotas,
-    cascoExtra: data.cascoExtra,
+    asientos: resolvedAsientos,
+    aireAcondicionado: resolvedAire,
+    baul: resolvedBaul,
+    aceptaMascotas: resolvedMascotas,
+    cascoExtra: resolvedCasco,
     indiceSeguridad,
   };
 
-  // 1. Actualizar inmediatamente la caché local y notificar en tiempo real a Administración UPPA
-  const current = getCached<HabilitacionChofer[]>('habilitaciones', MOCK_INITIAL_HABILITACIONES);
-  const updated = [newHab, ...current.filter((h) => h.id !== newHab.id)];
+  // 1. Si había un placeholder inicial pendiente de este mismo chofer, reemplazarlo limpiamente
+  const cleanedPrev = current.filter(
+    (h) =>
+      h.id !== newHab.id &&
+      !(
+        !isInitialPlaceholder &&
+        h.driverId === effectiveDriverId &&
+        h.estado === 'pendiente' &&
+        h.comprobanteFileName?.startsWith('Registro inicial')
+      )
+  );
+  const updated = [newHab, ...cleanedPrev];
   setCached('habilitaciones', updated);
   notifyHabilitacionesListeners(updated);
 
@@ -2362,22 +2451,25 @@ export async function solicitarHabilitacionChofer(data: {
   try {
     triggerInAppPushNotification(
       '📋 Nueva Solicitud de Chofer Pendiente',
-      `${data.driverName} envió solicitud para prestar servicio (${data.vehicleType === 'moto' ? 'Moto' : 'Auto'}) por ${data.horas}h en Administración UPPA.`,
+      `${safeDriverName} envió solicitud para prestar servicio (${data.vehicleType === 'moto' ? 'Moto' : 'Auto'}) por ${newHab.horas}h en Administración UPPA.`,
       'admin',
       { habilitacionId: localId }
     );
   } catch {}
 
-  // 3. Escribir en Firestore de forma resiliente
+  // 3. Escribir en Firestore de forma resiliente (sin campos undefined)
   try {
     const authUid = await ensureFirebaseAuthSession();
     const colRef = collection(db, COL_HABILITACIONES);
     const docRef = doc(colRef, localId);
-    await setDoc(docRef, {
-      ...newHab,
-      authUid: authUid || null,
-      createdAt: serverTimestamp(),
-    });
+    const firestorePayload = Object.fromEntries(
+      Object.entries({
+        ...newHab,
+        authUid: authUid || null,
+        createdAt: serverTimestamp(),
+      }).filter(([, v]) => v !== undefined)
+    );
+    await setDoc(docRef, firestorePayload);
     notifyFirestoreSyncHealthy(`${COL_HABILITACIONES}/${localId}`);
   } catch (err) {
     console.warn('Firestore solicitarHabilitacionChofer notice (persisted in local cache):', err);
@@ -2398,6 +2490,7 @@ export async function marcarSolicitudWhatsappEnviada(habId: string): Promise<voi
   notifyHabilitacionesListeners(updated);
 
   try {
+    await ensureFirebaseAuthSession().catch(() => null);
     const docRef = doc(db, COL_HABILITACIONES, habId);
     await updateDoc(docRef, { whatsappEnviadoEn: now });
   } catch (err) {
@@ -2422,14 +2515,22 @@ export async function habilitarChoferConClaveAdmin(
 
   const path = `${COL_HABILITACIONES}/${habilitacionId}`;
   try {
+    await ensureFirebaseAuthSession().catch(() => null);
     const docRef = doc(db, COL_HABILITACIONES, habilitacionId);
-    const snap = await getDoc(docRef);
-
+    let snapExists = false;
     let docData: any = null;
-    if (snap.exists()) {
-      docData = snap.data();
-    } else {
-      // Find in cached
+
+    try {
+      const snap = await getDoc(docRef);
+      if (snap.exists()) {
+        snapExists = true;
+        docData = snap.data();
+      }
+    } catch (readErr) {
+      console.warn('Firestore getDoc habilitacion notice:', readErr);
+    }
+
+    if (!docData) {
       const cachedList = getCached<HabilitacionChofer[]>('habilitaciones', MOCK_INITIAL_HABILITACIONES);
       docData = cachedList.find((h) => h.id === habilitacionId);
     }
@@ -2460,9 +2561,25 @@ export async function habilitarChoferConClaveAdmin(
     };
 
     try {
-      await updateDoc(docRef, updatePayload);
+      if (snapExists) {
+        await updateDoc(docRef, updatePayload);
+      } else {
+        const sanitizedFull = Object.fromEntries(
+          Object.entries({
+            ...docData,
+            ...updatePayload,
+            id: habilitacionId,
+            driverName: (docData.driverName || 'Chofer UPPA').trim().slice(0, 100),
+            vehicleType: docData.vehicleType === 'moto' ? 'moto' : 'auto',
+            whatsapp: String(docData.whatsapp || '54900000000').slice(0, 30),
+            createdAt: serverTimestamp(),
+          }).filter(([, v]) => v !== undefined)
+        );
+        await setDoc(docRef, sanitizedFull);
+      }
+      notifyFirestoreSyncHealthy(path);
     } catch (e) {
-      console.warn('Update doc warning, maintaining session:', e);
+      console.warn('Update/Set doc warning, maintaining session:', e);
     }
 
     // Actualizar caché local y notificar a Administración UPPA en vivo
@@ -2537,13 +2654,16 @@ export async function revocarHabilitacionChofer(habilitacionId: string): Promise
 
   const path = `${COL_HABILITACIONES}/${habilitacionId}`;
   try {
+    await ensureFirebaseAuthSession().catch(() => null);
     const docRef = doc(db, COL_HABILITACIONES, habilitacionId);
     await updateDoc(docRef, {
       estado: 'revocado',
       actualizadoEn: serverTimestamp(),
     });
+    notifyFirestoreSyncHealthy(path);
   } catch (error) {
-    handleFirestoreError(error, OperationType.UPDATE, path);
+    console.warn('Firestore revocarHabilitacionChofer resilient mode:', error);
+    reportFirestorePermissionIssue(error, OperationType.UPDATE, path);
   }
 }
 

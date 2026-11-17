@@ -20,6 +20,7 @@ import {
   updateUserDocument,
   marcarEmailVerificadoEnFirestore,
 } from '../services/firestoreService';
+import { solicitarHabilitacionChofer } from '../services/realtimeFirebaseService';
 
 interface RegisterExtraData {
   phone?: string;
@@ -452,6 +453,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           emailVerificado: true,
         }).catch(() => {});
 
+        if (selectedRol === 'chofer_moto' || selectedRol === 'chofer_auto') {
+          const vehicleType: 'moto' | 'auto' = selectedRol === 'chofer_moto' ? 'moto' : 'auto';
+          await solicitarHabilitacionChofer({
+            driverId: effectiveUid,
+            driverName: cleanName,
+            vehicleType,
+            vehicleModel: vehicleType === 'moto' ? 'Moto Taxi UPPA (Completar datos)' : 'Auto Taxi UPPA (Completar datos)',
+            whatsapp: finalUser.phone || '54900000000',
+            zone: finalUser.barrio || 'Zárate ↔ Campana',
+            horas: 12,
+            comprobanteFileName: 'Registro inicial de chofer (pendiente comprobante)',
+          }).catch(() => {});
+        }
+
         setUser(finalUser);
         saveStoredSessionUser(finalUser);
         return finalUser;
@@ -501,6 +516,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         tipoVehiculo,
         emailVerificado: fbVerified,
       }).catch(() => {});
+
+      if (selectedRol === 'chofer_moto' || selectedRol === 'chofer_auto') {
+        const vehicleType: 'moto' | 'auto' = selectedRol === 'chofer_moto' ? 'moto' : 'auto';
+        await solicitarHabilitacionChofer({
+          driverId: fbUid,
+          driverName: cleanName,
+          vehicleType,
+          vehicleModel: vehicleType === 'moto' ? 'Moto Taxi UPPA (Completar datos)' : 'Auto Taxi UPPA (Completar datos)',
+          whatsapp: finalUser.phone || '54900000000',
+          zone: finalUser.barrio || 'Zárate ↔ Campana',
+          horas: 12,
+          comprobanteFileName: 'Registro inicial de chofer (pendiente comprobante)',
+        }).catch(() => {});
+      }
 
       setUser(finalUser);
       saveStoredSessionUser(finalUser);

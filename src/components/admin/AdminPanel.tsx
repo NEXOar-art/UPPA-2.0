@@ -27,11 +27,12 @@ import {
   subscribeToHabilitacionesChofer,
   habilitarChoferConClaveAdmin,
   revocarHabilitacionChofer,
+  solicitarHabilitacionChofer,
+  sincronizarHabilitacionesDesdeFirestore,
   obtenerMetricasEnTiempoReal,
   triggerInAppPushNotification,
   crearCodigoHabilitacion,
   suscribirCodigosHabilitacion,
-  obtenerHabilitacionesActuales,
 } from '../../services/realtimeFirebaseService';
 import { getTimerState } from '../../services/driverActivationService';
 import { UppaDatabaseViewer } from './UppaDatabaseViewer';
@@ -67,6 +68,7 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Plus,
 } from 'lucide-react';
 
 interface AdminPanelProps {
@@ -126,9 +128,21 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   // Inline Confirmations (replacing window.confirm)
   const [confirmRevokeHabId, setConfirmRevokeHabId] = useState<string | null>(null);
+  const [confirmRejectHabId, setConfirmRejectHabId] = useState<string | null>(null);
   const [confirmDeleteUid, setConfirmDeleteUid] = useState<string | null>(null);
   const [confirmDeleteReportId, setConfirmDeleteReportId] = useState<string | null>(null);
   const [confirmDeleteChatId, setConfirmDeleteChatId] = useState<string | null>(null);
+
+  // Manual pending request creation inside Admin
+  const [isManualHabOpen, setIsManualHabOpen] = useState(false);
+  const [manualDriverName, setManualDriverName] = useState('');
+  const [manualVehicleType, setManualVehicleType] = useState<'auto' | 'moto'>('auto');
+  const [manualVehicleModel, setManualVehicleModel] = useState('');
+  const [manualPatente, setManualPatente] = useState('');
+  const [manualWhatsapp, setManualWhatsapp] = useState('');
+  const [manualZone, setManualZone] = useState('Zárate ↔ Campana');
+  const [manualHoras, setManualHoras] = useState<number>(12);
+  const [isCreatingManualHab, setIsCreatingManualHab] = useState(false);
 
   // Sistema de Códigos Únicos Firestore
   const [firestoreCodigos, setFirestoreCodigos] = useState<any[]>([]);
@@ -269,6 +283,49 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }
   };
 
+  const handleCreateManualHabilitacion = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanName = manualDriverName.trim();
+    const cleanWa = manualWhatsapp.replace(/\D/g, '');
+    if (!cleanName) {
+      showErrorBanner('Ingresá el nombre del chofer para generar la solicitud pendiente.');
+      return;
+    }
+    if (cleanWa.length < 8) {
+      showErrorBanner('Ingresá un número de WhatsApp válido (mínimo 8 dígitos).');
+      return;
+    }
+
+    setIsCreatingManualHab(true);
+    try {
+      await solicitarHabilitacionChofer({
+        driverId: `drv-admin-${Date.now()}`,
+        driverName: cleanName,
+        vehicleType: manualVehicleType,
+        vehicleModel:
+          manualVehicleModel.trim() ||
+          (manualVehicleType === 'moto' ? 'Moto Taxi UPPA' : 'Auto Taxi UPPA'),
+        patente: manualPatente.trim().toUpperCase(),
+        whatsapp: cleanWa,
+        zone: manualZone.trim() || 'Zárate ↔ Campana',
+        horas: manualHoras,
+        comprobanteFileName: 'Solicitud cargada desde Administración UPPA',
+      });
+      setManualDriverName('');
+      setManualVehicleModel('');
+      setManualPatente('');
+      setManualWhatsapp('');
+      setManualZone('Zárate ↔ Campana');
+      setManualHoras(12);
+      setIsManualHabOpen(false);
+      showSuccessBanner(`Solicitud pendiente creada para ${cleanName}. Ya podés habilitarla.`);
+    } catch (err: any) {
+      showErrorBanner(err?.message || 'No se pudo crear la solicitud pendiente.');
+    } finally {
+      setIsCreatingManualHab(false);
+    }
+  };
+
   const handleCopy = (text: string, key: string) => {
     navigator.clipboard.writeText(text);
     setCopiedKey(key);
@@ -369,16 +426,19 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     return 0;
   };
 
-  const HABILITACION_TIMEOUT_MS = 25 * 60 * 1000;
+  const formatWaitingElapsed = (createdMs: number): string => {
+    if (!createdMs || createdMs <= 0) return 'Recién';
+    const diffMin = Math.max(0, Math.floor((nowTick - createdMs) / 60000));
+    if (diffMin < 1) return 'Recién';
+    if (diffMin < 60) return `Hace ${diffMin} min`;
+    const hrs = Math.floor(diffMin / 60);
+    const mins = diffMin % 60;
+    return `Hace ${hrs}h ${mins}m`;
+  };
 
-  const pendingHabilitaciones = habilitaciones.filter((h) => {
-    if (h.estado !== 'pendiente' || h.id === 'hab-2' || h.driverId === 'drv-carlos') return false;
-    const createdMs = getHabTimestamp(h);
-    if (createdMs > 0 && nowTick - createdMs > HABILITACION_TIMEOUT_MS) {
-      return false;
-    }
-    return true;
-  });
+  const pendingHabilitaciones = habilitaciones.filter(
+    (h) => h.estado === 'pendiente' && h.id !== 'hab-2' && h.driverId !== 'drv-carlos'
+  );
 
   const activeHabilitaciones = habilitaciones.filter(
     (h) => h.estado === 'activo' && Boolean(h.endsAt && h.endsAt > nowTick)
@@ -493,11 +553,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             type="button"
             onClick={async () => {
               setIsRefreshing(true);
-              const m = await obtenerMetricasEnTiempoReal();
-              setMetricas(m);
-              setHabilitaciones(obtenerHabilitacionesActuales());
-              setIsRefreshing(false);
-              showSuccessBanner('Métricas y solicitudes sincronizadas con Firestore');
+              try {
+                const [m, syncedHabs] = await Promise.all([
+                  obtenerMetricasEnTiempoReal(),
+                  sincronizarHabilitacionesDesdeFirestore(),
+                ]);
+                setMetricas(m);
+                setHabilitaciones(syncedHabs);
+                showSuccessBanner('Métricas y solicitudes sincronizadas con Firestore');
+              } finally {
+                setIsRefreshing(false);
+              }
             }}
             className="min-h-[40px] px-3 rounded-xl bg-[#101114] hover:bg-white/10 border border-white/15 text-white text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
             disabled={isRefreshing}
@@ -703,10 +769,135 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
           {/* Pending Driver Requests */}
           <div className="space-y-3">
-            <h3 className="text-sm font-black text-white flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-[#FFF19A] animate-pulse" />
-              Solicitudes Pendientes de Choferes ({pendingHabilitaciones.length})
-            </h3>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <h3 className="text-sm font-black text-white flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#FFF19A] animate-pulse" />
+                Solicitudes Pendientes de Choferes ({pendingHabilitaciones.length})
+              </h3>
+
+              <button
+                type="button"
+                onClick={() => setIsManualHabOpen((prev) => !prev)}
+                className="px-3.5 min-h-[38px] rounded-xl bg-[#101114] hover:border-[#FFF19A] border-2 border-[#FFF19A]/45 text-[#FFF19A] text-xs font-black flex items-center justify-center gap-1.5 transition-all cursor-pointer self-start sm:self-auto"
+                title="Cargar manualmente una solicitud de chofer pendiente para habilitar"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>{isManualHabOpen ? 'Cerrar Formulario' : 'Nueva Solicitud Pendiente'}</span>
+              </button>
+            </div>
+
+            {isManualHabOpen && (
+              <form
+                onSubmit={handleCreateManualHabilitacion}
+                noValidate
+                className="p-4 rounded-2xl bg-[#202329] border-2 border-[#FFF19A]/50 shadow-[4px_4px_0px_#000000] space-y-3 animate-in fade-in"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-black text-[#FFF19A] uppercase tracking-wider">
+                    Registrar Solicitud Pendiente Manualmente
+                  </span>
+                  <span className="text-[10px] text-[#9299A5]">
+                    Luego la habilitás con clave 0608
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
+                  <div>
+                    <label className="block text-[10px] text-[#9299A5] font-bold mb-1">Nombre del Chofer *</label>
+                    <input
+                      type="text"
+                      value={manualDriverName}
+                      onChange={(e) => setManualDriverName(e.target.value)}
+                      placeholder="Ej: Juan Pérez"
+                      className="w-full min-h-[38px] px-3 rounded-xl bg-[#101114] border border-white/15 text-white text-xs focus:outline-none focus:border-[#FFF19A]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-[#9299A5] font-bold mb-1">WhatsApp *</label>
+                    <input
+                      type="tel"
+                      value={manualWhatsapp}
+                      onChange={(e) => setManualWhatsapp(e.target.value)}
+                      placeholder="Ej: 3489 551122"
+                      className="w-full min-h-[38px] px-3 rounded-xl bg-[#101114] border border-white/15 text-white font-mono text-xs focus:outline-none focus:border-[#FFF19A]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-[#9299A5] font-bold mb-1">Tipo y Horas</label>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <select
+                        value={manualVehicleType}
+                        onChange={(e) => setManualVehicleType(e.target.value as 'auto' | 'moto')}
+                        aria-label="Tipo de vehículo"
+                        className="min-h-[38px] px-2 rounded-xl bg-[#101114] border border-white/15 text-white text-xs font-bold"
+                      >
+                        <option value="auto">Auto</option>
+                        <option value="moto">Moto</option>
+                      </select>
+                      <select
+                        value={manualHoras}
+                        onChange={(e) => setManualHoras(Number(e.target.value))}
+                        aria-label="Horas de servicio"
+                        className="min-h-[38px] px-2 rounded-xl bg-[#101114] border border-white/15 text-white text-xs font-bold"
+                      >
+                        <option value={2}>2h</option>
+                        <option value={6}>6h</option>
+                        <option value={12}>12h</option>
+                        <option value={24}>24h</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-[#9299A5] font-bold mb-1">Vehículo / Modelo</label>
+                    <input
+                      type="text"
+                      value={manualVehicleModel}
+                      onChange={(e) => setManualVehicleModel(e.target.value)}
+                      placeholder={manualVehicleType === 'moto' ? 'Ej: Honda Wave Roja' : 'Ej: Fiat Cronos Blanco'}
+                      className="w-full min-h-[38px] px-3 rounded-xl bg-[#101114] border border-white/15 text-white text-xs focus:outline-none focus:border-[#FFF19A]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-[#9299A5] font-bold mb-1">Patente</label>
+                    <input
+                      type="text"
+                      value={manualPatente}
+                      onChange={(e) => setManualPatente(e.target.value.toUpperCase())}
+                      placeholder="Ej: AE 123 CD"
+                      className="w-full min-h-[38px] px-3 rounded-xl bg-[#101114] border border-white/15 text-white font-mono uppercase text-xs focus:outline-none focus:border-[#FFF19A]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-[#9299A5] font-bold mb-1">Zona</label>
+                    <input
+                      type="text"
+                      value={manualZone}
+                      onChange={(e) => setManualZone(e.target.value)}
+                      placeholder="Zárate ↔ Campana"
+                      className="w-full min-h-[38px] px-3 rounded-xl bg-[#101114] border border-white/15 text-white text-xs focus:outline-none focus:border-[#FFF19A]"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setIsManualHabOpen(false)}
+                    className="min-h-[38px] px-3 rounded-xl bg-[#101114] border border-white/15 text-[#9299A5] hover:text-white text-xs font-bold cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isCreatingManualHab}
+                    className="min-h-[38px] px-4 rounded-xl uppa-cta-green font-black text-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>{isCreatingManualHab ? 'Creando...' : 'Crear Solicitud Pendiente'}</span>
+                  </button>
+                </div>
+              </form>
+            )}
 
             {pendingHabilitaciones.length === 0 ? (
               <div className="p-8 text-center rounded-2xl bg-[#202329] border-2 border-white/10 text-[#9299A5] text-xs space-y-1.5">
@@ -714,20 +905,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   No hay solicitudes de choferes pendientes de habilitación en este momento.
                 </p>
                 <p className="text-[11px]">
-                  Las solicitudes aparecerán aquí en tiempo real cuando los prestadores transfieran y envíen su solicitud (vigencia 25 minutos).
+                  Aparecerán aquí automáticamente cuando un usuario se registre como Chofer, envíe su solicitud desde Taxis &amp; Motos (&quot;Prestar Servicio&quot;), o cargues una con &quot;Nueva Solicitud Pendiente&quot;.
                 </p>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {pendingHabilitaciones.map((hab) => {
                   const createdMs = getHabTimestamp(hab);
-                  const remainingMs =
-                    createdMs > 0
-                      ? Math.max(0, HABILITACION_TIMEOUT_MS - (nowTick - createdMs))
-                      : HABILITACION_TIMEOUT_MS;
-                  const remMins = Math.floor(remainingMs / 60000);
-                  const remSecs = Math.floor((remainingMs % 60000) / 1000);
-                  const formattedPendingTimer = `${remMins}:${remSecs.toString().padStart(2, '0')}`;
+                  const waitingLabel = formatWaitingElapsed(createdMs);
+                  const isConfirmingReject = confirmRejectHabId === hab.id;
 
                   return (
                     <div
@@ -751,9 +937,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                           <span className="px-2 py-0.5 rounded-md bg-[#FFF19A]/15 border border-[#FFF19A]/45 text-[10px] font-black text-[#FFF19A]">
                             Estado: Pendiente
                           </span>
-                          <span className="px-2 py-0.5 rounded-md bg-rose-500/20 border border-rose-400/40 text-[9.5px] font-mono font-bold text-rose-300 flex items-center gap-1">
-                            <Clock className="w-2.5 h-2.5" />
-                            <span>{formattedPendingTimer} restante</span>
+                          <span className="px-2 py-0.5 rounded-md bg-[#101114] border border-white/15 text-[9.5px] font-mono font-bold text-[#9299A5] flex items-center gap-1">
+                            <Clock className="w-2.5 h-2.5 text-[#FFF19A]" />
+                            <span>{waitingLabel}</span>
                           </span>
                         </div>
                       </div>
@@ -852,6 +1038,30 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                             </button>
                           </div>
                         </div>
+                      ) : isConfirmingReject ? (
+                        <div className="p-2.5 rounded-xl bg-rose-950/40 border border-rose-400/50 flex items-center justify-between gap-2 text-xs">
+                          <span className="text-rose-200 font-bold">¿Rechazar solicitud?</span>
+                          <div className="flex gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => setConfirmRejectHabId(null)}
+                              className="px-2.5 py-1.5 rounded-lg bg-[#101114] text-white font-bold cursor-pointer"
+                            >
+                              No
+                            </button>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                await revocarHabilitacionChofer(hab.id);
+                                setConfirmRejectHabId(null);
+                                showSuccessBanner(`Solicitud de ${hab.driverName} rechazada.`);
+                              }}
+                              className="px-2.5 py-1.5 rounded-lg bg-rose-500 text-[#101114] font-black cursor-pointer"
+                            >
+                              Sí, Rechazar
+                            </button>
+                          </div>
+                        </div>
                       ) : (
                         <div className="flex gap-2">
                           <button
@@ -867,9 +1077,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                             <KeyRound className="w-3.5 h-3.5" />
                             <span>Habilitar Chofer</span>
                           </button>
+                          <button
+                            type="button"
+                            onClick={() => setConfirmRejectHabId(hab.id)}
+                            title={`Rechazar o descartar solicitud de ${hab.driverName}`}
+                            className="min-h-[44px] px-3 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-400/40 text-rose-300 text-xs font-bold flex items-center justify-center cursor-pointer"
+                          >
+                            <XCircle className="w-4 h-4" />
+                          </button>
                           <a
                             href={`https://wa.me/${hab.whatsapp}?text=${encodeURIComponent(
-                              `Hola ${hab.driverName}! Recibimos tu comprobante en UPPA. Estamos validando la habilitación de tu ${hab.vehicleType}.`
+                              `Hola ${hab.driverName}! Recibimos tu solicitud en UPPA. Estamos validando la habilitación de tu ${hab.vehicleType}.`
                             )}`}
                             target="_blank"
                             rel="noopener noreferrer"
@@ -1182,8 +1400,22 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                           <select
                             value={user.rol}
                             onChange={async (e) => {
-                              await actualizarRolUsuario(user.uid, e.target.value as any);
-                              showSuccessBanner(`Rol actualizado a ${e.target.value} para ${user.nombre}`);
+                              const nextRole = e.target.value as any;
+                              await actualizarRolUsuario(user.uid, nextRole);
+                              if (nextRole === 'chofer_moto' || nextRole === 'chofer_auto') {
+                                const vType: 'moto' | 'auto' = nextRole === 'chofer_moto' ? 'moto' : 'auto';
+                                await solicitarHabilitacionChofer({
+                                  driverId: user.uid,
+                                  driverName: user.nombre,
+                                  vehicleType: vType,
+                                  vehicleModel: vType === 'moto' ? 'Moto Taxi UPPA' : 'Auto Taxi UPPA',
+                                  whatsapp: user.telefono || (user as any).phone || '54900000000',
+                                  zone: user.barrio || 'Zárate ↔ Campana',
+                                  horas: 12,
+                                  comprobanteFileName: 'Registro inicial de chofer (asignado por Admin)',
+                                }).catch(() => {});
+                              }
+                              showSuccessBanner(`Rol actualizado a ${nextRole} para ${user.nombre}`);
                             }}
                             aria-label={`Cambiar rol de ${user.nombre}`}
                             className="h-8 px-2 rounded-lg bg-[#101114] border border-[#FFF19A]/40 text-[#FFF19A] text-[11px] font-bold"

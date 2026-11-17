@@ -375,24 +375,13 @@ export default function App() {
     return () => clearInterval(timer);
   }, [isAdminViewer]);
 
-  // Solicitudes pendientes de habilitación por WhatsApp (visibles EXCLUSIVAMENTE para el Administrador)
+  // Solicitudes pendientes de habilitación (visibles EXCLUSIVAMENTE para el Administrador)
   const pendingAdminHabilitaciones = useMemo(() => {
     if (!isAdminViewer) return [];
-    const HABILITACION_TIMEOUT_MS = 25 * 60 * 1000;
-    return habilitacionesList.filter((h) => {
-      if (h.estado !== 'pendiente' || h.id === 'hab-2' || h.driverId === 'drv-carlos') return false;
-      const createdMs =
-        typeof h.createdAt === 'number'
-          ? h.createdAt
-          : h.createdAt?.toMillis
-          ? h.createdAt.toMillis()
-          : h.createdAt
-          ? new Date(h.createdAt).getTime()
-          : 0;
-      if (createdMs > 0 && adminNowTick - createdMs > HABILITACION_TIMEOUT_MS) return false;
-      return true;
-    });
-  }, [isAdminViewer, habilitacionesList, adminNowTick]);
+    return habilitacionesList.filter(
+      (h) => h.estado === 'pendiente' && h.id !== 'hab-2' && h.driverId !== 'drv-carlos'
+    );
+  }, [isAdminViewer, habilitacionesList]);
 
   // Habilitación específica del usuario actual (validación estricta por UID cuando existe)
   const userHabilitacionRecord = useMemo(() => {
@@ -624,6 +613,8 @@ export default function App() {
 
   // Active View / Tabs
   const [activeTab, setActiveTab] = useState<'map' | 'taxi' | 'chat' | 'admin'>('map');
+  const activeTabRef = useRef(activeTab);
+  activeTabRef.current = activeTab;
   const [selectedEvent, setSelectedEvent] = useState<MapEvent | null>(null);
   const [selectedRouteId, setSelectedRouteId] = useState<string>('route-zarate-malvinas');
   const [activeTrackingTaxi, setActiveTrackingTaxi] = useState<TaxiListing | null>(null);
@@ -718,12 +709,12 @@ export default function App() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isHeaderMenuOpen, isProfileDropdownOpen]);
 
-  // Limpieza periódica de eventos push en pantalla tras 7 segundos de exposición
+  // Limpieza periódica de eventos push en pantalla al vencer su exposición (4.5s chat / 7s reportes)
   useEffect(() => {
     const cleaner = setInterval(() => {
       const now = Date.now();
       setScreenPushEvents((prev) => prev.filter((ev) => (ev.exposureExpiresAt || 0) > now));
-    }, 500);
+    }, 250);
     return () => clearInterval(cleaner);
   }, []);
 
@@ -839,6 +830,9 @@ export default function App() {
       if (!notif) return;
       if (!isRealCommunityReport(notif)) return;
       if (notif.type === 'admin' && !isAdminViewerRef.current) return;
+      if (notif.type === 'chat' && (activeTabRef.current === 'taxi' || activeTabRef.current === 'chat')) {
+        return;
+      }
       showToast(`${notif.title}: ${notif.body}`);
 
       setScreenPushEvents((prev) => {
@@ -856,8 +850,9 @@ export default function App() {
           return prev; // No duplicar en pantalla
         }
 
-        // Se publica con tiempo de exposición en pantalla de 7 segundos para despejar rápidamente el mapa
-        const maxExpiresAt = Date.now() + 7 * 1000;
+        // Chat: 4.5 segundos exactos (en otras pantallas fuera de Taxis & Motos). Otros: 7 segundos
+        const durationMs = notif.type === 'chat' ? 4500 : 7 * 1000;
+        const maxExpiresAt = Date.now() + durationMs;
         const exposureExpiresAt = notif.exposureExpiresAt
           ? Math.min(notif.exposureExpiresAt, maxExpiresAt)
           : maxExpiresAt;
@@ -1028,7 +1023,7 @@ export default function App() {
 
   const latestCommunityMessage = communityChatList.length > 0 ? communityChatList[communityChatList.length - 1] : null;
 
-  // Auto-ocultar el contenedor flotante "Ver Chat" tras 7 segundos para despejar el mapa
+  // Auto-ocultar el contenedor flotante del chat tras 4.5 segundos (solo visible fuera de Chat y Taxis & Motos)
   useEffect(() => {
     if (!latestCommunityMessage?.id) return;
     if (activeTab === 'chat') {
@@ -1042,7 +1037,7 @@ export default function App() {
     const msgId = latestCommunityMessage.id;
     const hideChatTimer = setTimeout(() => {
       setDismissedChatMsgId(msgId);
-    }, 7000);
+    }, 4500);
 
     return () => clearTimeout(hideChatTimer);
   }, [latestCommunityMessage?.id, dismissedChatMsgId, activeTab]);
@@ -1653,68 +1648,78 @@ export default function App() {
       )}
 
       {/* Eventos Push en Pantalla */}
-      {screenPushEvents.length > 0 && (
-        <aside aria-label="Eventos en tiempo real" className="fixed top-16 right-3 sm:right-6 z-40 max-w-sm w-[calc(100vw-1.5rem)] sm:w-88 space-y-2 pointer-events-none">
-          {screenPushEvents.slice(0, 4).map((ev) => {
-            const remainingSec = Math.max(0, Math.floor(((ev.exposureExpiresAt || 0) - Date.now()) / 1000));
-            const min = Math.floor(remainingSec / 60);
-            const sec = remainingSec % 60;
-            const formattedTime = `${min}:${sec.toString().padStart(2, '0')}`;
+      {(() => {
+        const visiblePushEvents = screenPushEvents.filter(
+          (ev) => !(ev.type === 'chat' && (activeTab === 'taxi' || activeTab === 'chat'))
+        );
+        if (visiblePushEvents.length === 0) return null;
+        return (
+          <aside aria-label="Eventos en tiempo real" className="fixed top-16 right-3 sm:right-6 z-40 max-w-sm w-[calc(100vw-1.5rem)] sm:w-88 space-y-2 pointer-events-none">
+            {visiblePushEvents.slice(0, 4).map((ev) => {
+              const remainingMs = Math.max(0, (ev.exposureExpiresAt || 0) - Date.now());
+              const remainingSec = Math.floor(remainingMs / 1000);
+              const min = Math.floor(remainingSec / 60);
+              const sec = remainingSec % 60;
+              const formattedTime =
+                ev.type === 'chat'
+                  ? `${(remainingMs / 1000).toFixed(1)}s`
+                  : `${min}:${sec.toString().padStart(2, '0')}`;
 
-            const badgeBg =
-              ev.type === 'reporte'
-                ? 'bg-rose-500/20 border-rose-400/50 text-rose-200'
-                : ev.type === 'transporte'
-                ? 'bg-[#B7F36B]/15 border-[#B7F36B]/60 text-[#B7F36B]'
-                : ev.type === 'admin'
-                ? 'bg-[#FFF19A]/15 border-[#FFF19A]/60 text-[#FFF19A]'
-                : 'bg-[#101114] border-white/20 text-white';
+              const badgeBg =
+                ev.type === 'reporte'
+                  ? 'bg-rose-500/20 border-rose-400/50 text-rose-200'
+                  : ev.type === 'transporte'
+                  ? 'bg-[#B7F36B]/15 border-[#B7F36B]/60 text-[#B7F36B]'
+                  : ev.type === 'admin'
+                  ? 'bg-[#FFF19A]/15 border-[#FFF19A]/60 text-[#FFF19A]'
+                  : 'bg-[#101114] border-white/20 text-white';
 
-            const icon =
-              ev.type === 'reporte'
-                ? '💥'
-                : ev.type === 'transporte'
-                ? '🚕'
-                : ev.type === 'admin'
-                ? '🛡️'
-                : '💬';
+              const icon =
+                ev.type === 'reporte'
+                  ? '💥'
+                  : ev.type === 'transporte'
+                  ? '🚕'
+                  : ev.type === 'admin'
+                  ? '🛡️'
+                  : '💬';
 
-            return (
-              <div
-                key={ev.id}
-                className="p-3.5 rounded-2xl bg-[#202329] border-2 border-white/15 shadow-[4px_4px_0px_#101114] pointer-events-auto space-y-2 animate-in slide-in-from-top-2 duration-300"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-base">{icon}</span>
-                    <span className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase border ${badgeBg}`}>
-                      {ev.type}
-                    </span>
-                    <h4 className="text-xs font-extrabold text-white line-clamp-1">{ev.title}</h4>
+              return (
+                <div
+                  key={ev.id}
+                  className="p-3.5 rounded-2xl bg-[#202329] border-2 border-white/15 shadow-[4px_4px_0px_#101114] pointer-events-auto space-y-2 animate-in slide-in-from-top-2 duration-300"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-base">{icon}</span>
+                      <span className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase border ${badgeBg}`}>
+                        {ev.type}
+                      </span>
+                      <h4 className="text-xs font-extrabold text-white line-clamp-1">{ev.title}</h4>
+                    </div>
+                    <button
+                      onClick={() => setScreenPushEvents((prev) => prev.filter((p) => p.id !== ev.id))}
+                      className="text-[#9299A5] hover:text-white p-1.5 rounded-lg bg-[#101114] border border-white/10 cursor-pointer shrink-0"
+                      title="Cerrar notificación en pantalla"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
                   </div>
-                  <button
-                    onClick={() => setScreenPushEvents((prev) => prev.filter((p) => p.id !== ev.id))}
-                    className="text-[#9299A5] hover:text-white p-1.5 rounded-lg bg-[#101114] border border-white/10 cursor-pointer shrink-0"
-                    title="Cerrar notificación en pantalla"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </div>
 
-                <p className="text-[11px] text-[#9299A5] leading-snug">{ev.body}</p>
+                  <p className="text-[11px] text-[#9299A5] leading-snug">{ev.body}</p>
 
-                <div className="flex items-center justify-between text-[10px] text-[#9299A5] pt-1.5 border-t border-white/10 font-mono">
-                  <span className="flex items-center gap-1 text-[#FFF19A] font-bold">
-                    <Clock className="w-3 h-3 text-[#FFF19A]" />
-                    <span>Exposición: {formattedTime}</span>
-                  </span>
-                  <span className="text-[9px] text-[#9299A5]">Aviso en vivo</span>
+                  <div className="flex items-center justify-between text-[10px] text-[#9299A5] pt-1.5 border-t border-white/10 font-mono">
+                    <span className="flex items-center gap-1 text-[#FFF19A] font-bold">
+                      <Clock className="w-3 h-3 text-[#FFF19A]" />
+                      <span>Exposición: {formattedTime}</span>
+                    </span>
+                    <span className="text-[9px] text-[#9299A5]">Aviso en vivo</span>
+                  </div>
                 </div>
-              </div>
-            );
-          })}
-        </aside>
-      )}
+              );
+            })}
+          </aside>
+        );
+      })()}
 
       {/* Alerta / Recordatorio de email pendiente de autenticar */}
       {isLoggedIn &&
@@ -1810,7 +1815,7 @@ export default function App() {
             <button
               type="button"
               onClick={() => setActiveTab('admin')}
-              title={`Habilitación pendiente (${pendingAdminHabilitaciones.length}): El prestador envió solicitud por WhatsApp. Tocá para ir a Administración UPPA y habilitar el servicio`}
+              title={`Habilitación pendiente (${pendingAdminHabilitaciones.length}): Hay solicitudes de chofer esperando aprobación. Tocá para ir a Administración UPPA`}
               aria-label="Indicador de habilitación pendiente para Administrador"
               className="relative min-h-[44px] px-2.5 py-1.5 rounded-xl bg-[#202329] border-2 border-blue-400 text-blue-200 hover:bg-blue-500/15 flex items-center gap-2 cursor-pointer transition-all shrink-0"
             >
@@ -1972,8 +1977,20 @@ export default function App() {
                             Habilitación por Administrador
                           </div>
                           <p className="text-[10.5px] text-[#9299A5] leading-relaxed">
-                            Para figurar como Habilitado en la plataforma, el Administrador debe validar tu comprobante de transferencia y activar tu unidad. En ese momento comenzará tu temporizador en vivo.
+                            Para figurar como Habilitado en la plataforma, completá tu solicitud de turno y el Administrador validará tu comprobante para iniciar tu temporizador en vivo.
                           </p>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setPublishTaxiInitialTab('transfer');
+                              setIsPublishTaxiOpen(true);
+                              setIsProfileDropdownOpen(false);
+                            }}
+                            className="w-full min-h-[42px] py-2 px-3 rounded-xl uppa-cta-yellow font-black text-xs flex items-center justify-center gap-1.5 cursor-pointer"
+                          >
+                            <KeyRound className="w-4 h-4" />
+                            <span>Solicitar Habilitación de Turno</span>
+                          </button>
                           <a
                             href={`https://wa.me/5493489690058?text=${encodeURIComponent(
                               `Hola Lucia Veronica Gimenez! Te contacto por la habilitación de mi servicio de chofer (${currentUser.name || 'Prestador UPPA'}).`
@@ -2375,8 +2392,8 @@ export default function App() {
         )}
       </main>
 
-      {/* Barra Flotante de Acceso Rápido al Chat Comunitario */}
-      {activeTab !== 'chat' && latestCommunityMessage && latestCommunityMessage.id !== dismissedChatMsgId && (
+      {/* Barra Flotante de Acceso Rápido al Chat Comunitario (visible en otras pantallas excepto Chat y Taxis & Motos por 4.5s) */}
+      {activeTab !== 'chat' && activeTab !== 'taxi' && latestCommunityMessage && latestCommunityMessage.id !== dismissedChatMsgId && (
         <div className="fixed bottom-24 sm:bottom-28 right-3 sm:right-5 max-w-[calc(100vw-24px)] sm:max-w-sm z-30 animate-in slide-in-from-bottom-3 duration-300">
           <div className="p-2.5 rounded-2xl bg-[#202329] border-2 border-[#FFF19A]/45 shadow-[4px_4px_0px_#101114] flex items-center justify-between gap-2.5 text-xs">
             <button
@@ -2393,7 +2410,7 @@ export default function App() {
                     {latestCommunityMessage.nombreUsuario}
                   </span>
                   <span className="px-1.5 py-0.5 rounded text-[8.5px] font-black bg-[#101114] text-[#B7F36B] border border-[#B7F36B]/40 shrink-0">
-                    Comunidad
+                    Escribió en Chat
                   </span>
                 </div>
                 <p className="text-[11px] text-[#9299A5] truncate">
@@ -2713,6 +2730,10 @@ export default function App() {
         onClose={() => setIsAuthModalOpen(false)}
         currentUser={currentUser}
         isHabilitado={isDriverHabilitado}
+        onOpenPublishTaxi={() => {
+          setPublishTaxiInitialTab('transfer');
+          setIsPublishTaxiOpen(true);
+        }}
         onUpdateUser={(updated) => {
           const roleChanged = updated.role !== currentUser.role;
           setCurrentUser(updated);

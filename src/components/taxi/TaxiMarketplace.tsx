@@ -779,6 +779,18 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
               </button>
             )}
 
+            {!isPrestadorLogueado && (
+              <button
+                type="button"
+                onClick={() => onOpenPublishModal('transfer')}
+                className="min-h-[42px] px-3.5 py-2 rounded-xl uppa-cta-green font-black text-xs flex items-center gap-1.5 transition-all cursor-pointer"
+                title="Enviar solicitud para prestar servicio como Auto Taxi o Moto Taxi"
+              >
+                <KeyRound className="w-4 h-4" />
+                <span>Prestar Servicio</span>
+              </button>
+            )}
+
             <button
               type="button"
               onClick={() => setIsPoliticasOpen(true)}
@@ -790,6 +802,31 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
             </button>
           </div>
         </div>
+
+        {!isDriverHabilitado &&
+          (currentUserRole === 'driver' ||
+            currentUserRole === 'chofer' ||
+            currentUserRole === 'chofer_auto' ||
+            currentUserRole === 'chofer_moto') && (
+            <div className="mt-3 p-3 rounded-2xl bg-[#101114] border-2 border-[#FFF19A]/45 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
+              <div className="space-y-0.5">
+                <div className="font-black text-[#FFF19A] flex items-center gap-1.5">
+                  <KeyRound className="w-3.5 h-3.5 shrink-0" />
+                  <span>Tu cuenta de Chofer está Pendiente de Habilitación</span>
+                </div>
+                <p className="text-[11px] text-[#9299A5]">
+                  Si aún no enviaste los datos de tu vehículo y comprobante, completá tu solicitud para aparecer en Administración UPPA.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => onOpenPublishModal('transfer')}
+                className="min-h-[40px] px-3.5 py-2 rounded-xl uppa-cta-yellow font-black text-xs shrink-0 cursor-pointer"
+              >
+                Completar Solicitud de Turno
+              </button>
+            </div>
+          )}
 
         {/* Success / Error Notices */}
         {rideSuccessNotice && (
@@ -1954,9 +1991,21 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                         No hay {vehicleFilter === 'moto' ? 'motos' : vehicleFilter === 'auto' ? 'autos' : 'prestadores'} habilitados en este momento
                       </h4>
                       <p className="text-[11px] text-[#9299A5] mt-1 max-w-md mx-auto leading-relaxed">
-                        Todos los prestadores mostrados en UPPA son reales y verificados con turno vigente. Podés solicitar un traslado desde el menú superior.
+                        Todos los prestadores mostrados en UPPA son reales y verificados con turno vigente. Podés solicitar un traslado o postularte como prestador.
                       </p>
                     </div>
+                    {!isPrestadorLogueado && (
+                      <div className="pt-1 flex justify-center">
+                        <button
+                          type="button"
+                          onClick={() => onOpenPublishModal('transfer')}
+                          className="min-h-[42px] px-4 py-2 rounded-xl uppa-cta-green font-black text-xs inline-flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <KeyRound className="w-4 h-4" />
+                          <span>Prestar Servicio / Solicitar Habilitación</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   visibleTaxis.map((taxi) => renderTaxiCard(taxi, false))
