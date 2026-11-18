@@ -82,6 +82,7 @@ import {
   anunciarVehiculoDesocupado,
   isRealCommunityReport,
   enviarMensajeChat,
+  getMessageTimestampMs,
 } from './services/realtimeFirebaseService';
 import { ensureFirebaseAuthSession } from './config/firebase';
 
@@ -770,6 +771,112 @@ export default function App() {
 
   // Eventos Push en Pantalla (Exposición de 7 segundos para mantener el mapa despejado)
   const [screenPushEvents, setScreenPushEvents] = useState<PushNotificationPayload[]>([]);
+  // Cartel Oficial de Alerta Push de Administración UPPA en la sección del Mapa (5 segundos exactos)
+  const [mapAdminAlert, setMapAdminAlert] = useState<{
+    id: string;
+    title: string;
+    body: string;
+    createdAt: number;
+    expiresAt: number | null;
+  } | null>(null);
+  const [mapAdminAlertNow, setMapAdminAlertNow] = useState<number>(Date.now());
+  const seenAdminAlertMsgIdsRef = useRef<Set<string>>(new Set());
+  const adminAlertChatInitRef = useRef<boolean>(false);
+  const lastLocalAdminAlertRef = useRef<{ text: string; at: number } | null>(null);
+
+  const triggerMapAdminAlertCartel = (id: string, title: string, body: string) => {
+    const now = Date.now();
+    setMapAdminAlertNow(now);
+    setMapAdminAlert({
+      id,
+      title: title.trim() || 'Alerta Oficial UPPA',
+      body: body.trim(),
+      createdAt: now,
+      expiresAt: activeTabRef.current === 'map' ? now + 5000 : null,
+    });
+  };
+
+  useEffect(() => {
+    if (!mapAdminAlert) return;
+    if (activeTab === 'map' && mapAdminAlert.expiresAt === null) {
+      const now = Date.now();
+      if (now - mapAdminAlert.createdAt > 90000) {
+        setMapAdminAlert(null);
+      } else {
+        setMapAdminAlertNow(now);
+        setMapAdminAlert((prev) =>
+          prev && prev.id === mapAdminAlert.id && prev.expiresAt === null
+            ? { ...prev, expiresAt: now + 5000 }
+            : prev
+        );
+      }
+      return;
+    }
+
+    if (activeTab === 'map' && mapAdminAlert.expiresAt !== null) {
+      const targetExpiresAt = mapAdminAlert.expiresAt;
+      const tick = setInterval(() => {
+        const now = Date.now();
+        setMapAdminAlertNow(now);
+        if (now >= targetExpiresAt) {
+          setMapAdminAlert((prev) => (prev?.id === mapAdminAlert.id ? null : prev));
+        }
+      }, 100);
+      return () => clearInterval(tick);
+    }
+  }, [activeTab, mapAdminAlert]);
+
+  useEffect(() => {
+    if (!communityChatList || communityChatList.length === 0) {
+      adminAlertChatInitRef.current = true;
+      return;
+    }
+
+    const now = Date.now();
+    if (!adminAlertChatInitRef.current) {
+      for (const m of communityChatList) {
+        const ts = getMessageTimestampMs(m.enviadoEn);
+        if (now - ts >= 8000) {
+          seenAdminAlertMsgIdsRef.current.add(m.id);
+        }
+      }
+      adminAlertChatInitRef.current = true;
+    }
+
+    for (const m of communityChatList) {
+      if (seenAdminAlertMsgIdsRef.current.has(m.id)) continue;
+      seenAdminAlertMsgIdsRef.current.add(m.id);
+      const rawText = (m.texto || '').trim();
+      if (!rawText.startsWith('🚨 [ALERTA OFICIAL UPPA]')) continue;
+      const ts = getMessageTimestampMs(m.enviadoEn);
+      if (now - ts > 20000) continue;
+
+      if (
+        lastLocalAdminAlertRef.current &&
+        lastLocalAdminAlertRef.current.text === rawText &&
+        now - lastLocalAdminAlertRef.current.at < 12000
+      ) {
+        continue;
+      }
+
+      const contentWithoutPrefix = rawText.replace('🚨 [ALERTA OFICIAL UPPA]', '').trim();
+      const sepIndex = contentWithoutPrefix.indexOf(' — ');
+      const parsedTitle =
+        sepIndex >= 0
+          ? contentWithoutPrefix.slice(0, sepIndex).trim()
+          : contentWithoutPrefix || 'Alerta Oficial UPPA';
+      const parsedBody = sepIndex >= 0 ? contentWithoutPrefix.slice(sepIndex + 3).trim() : '';
+
+      triggerMapAdminAlertCartel(m.id, parsedTitle, parsedBody);
+      triggerInAppPushNotification(
+        parsedTitle,
+        parsedBody || 'Comunicado oficial de Administración UPPA',
+        'admin',
+        { fromChatId: m.id }
+      );
+    }
+  }, [communityChatList]);
+
   const selectedEventAutoCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -938,7 +1045,7 @@ export default function App() {
     const unsubNotif = onPushNotification((notif) => {
       if (!notif) return;
       if (!isRealCommunityReport(notif)) return;
-      if (notif.type === 'admin' && !isAdminViewerRef.current) return;
+      if (notif.type === 'admin') return;
       if (notif.type === 'chat' && (activeTabRef.current === 'taxi' || activeTabRef.current === 'chat')) {
         return;
       }
@@ -1932,24 +2039,46 @@ export default function App() {
   };
 
   const handleBroadcastAlert = (title: string, description: string) => {
-    const broadcastEvent: MapEvent = {
-      id: `ev-broadcast-${Date.now()}`,
-      routeId: 'route-zarate-malvinas',
-      type: 'danger',
-      title,
-      description,
-      lat: userLocation ? userLocation.lat : -34.1683,
-      lng: userLocation ? userLocation.lng : -58.9592,
-      reportedBy: 'Admin UPPA',
-      reportedByUserId: 'usr-admin',
-      confirmations: 30,
-      confirmedByUserIds: [],
-      reportedAt: 'Alerta Oficial',
-      isVerified: true,
+    const now = Date.now();
+    const cleanTitle = title.trim() || 'Alerta Oficial UPPA';
+    const cleanDesc = description.trim();
+    const alertChatText = cleanDesc
+      ? `🚨 [ALERTA OFICIAL UPPA] ${cleanTitle} — ${cleanDesc}`
+      : `🚨 [ALERTA OFICIAL UPPA] ${cleanTitle}`;
+
+    lastLocalAdminAlertRef.current = { text: alertChatText, at: now };
+
+    // 1. Mostrar cartel destacado de 5 segundos en la sección del Mapa
+    triggerMapAdminAlertCartel(`admin-alert-${now}`, cleanTitle, cleanDesc);
+
+    // 2. Disparar alerta sonora y notificación Web Push
+    triggerInAppPushNotification(
+      cleanTitle,
+      cleanDesc || 'Comunicado oficial de Administración UPPA',
+      'admin'
+    );
+
+    // 3. Publicar automáticamente en el Chat General (todos los usuarios conectados)
+    enviarMensajeChat('todos', {
+      usuarioId: currentUser.uid || currentUser.id || 'usr-admin',
+      nombreUsuario: 'Administración UPPA',
+      texto: alertChatText,
+      rol: 'administrador',
+      avatarUrl: currentUser.avatarUrl,
+    }).catch((err) => console.warn('Admin alert chat broadcast notice:', err));
+
+    const adminChatNotice: ChatMessage = {
+      id: `msg-admin-${now}`,
+      channel: 'general',
+      userId: currentUser.uid || currentUser.id || 'usr-admin',
+      userName: 'Administración UPPA',
+      content: alertChatText,
+      timestamp: new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }),
+      sentiment: 'neutral',
     };
-    setEvents([broadcastEvent, ...events]);
-    openAutoDismissEvent(broadcastEvent);
-    showToast('Alerta transmitida');
+    setMessages((prev) => [...prev, adminChatNotice]);
+
+    showToast('Alerta oficial enviada al Mapa (5s) y al Chat General');
   };
 
   const handleOpenContextualChat = (event: MapEvent) => {
@@ -2864,6 +2993,82 @@ export default function App() {
                 </div>
               </div>
             )}
+
+            {/* Cartel Oficial de Alerta Push de Administración UPPA en la sección del Mapa (5 segundos) */}
+            {mapAdminAlert && mapAdminAlert.expiresAt !== null && (() => {
+              const remainingMs = Math.max(0, mapAdminAlert.expiresAt - mapAdminAlertNow);
+              if (remainingMs <= 0) return null;
+              const progressPct = Math.max(0, Math.min(100, (remainingMs / 5000) * 100));
+
+              return (
+                <div
+                  role="alert"
+                  aria-live="assertive"
+                  className="absolute top-3 left-1/2 -translate-x-1/2 z-[45] w-[calc(100vw-2rem)] max-w-md pointer-events-auto animate-in fade-in slide-in-from-top-3 duration-200"
+                >
+                  <div className="rounded-2xl bg-[#101114]/95 backdrop-blur-xl border-2 border-[#FFF19A] shadow-[0_12px_34px_rgba(0,0,0,0.82)] overflow-hidden text-white">
+                    <div className="p-3.5 space-y-2">
+                      <div className="flex items-start justify-between gap-2.5">
+                        <div className="flex items-start gap-2.5 min-w-0">
+                          <div className="w-9 h-9 rounded-xl bg-[#FFF19A] text-[#101114] border border-[#101114] flex items-center justify-center shrink-0">
+                            <Radio className="w-4 h-4 animate-pulse" />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="px-1.5 py-0.5 rounded bg-[#FFF19A]/20 text-[#FFF19A] border border-[#FFF19A]/45 text-[9.5px] font-black uppercase tracking-wide">
+                                Alerta Oficial UPPA
+                              </span>
+                              <span className="text-[10px] font-mono font-bold text-[#B7F36B]">
+                                {(remainingMs / 1000).toFixed(1)}s
+                              </span>
+                            </div>
+                            <h4 className="text-xs sm:text-sm font-black text-white leading-snug mt-1">
+                              {mapAdminAlert.title}
+                            </h4>
+                            {mapAdminAlert.body && (
+                              <p className="text-[11px] sm:text-xs text-white/85 leading-snug mt-0.5">
+                                {mapAdminAlert.body}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => setMapAdminAlert(null)}
+                          className="w-7 h-7 rounded-lg bg-white/10 hover:bg-white/20 border border-white/15 text-[#9299A5] hover:text-white flex items-center justify-center shrink-0 cursor-pointer"
+                          title="Cerrar cartel"
+                          aria-label="Cerrar cartel"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+
+                      <div className="flex items-center justify-between gap-2 pt-1 border-t border-white/10 text-[10px] text-[#9299A5]">
+                        <span>También publicado en el Chat General</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMapAdminAlert(null);
+                            setActiveTab('chat');
+                          }}
+                          className="px-2 py-1 rounded-lg bg-[#202329] hover:border-[#FFF19A] border border-white/15 text-[#FFF19A] font-bold cursor-pointer transition-colors"
+                        >
+                          Ver en Chat
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="h-1 w-full bg-white/10">
+                      <div
+                        className="h-full bg-gradient-to-r from-[#FFF19A] to-[#B7F36B] transition-[width] duration-100 ease-linear"
+                        style={{ width: `${progressPct}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Cabify-Inspired Mobility Bottom Sheet (Panel inferior con scrolling web hacia arriba) */}
             <div className="absolute bottom-2 left-0 right-0 z-30 pointer-events-none">

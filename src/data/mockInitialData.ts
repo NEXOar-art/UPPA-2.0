@@ -117,24 +117,24 @@ export const MOCK_ROUTES: TransitRoute[] = [
       [-34.115650, -59.013400], // Rotonda Zárate
       [-34.163200, -58.958950], // Plaza Costa
       [-34.191398, -58.944732], // McDonald's
-      [-34.200810, -58.937393], // Escuela Técnica Roberto Rocca
-      [-34.201022, -58.937241], // Galería Ariel del Plata
+      [-34.200625, -58.937410], // Escuela Técnica Roberto Rocca
+      [-34.204011, -58.935267], // Galería Ariel del Plata
       [-34.202119, -58.936479], // Escuela Ariel del Plata
-      [-34.203006, -58.935582], // Sociedad de Fomento Ariel del Plata
-      [-34.203967, -58.936834], // Casaux y Goujon
-      [-34.205225, -58.939338], // Casaux y Chapuis (Las Campanas)
+      [-34.205930, -58.939113], // Sociedad de Fomento Ariel del Plata
+      [-34.207054, -58.939631], // Casaux y Goujon
+      [-34.208539, -58.939095], // Casaux y Chapuis (Las Campanas)
     ],
     stops: [
       { id: 'st-ap-1', name: 'Terminal Zárate (Andén Principal)', lat: -34.095650, lng: -59.038650, sequence: 1 },
       { id: 'st-ap-2', name: 'Rotonda Zárate / RN 9', lat: -34.115650, lng: -59.013400, sequence: 2 },
       { id: 'st-ap-3', name: 'Plaza Eduardo Costa (Campana)', lat: -34.163200, lng: -58.958950, sequence: 3 },
       { id: 'st-ap-4', name: "McDonald's Campana (Colectora Sur)", lat: -34.191398, lng: -58.944732, sequence: 4 },
-      { id: 'st-ap-5', name: 'Escuela Técnica Roberto Rocca', lat: -34.200810, lng: -58.937393, sequence: 5 },
-      { id: 'st-ap-6', name: 'Galería Ariel del Plata', lat: -34.201022, lng: -58.937241, sequence: 6 },
+      { id: 'st-ap-5', name: 'Escuela Técnica Roberto Rocca', lat: -34.200625, lng: -58.937410, sequence: 5 },
+      { id: 'st-ap-6', name: 'Galería Ariel del Plata', lat: -34.204011, lng: -58.935267, sequence: 6 },
       { id: 'st-ap-7', name: 'Escuela Ariel del Plata (Calle Aguer)', lat: -34.202119, lng: -58.936479, sequence: 7 },
-      { id: 'st-ap-8', name: 'Sociedad de Fomento Ariel del Plata', lat: -34.203006, lng: -58.935582, sequence: 8 },
-      { id: 'st-ap-9', name: 'Casaux y Goujon (Ariel del Plata)', lat: -34.203967, lng: -58.936834, sequence: 9 },
-      { id: 'st-ap-10', name: 'Casaux y Chapuis (Las Campanas / B° Malvinas)', lat: -34.205225, lng: -58.939338, sequence: 10 },
+      { id: 'st-ap-8', name: 'Sociedad de Fomento Ariel del Plata', lat: -34.205930, lng: -58.939113, sequence: 8 },
+      { id: 'st-ap-9', name: 'Casaux y Goujon', lat: -34.207054, lng: -58.939631, sequence: 9 },
+      { id: 'st-ap-10', name: 'Casaux y Chapuis (Las Campanas / B° Malvinas)', lat: -34.208539, lng: -58.939095, sequence: 10 },
     ],
   },
   {

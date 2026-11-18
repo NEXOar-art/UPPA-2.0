@@ -30,7 +30,6 @@ import {
   solicitarHabilitacionChofer,
   sincronizarHabilitacionesDesdeFirestore,
   obtenerMetricasEnTiempoReal,
-  triggerInAppPushNotification,
   crearCodigoHabilitacion,
   suscribirCodigosHabilitacion,
 } from '../../services/realtimeFirebaseService';
@@ -1918,14 +1917,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             <button
               type="button"
               onClick={() => {
-                if (!broadcastTitle.trim()) return;
-                onBroadcastAlert(broadcastTitle, broadcastDesc);
-                triggerInAppPushNotification(broadcastTitle, broadcastDesc, 'admin');
+                const cleanTitle = broadcastTitle.trim();
+                const cleanDesc = broadcastDesc.trim();
+                if (!cleanTitle && !cleanDesc) return;
+                onBroadcastAlert(cleanTitle || 'Alerta Oficial UPPA', cleanDesc);
                 setBroadcastTitle('');
                 setBroadcastDesc('');
-                showSuccessBanner('Alerta transmitida instantáneamente por FCM y Web Push');
+                showSuccessBanner('Alerta enviada al Mapa (5s) y publicada en el Chat General');
               }}
-              title="Enviar notificación oficial a todos los usuarios conectados"
+              title="Enviar notificación oficial al Mapa (5s) y al Chat General"
               className="w-full min-h-[48px] rounded-xl uppa-cta-yellow font-black text-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
             >
               <Send className="w-4 h-4" />

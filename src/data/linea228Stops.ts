@@ -12,24 +12,24 @@ export interface Linea228Stop extends BusStop {
 export const LINEA_228_STOPS: Linea228Stop[] = [
   // Tramo 1: Justo Vigalondo & B° Malvinas (Campana Sur)
   { id: 'p228-03', sequence: 1, name: 'Justo Vigalondo 1887 (Comercial)', lat: -34.211791, lng: -58.940898, zone: 'Barrio Malvinas', description: 'Parada demarcada en poste oficial.' },
-  { id: 'p228-04', sequence: 2, name: 'Justo Vigalondo y Sandalía Bravo', lat: -34.211355, lng: -58.941215, zone: 'Barrio Malvinas', description: 'Cruce principal de acceso peatonal.' },
-  { id: 'p228-05', sequence: 3, name: 'Justo Vigalondo y Bomberos Voluntarios', lat: -34.209988, lng: -58.942204, zone: 'Barrio Malvinas', description: 'Centro neurálgico B° Malvinas.' },
-  { id: 'p228-06', sequence: 4, name: 'Justo Vigalondo 1419', lat: -34.208704, lng: -58.943139, zone: 'Barrio Malvinas', description: 'Frente a Escuela de la zona.' },
-  { id: 'p228-07', sequence: 5, name: 'Justo Vigalondo 1219 y Sierra', lat: -34.207533, lng: -58.943970, zone: 'Barrio Malvinas', description: 'Esquina asfaltada con refugio peatonal.' },
-  { id: 'p228-08', sequence: 6, name: 'Justo Vigalondo y Puerto Argentino', lat: -34.205220, lng: -58.945641, zone: 'Barrio Malvinas', description: 'Fin tramo Vigalondo, giro hacia Las Campanas.' },
+  { id: 'p228-04', sequence: 2, name: 'Vigalondo y Puerto Argentino', lat: -34.211355, lng: -58.941215, zone: 'Barrio Malvinas', description: 'Cruce Justo Vigalondo y Puerto Argentino.' },
+  { id: 'p228-05', sequence: 3, name: 'Vigalondo y C. Chapuis', lat: -34.209988, lng: -58.942204, zone: 'Barrio Malvinas', description: 'Cruce Justo Vigalondo y Claudio Chapuis.' },
+  { id: 'p228-06', sequence: 4, name: 'Vigalondo y De los Trabajadores', lat: -34.208642, lng: -58.943184, zone: 'Barrio Malvinas', description: 'Cruce Justo Vigalondo y De los Trabajadores.' },
+  { id: 'p228-07', sequence: 5, name: 'Vigalondo y Bravo', lat: -34.207533, lng: -58.943970, zone: 'Barrio Malvinas', description: 'Cruce Justo Vigalondo y Sandalía Bravo.' },
+  { id: 'p228-08', sequence: 6, name: 'Vigalondo y Puerto San Carlos', lat: -34.204705, lng: -58.946011, zone: 'Barrio Malvinas', description: 'Fin tramo Vigalondo, giro hacia Las Campanas.' },
 
   // Tramo 2: Barrio Las Campanas
-  { id: 'p228-09', sequence: 7, name: 'Schinoni y Miracca (Las Campanas)', lat: -34.206483, lng: -58.941843, zone: 'Las Campanas', description: 'Entrada B° Las Campanas.' },
-  { id: 'p228-10', sequence: 8, name: 'A. Schinoni y Casaux', lat: -34.205854, lng: -58.940590, zone: 'Las Campanas', description: 'Parada comunitaria con iluminación.' },
-  { id: 'p228-11', sequence: 9, name: 'Casaux y Chapuis', lat: -34.205225, lng: -58.939338, zone: 'Las Campanas', description: 'Cruce peatonal Las Campanas.' },
-  { id: 'p228-12', sequence: 10, name: 'Fremi y Casaux', lat: -34.204587, lng: -58.938069, zone: 'Las Campanas', description: 'Enlace entre Las Campanas y Ariel del Plata.' },
+  { id: 'p228-09', sequence: 7, name: 'Vigalondo y Miraca', lat: -34.211031, lng: -58.939337, zone: 'Las Campanas', description: 'Cruce Justo Vigalondo y Miraca.' },
+  { id: 'p228-10', sequence: 8, name: 'Shinoni y Casaux', lat: -34.210317, lng: -58.937851, zone: 'Las Campanas', description: 'Cruce Shinoni y Casaux (Las Campanas).' },
+  { id: 'p228-11', sequence: 9, name: 'Casaux y Chapuis', lat: -34.208539, lng: -58.939095, zone: 'Las Campanas', description: 'Cruce Casaux y Chapuis.' },
+  { id: 'p228-12', sequence: 10, name: 'H. Fremi y Casaux', lat: -34.207693, lng: -58.939446, zone: 'Las Campanas', description: 'Cruce H. Fremi y Casaux.' },
 
   // Tramo 3: Barrio Ariel del Plata
-  { id: 'p228-13', sequence: 11, name: 'Casaux y Goujon (Ariel del Plata)', lat: -34.203967, lng: -58.936834, zone: 'Ariel del Plata', description: 'Ingreso B° Ariel del Plata.' },
-  { id: 'p228-14', sequence: 12, name: 'Sociedad de Fomento Ariel del Plata', lat: -34.203006, lng: -58.935582, zone: 'Ariel del Plata', description: 'Frente al club social y centro comunitario.' },
-  { id: 'p228-15', sequence: 13, name: 'Escuela Ariel del Plata (Calle Aguer)', lat: -34.202119, lng: -58.936479, zone: 'Ariel del Plata', description: 'Parada escolar de alto tránsito.' },
-  { id: 'p228-16', sequence: 14, name: 'Galería Ariel del Plata', lat: -34.201022, lng: -58.937241, zone: 'Ariel del Plata', description: 'Centro comercial barrial.' },
-  { id: 'p228-17', sequence: 15, name: 'Escuela Técnica Roberto Rocca', lat: -34.200810, lng: -58.937393, zone: 'Ariel del Plata', description: 'Acceso principal Escuela Técnica Roberto Rocca.' },
+  { id: 'p228-13', sequence: 11, name: 'Casaux y Goujon', lat: -34.207054, lng: -58.939631, zone: 'Ariel del Plata', description: 'Cruce Casaux y Goujon (Ingreso B° Ariel del Plata).' },
+  { id: 'p228-14', sequence: 12, name: 'Sociedad de Fomento Ariel del Plata', lat: -34.205930, lng: -58.939113, zone: 'Ariel del Plata', description: 'Frente a Sociedad de Fomento Ariel del Plata.' },
+  { id: 'p228-16', sequence: 13, name: 'Galería Ariel del Plata', lat: -34.204011, lng: -58.935267, zone: 'Ariel del Plata', description: 'Frente a Galería Ariel del Plata.' },
+  { id: 'p228-17', sequence: 14, name: 'Escuela Técnica Roberto Rocca', lat: -34.200625, lng: -58.937410, zone: 'Ariel del Plata', description: 'Acceso principal Escuela Técnica Roberto Rocca.' },
+  { id: 'p228-15', sequence: 15, name: 'Escuela Ariel del Plata (Calle Aguer)', lat: -34.202119, lng: -58.936479, zone: 'Ariel del Plata', description: 'Parada escolar de alto tránsito.' },
 
   // Tramo 4: Colectora Sur Panamericana (hasta McDonald's Campana)
   { id: 'p228-18', sequence: 16, name: 'Colectora Sur y Grassi', lat: -34.200217, lng: -58.940283, zone: 'Colectora', description: 'Empalme Colectora Sur Panamericana y calle Grassi.' },
@@ -102,38 +102,36 @@ export const VIGALONDO_MCDONALDS_STOPS: Linea228Stop[] = LINEA_228_STOPS.slice(0
 export const CAMPANA_CENTRO_ZARATE_STOPS: Linea228Stop[] = LINEA_228_STOPS.slice(27);
 
 // Polilínea de alta fidelidad que sigue fielmente el trazado de las calles de Campana:
-// Justo Vigalondo -> Sandalía Bravo -> Las Campanas -> Ariel del Plata -> Colectora Sur -> McDonald's Panamericana Km 72.5
+// Justo Vigalondo -> Puerto Argentino -> C. Chapuis -> De los Trabajadores -> Bravo -> Puerto San Carlos -> Las Campanas -> Ariel del Plata -> Colectora Sur -> McDonald's Panamericana Km 72.5
 export const VIGALONDO_MCDONALDS_COORDINATES: [number, number][] = [
   [-34.211791, -58.940898], // Vigalondo 1887 (Parada #1)
-  [-34.211355, -58.941215], // Sandalía Bravo (Parada #2)
+  [-34.211355, -58.941215], // Vigalondo y Puerto Argentino (Parada #2)
   [-34.210888, -58.941554],
   [-34.210440, -58.941880],
-  [-34.209988, -58.942204], // Bomberos Voluntarios
+  [-34.209988, -58.942204], // Vigalondo y C. Chapuis (Parada #3)
   [-34.209560, -58.942520],
   [-34.209099, -58.942855],
-  [-34.208704, -58.943139], // Vigalondo 1419
+  [-34.208642, -58.943184], // Vigalondo y De los Trabajadores (Parada #4)
   [-34.207622, -58.943905],
-  [-34.207533, -58.943970], // Sierra
+  [-34.207533, -58.943970], // Vigalondo y Bravo (Parada #5)
   [-34.207138, -58.944258],
   [-34.206667, -58.944594],
   [-34.206200, -58.944931],
-  [-34.205220, -58.945641], // Puerto Argentino
-  [-34.204705, -58.946011],
+  [-34.205220, -58.945641],
+  [-34.204705, -58.946011], // Vigalondo y Puerto San Carlos (Parada #6)
   [-34.205261, -58.947069],
   [-34.204790, -58.947401],
   [-34.204247, -58.946340],
   [-34.206034, -58.945055],
-  [-34.206483, -58.941843], // Schinoni y Miracca
-  [-34.205854, -58.940590], // Las Campanas
-  [-34.205225, -58.939338], // Chapuis
-  [-34.204587, -58.938069], // Fremi / Casaux
-  [-34.203967, -58.936834], // Ariel del Plata
-  [-34.203337, -58.935581],
-  [-34.203006, -58.935582], // Fomento Ariel del Plata
-  [-34.202341, -58.936283],
+  [-34.211031, -58.939337], // Vigalondo y Miraca (Parada #7)
+  [-34.210317, -58.937851], // Shinoni y Casaux (Parada #8)
+  [-34.208539, -58.939095], // Casaux y Chapuis (Parada #9)
+  [-34.207693, -58.939446], // H. Fremi y Casaux (Parada #10)
+  [-34.207054, -58.939631], // Casaux y Goujon (Parada #11)
+  [-34.205930, -58.939113], // Sociedad de Fomento Ariel del Plata (Parada #12)
+  [-34.204011, -58.935267], // Galería Ariel del Plata (Parada #13)
   [-34.202119, -58.936479], // Escuela Ariel del Plata
-  [-34.201022, -58.937241], // Galería
-  [-34.200810, -58.937393], // Roberto Rocca
+  [-34.200625, -58.937410], // Escuela Técnica Roberto Rocca (Parada #14)
   [-34.200196, -58.937838],
   [-34.199553, -58.938301],
   [-34.199813, -58.939686],

@@ -369,6 +369,32 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
     userLng: number;
   } | null>(null);
 
+  const formatStopNameForSpeech = (rawName: string): string =>
+    rawName
+      .replace(/\bC\.\s*Chapuis\b/gi, 'Claudio Chapuis')
+      .replace(/\bAv\.\s*/gi, 'Avenida ')
+      .replace(/\bB°\s*/gi, 'Barrio ')
+      .replace(/\bRP\s*6\b/gi, 'Ruta Provincial 6')
+      .replace(/\bRN\s*9\b/gi, 'Ruta Nacional 9');
+
+  const speakStopAnnouncement = (stop: BusStop, mode: 'select' | 'gps' = 'select') => {
+    try {
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const spokenName = formatStopNameForSpeech(stop.name);
+        const seqPart = stop.sequence ? `Parada ${stop.sequence}, ` : 'Parada ';
+        const text =
+          mode === 'gps'
+            ? `Iniciando guía GPS hacia ${seqPart}${spokenName}`
+            : `${seqPart}${spokenName}`;
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'es-AR';
+        utterance.rate = 1.05;
+        window.speechSynthesis.speak(utterance);
+      }
+    } catch {}
+  };
+
   // Focus on a stop when requested from bottom sheet
   useEffect(() => {
     if (!focusedStop || !mapInstanceRef.current) return;
@@ -379,7 +405,8 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
     const matchedRoute = routes.find((r) => r.id === 'route-zarate-malvinas') || routes[0];
     if (matchedRoute) {
       setSelectedStop({ stop: focusedStop, route: matchedRoute });
-      setAreCardsVisible(true);
+      scheduleHideTimerRef.current(8000);
+      speakStopAnnouncement(focusedStop, 'select');
     }
   }, [focusedStop, routes]);
 
@@ -952,16 +979,8 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
     const etaWalkMin = Math.max(1, Math.round((distKm / 4.5) * 60));
     const etaTransitMin = Math.max(1, Math.round((distKm / 32) * 60));
 
-    // Anuncio de voz amigable para guía GPS
-    try {
-      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-        const utterance = new SpeechSynthesisUtterance(`Iniciando guía GPS hacia la parada ${stop.name}`);
-        utterance.lang = 'es-AR';
-        utterance.rate = 1.05;
-        window.speechSynthesis.speak(utterance);
-      }
-    } catch {}
+    // Anuncio de voz amigable para guía GPS con ubicación y número de parada actualizados
+    speakStopAnnouncement(stop, 'gps');
 
     setStopTrajectoryInfo({
       stop,
@@ -1180,9 +1199,10 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
       `);
 
       stopMarker.on('click', () => {
-        // Mostrar la tarjeta con la información de la parada y el botón 'Llevarme a esta ubicación'
+        // Mostrar la tarjeta con la información de la parada, anunciar por voz y centrar el mapa
         resetHideTimer();
         setSelectedStop({ stop, route: totalRoute });
+        speakStopAnnouncement(stop, 'select');
         if (stopTrajectoryLayerRef.current) {
           stopTrajectoryLayerRef.current.clearLayers();
         }
@@ -3003,7 +3023,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
         <div
           onMouseEnter={handleCardMouseEnter}
           onMouseLeave={handleCardMouseLeave}
-          className={`absolute bottom-6 left-3 right-3 sm:right-auto sm:left-4 sm:w-92 z-30 transition-all duration-500 ease-in-out ${
+          className={`absolute bottom-24 left-3 right-3 sm:right-auto sm:left-4 sm:w-92 z-[35] transition-all duration-500 ease-in-out ${
             areCardsVisible
               ? 'opacity-100 translate-y-0 pointer-events-auto'
               : 'opacity-0 translate-y-4 pointer-events-none'
@@ -3066,28 +3086,23 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
               );
             })()}
 
-            <div className="flex items-center gap-2 pt-0.5">
-              <button
+            <div className="pt-0.5">
+              <a
+                href={`https://www.google.com/maps/dir/?api=1&${
+                  userLocation ? `origin=${userLocation.lat},${userLocation.lng}&` : ''
+                }destination=${selectedStop.stop.lat},${selectedStop.stop.lng}&travelmode=walking`}
+                target="_blank"
+                rel="noopener noreferrer"
                 onClick={() => {
                   handleCalculateStopTrajectory(selectedStop.stop, selectedStop.route);
                   setSelectedStop(null);
                 }}
-                className="flex-1 min-h-[44px] rounded-xl bg-[#B7F36B] hover:brightness-95 text-[#101114] border border-[#101114] font-black text-xs flex items-center justify-center gap-2 active:scale-95 transition-all cursor-pointer"
-                title="Iniciar Guía GPS en tiempo real hacia esta parada"
+                className="w-full min-h-[44px] rounded-xl bg-[#B7F36B] hover:brightness-95 text-[#101114] border border-[#101114] font-black text-xs flex items-center justify-center gap-2 active:scale-95 transition-all cursor-pointer"
+                title="Abrir guía GPS directamente en Google Maps hacia esta parada"
               >
                 <Navigation className="w-4 h-4 text-[#101114]" />
                 <span className="tracking-tight text-xs uppercase font-black">IR · Iniciar Guía GPS</span>
-              </button>
-
-              <a
-                href={`https://www.google.com/maps/dir/?api=1&destination=${selectedStop.stop.lat},${selectedStop.stop.lng}&travelmode=walking`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="min-h-[44px] px-3 rounded-xl bg-[#101114] border border-white/15 hover:border-[#FFF19A] text-xs font-bold text-white flex items-center justify-center gap-1 shrink-0"
-                title="Abrir parada en Google Maps"
-              >
-                <ExternalLink className="w-3.5 h-3.5 text-[#FFF19A]" />
-                <span className="hidden sm:inline text-[11px]">Maps</span>
+                <ExternalLink className="w-3.5 h-3.5 text-[#101114]" />
               </a>
             </div>
 

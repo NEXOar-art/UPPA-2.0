@@ -859,7 +859,13 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
                   {onSelectStop && (
                     <button
                       type="button"
-                      onClick={() => onSelectStop(stop)}
+                      onClick={() => {
+                        playMicroSound('ui_tap');
+                        setIsExpanded(false);
+                        setIsMinimized(true);
+                        window.dispatchEvent(new CustomEvent('uppa-map-show-controls'));
+                        onSelectStop(stop);
+                      }}
                       className="min-h-[36px] px-2.5 py-1 rounded-lg bg-[#202329] hover:bg-[#FFF19A] hover:text-[#101114] border border-white/15 text-white font-bold text-[10.5px] flex items-center gap-1 shrink-0 cursor-pointer active:scale-95 transition-all"
                       title={`Centrar parada ${stop.name} en el mapa`}
                     >
