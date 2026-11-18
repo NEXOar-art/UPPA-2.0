@@ -2881,6 +2881,7 @@ export default function App() {
                   showToast(`Parada #${stop.sequence}: ${stop.name}`);
                 }}
                 unreadChatCount={communityChatList.length}
+                busEvents={eventsWithStreet.filter((e) => e.type === 'bus_location')}
               />
             </div>
 

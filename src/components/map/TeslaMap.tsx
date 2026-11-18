@@ -341,7 +341,6 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
   const [stopSearchQuery, setStopSearchQuery] = useState('');
   const [eventCustomNote, setEventCustomNote] = useState('');
   const [eventRegisteredToast, setEventRegisteredToast] = useState<string | null>(null);
-  const [hoveredTopBusBtn, setHoveredTopBusBtn] = useState<'zarate' | 'malvinas' | null>(null);
   const [selectedStop, setSelectedStop] = useState<{ stop: BusStop; route: TransitRoute } | null>(null);
 
   // Live 1-second ticker para expiración estricta de 1 minuto en "Ubicación de colectivo ahora"
@@ -440,9 +439,25 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
     const handleShowControls = () => {
       resetHideTimerRef.current();
     };
+    const handleHoverControls = (e: Event) => {
+      const custom = e as CustomEvent<{ hovering: boolean }>;
+      const hovering = Boolean(custom.detail?.hovering);
+      setIsHoveringCards(hovering);
+      if (hovering) {
+        setAreCardsVisible(true);
+        if (hideTimerRef.current) {
+          clearTimeout(hideTimerRef.current);
+          hideTimerRef.current = null;
+        }
+      } else {
+        resetHideTimerRef.current();
+      }
+    };
     window.addEventListener('uppa-map-show-controls', handleShowControls);
+    window.addEventListener('uppa-map-hover-controls', handleHoverControls);
     return () => {
       window.removeEventListener('uppa-map-show-controls', handleShowControls);
+      window.removeEventListener('uppa-map-hover-controls', handleHoverControls);
     };
   }, []);
 
@@ -1951,7 +1966,12 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
     mapInstanceRef.current.flyTo([userLocation.lat, userLocation.lng], 15, { duration: 1.2 });
   };
 
-  // External trigger listeners for bottom bar buttons ("Mi ubicacion" y "Enfocar")
+  const registerBusEventRef = useRef<(direction: 'hacia_zarate' | 'hacia_malvinas') => void>(() => {});
+  registerBusEventRef.current = (direction: 'hacia_zarate' | 'hacia_malvinas') => {
+    handleRegisterEventFromDropdown(TRANSIT_EVENT_TYPES[0], direction);
+  };
+
+  // External trigger listeners for bottom bar buttons ("Mi ubicacion", "Enfocar" y Joystick de colectivos)
   useEffect(() => {
     const handleLocateEvent = () => {
       handleLocateMe();
@@ -1959,11 +1979,20 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
     const handleFitRouteEvent = () => {
       handleFitEntireRoute();
     };
+    const handleReportBusDirection = (e: Event) => {
+      const custom = e as CustomEvent<{ direction?: 'hacia_zarate' | 'hacia_malvinas' }>;
+      const dir = custom.detail?.direction;
+      if (dir === 'hacia_zarate' || dir === 'hacia_malvinas') {
+        registerBusEventRef.current(dir);
+      }
+    };
     window.addEventListener('uppa-map-locate-me', handleLocateEvent);
     window.addEventListener('uppa-map-fit-route', handleFitRouteEvent);
+    window.addEventListener('uppa-report-bus-direction', handleReportBusDirection);
     return () => {
       window.removeEventListener('uppa-map-locate-me', handleLocateEvent);
       window.removeEventListener('uppa-map-fit-route', handleFitRouteEvent);
+      window.removeEventListener('uppa-report-bus-direction', handleReportBusDirection);
     };
   }, [userLocation, stopTrajectoryInfo, activeTrackingTaxi, activeRoute]);
 
@@ -1979,173 +2008,9 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
       {/* Map Container Element */}
       <div ref={mapContainerRef} className="w-full h-full z-0" />
 
-      {/* Barra Superior Inteligente Centrada: Iconos compactos sin texto (Hacia Zárate / Hacia Malvinas) */}
-      {(() => {
-        const primaryBusOption = TRANSIT_EVENT_TYPES[0];
-        const activeZarateCount = events.filter(
-          (e) =>
-            e.type === 'bus_location' &&
-            e.direction === 'hacia_zarate' &&
-            nowTimestamp - (e.createdAtMs || 0) < 60000
-        ).length;
-        const activeMalvinasCount = events.filter(
-          (e) =>
-            e.type === 'bus_location' &&
-            e.direction === 'hacia_malvinas' &&
-            nowTimestamp - (e.createdAtMs || 0) < 60000
-        ).length;
-
-        return (
-          <div className="absolute top-2.5 inset-x-0 z-[25] flex flex-col items-center px-3 pointer-events-none">
-            <div className="pointer-events-auto inline-flex items-center justify-center gap-1.5 p-1 rounded-xl bg-[#101114]/90 backdrop-blur-md border border-white/15 shadow-[0_4px_16px_rgba(0,0,0,0.72)]">
-              <button
-                type="button"
-                aria-label="Reportar colectivo hacia Zárate"
-                onClick={() => {
-                  setHoveredTopBusBtn(null);
-                  handleRegisterEventFromDropdown(primaryBusOption, 'hacia_zarate');
-                }}
-                onMouseEnter={() => {
-                  setHoveredTopBusBtn('zarate');
-                  handleCardMouseEnter();
-                }}
-                onMouseLeave={() => {
-                  setHoveredTopBusBtn((prev) => (prev === 'zarate' ? null : prev));
-                  handleCardMouseLeave();
-                }}
-                onFocus={() => setHoveredTopBusBtn('zarate')}
-                onBlur={() => setHoveredTopBusBtn((prev) => (prev === 'zarate' ? null : prev))}
-                className="relative w-8 h-8 rounded-lg bg-[#FFF19A] hover:brightness-105 text-[#101114] border border-[#101114] flex items-center justify-center gap-0.5 shadow-[0_1.5px_0_#0A0B0D] active:scale-95 transition-all cursor-pointer"
-              >
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.3"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="w-3.5 h-3.5 shrink-0"
-                  aria-hidden="true"
-                >
-                  <path d="M8 6v6" />
-                  <path d="M15 6v6" />
-                  <path d="M2 12h19.6" />
-                  <path d="M18 18h3s.5-1.7.8-2.8c.1-.4.2-.8.2-1.2 0-.4-.1-.8-.2-1.2l-1.4-5C20.1 6.8 19.1 6 18 6H4a2 2 0 0 0-2 2v10h3" />
-                  <circle cx="7" cy="18" r="2" />
-                  <path d="M9 18h5" />
-                  <circle cx="16" cy="18" r="2" />
-                </svg>
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="3"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="w-2.5 h-2.5 shrink-0"
-                  aria-hidden="true"
-                >
-                  <path d="M5 12h14" />
-                  <path d="m12 5 7 7-7 7" />
-                </svg>
-                {activeZarateCount > 0 && (
-                  <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-cyan-400 border border-[#101114] animate-pulse" />
-                )}
-              </button>
-
-              <button
-                type="button"
-                aria-label="Reportar colectivo hacia Malvinas"
-                onClick={() => {
-                  setHoveredTopBusBtn(null);
-                  handleRegisterEventFromDropdown(primaryBusOption, 'hacia_malvinas');
-                }}
-                onMouseEnter={() => {
-                  setHoveredTopBusBtn('malvinas');
-                  handleCardMouseEnter();
-                }}
-                onMouseLeave={() => {
-                  setHoveredTopBusBtn((prev) => (prev === 'malvinas' ? null : prev));
-                  handleCardMouseLeave();
-                }}
-                onFocus={() => setHoveredTopBusBtn('malvinas')}
-                onBlur={() => setHoveredTopBusBtn((prev) => (prev === 'malvinas' ? null : prev))}
-                className="relative w-8 h-8 rounded-lg bg-[#B7F36B] hover:brightness-105 text-[#101114] border border-[#101114] flex items-center justify-center gap-0.5 shadow-[0_1.5px_0_#0A0B0D] active:scale-95 transition-all cursor-pointer"
-              >
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="3"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="w-2.5 h-2.5 shrink-0"
-                  aria-hidden="true"
-                >
-                  <path d="M19 12H5" />
-                  <path d="m12 19-7-7 7-7" />
-                </svg>
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.3"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="w-3.5 h-3.5 shrink-0"
-                  aria-hidden="true"
-                >
-                  <path d="M8 6v6" />
-                  <path d="M15 6v6" />
-                  <path d="M2 12h19.6" />
-                  <path d="M18 18h3s.5-1.7.8-2.8c.1-.4.2-.8.2-1.2 0-.4-.1-.8-.2-1.2l-1.4-5C20.1 6.8 19.1 6 18 6H4a2 2 0 0 0-2 2v10h3" />
-                  <circle cx="7" cy="18" r="2" />
-                  <path d="M9 18h5" />
-                  <circle cx="16" cy="18" r="2" />
-                </svg>
-                {activeMalvinasCount > 0 && (
-                  <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-cyan-400 border border-[#101114] animate-pulse" />
-                )}
-              </button>
-            </div>
-
-            {/* Hover informativo inteligente explicando para qué sirve cada botón */}
-            {hoveredTopBusBtn && (
-              <div
-                role="tooltip"
-                className={`pointer-events-none mt-2 w-full max-w-xs px-3.5 py-2.5 rounded-2xl bg-[#101114]/95 backdrop-blur-md border-2 shadow-[0_10px_28px_rgba(0,0,0,0.82)] text-left animate-in fade-in slide-in-from-top-1 duration-150 ${
-                  hoveredTopBusBtn === 'zarate' ? 'border-[#FFF19A]/85' : 'border-[#B7F36B]/85'
-                }`}
-              >
-                <div className="flex items-center justify-between gap-2 text-xs font-black">
-                  <div className="flex items-center gap-1.5">
-                    <span>{hoveredTopBusBtn === 'zarate' ? '📍 ➡️' : '📍 ⬅️'}</span>
-                    <span className={hoveredTopBusBtn === 'zarate' ? 'text-[#FFF19A]' : 'text-[#B7F36B]'}>
-                      {hoveredTopBusBtn === 'zarate'
-                        ? 'Reportar colectivo hacia Zárate'
-                        : 'Reportar colectivo hacia Malvinas'}
-                    </span>
-                  </div>
-                  {(hoveredTopBusBtn === 'zarate' ? activeZarateCount : activeMalvinasCount) > 0 && (
-                    <span className="px-1.5 py-0.5 rounded-full bg-cyan-500/20 text-cyan-200 border border-cyan-400/40 font-mono text-[9px]">
-                      {hoveredTopBusBtn === 'zarate' ? activeZarateCount : activeMalvinasCount} activo(s)
-                    </span>
-                  )}
-                </div>
-                <p className="text-[11px] text-white/90 leading-snug mt-1">
-                  {hoveredTopBusBtn === 'zarate'
-                    ? 'Marca en vivo tu ubicación GPS como colectivo rumbo a Zárate Centro / Terminal durante 1 minuto, determina tu calle exacta por geocodificación inversa y avisa al Chat Comunitario.'
-                    : 'Marca en vivo tu ubicación GPS como colectivo rumbo a Barrio Malvinas (Campana) durante 1 minuto, determina tu calle exacta por geocodificación inversa y avisa al Chat Comunitario.'}
-                </p>
-              </div>
-            )}
-          </div>
-        );
-      })()}
-
       {/* Toast de confirmación de evento registrado en el mapa */}
       {eventRegisteredToast && (
-        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-50 pointer-events-none animate-in fade-in slide-in-from-top-3 duration-200">
+        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-50 pointer-events-none animate-in fade-in slide-in-from-top-3 duration-200">
           <div className="px-4 py-2.5 rounded-xl bg-[#202329] border-2 border-[#FFF19A] shadow-[3px_3px_0px_#101114] flex items-center gap-2.5 text-xs font-extrabold text-white">
             <span className="w-2.5 h-2.5 rounded-full bg-[#B7F36B] animate-ping" />
             <span>{eventRegisteredToast}</span>

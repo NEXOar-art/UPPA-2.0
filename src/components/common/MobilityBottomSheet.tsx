@@ -26,6 +26,11 @@ import { RankingPrestadoresDropdown } from '../taxi/RankingPrestadoresDropdown';
 import { LottieMicroIcon } from './LottieMicroIcon';
 import { playMicroSound } from '../../utils/soundEffects';
 
+interface BusReportEventSummary {
+  direction?: string;
+  createdAtMs?: number;
+}
+
 interface MobilityBottomSheetProps {
   userName?: string;
   onOpenPedirTransporte: () => void;
@@ -34,6 +39,7 @@ interface MobilityBottomSheetProps {
   onOpenChat: () => void;
   onSelectStop?: (stop: Linea228Stop) => void;
   unreadChatCount?: number;
+  busEvents?: BusReportEventSummary[];
 }
 
 export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
@@ -44,21 +50,72 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
   onOpenChat,
   onSelectStop,
   unreadChatCount = 0,
+  busEvents = [],
 }) => {
   const [isMinimized, setIsMinimized] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedZone, setSelectedZone] = useState<string>('all');
   const [isMapFreeMode, setIsMapFreeMode] = useState(false);
+  const [hoveredJoystickBtn, setHoveredJoystickBtn] = useState<'zarate' | 'malvinas' | null>(null);
+  const [nowTs, setNowTs] = useState<number>(() => Date.now());
 
   useEffect(() => {
     const handleVisibility = (e: Event) => {
       const custom = e as CustomEvent<{ visible: boolean }>;
-      setIsMapFreeMode(!custom.detail?.visible);
+      const visible = Boolean(custom.detail?.visible);
+      setIsMapFreeMode(!visible);
+      if (!visible) {
+        setHoveredJoystickBtn(null);
+      }
     };
     window.addEventListener('uppa-map-cards-visibility', handleVisibility);
     return () => window.removeEventListener('uppa-map-cards-visibility', handleVisibility);
   }, []);
+
+  useEffect(() => {
+    if (!busEvents || busEvents.length === 0) return;
+    setNowTs(Date.now());
+    const timer = setInterval(() => {
+      setNowTs(Date.now());
+    }, 2000);
+    return () => clearInterval(timer);
+  }, [busEvents]);
+
+  const activeZarateCount = useMemo(
+    () =>
+      busEvents.filter(
+        (e) => e.direction === 'hacia_zarate' && nowTs - (e.createdAtMs || 0) < 60000
+      ).length,
+    [busEvents, nowTs]
+  );
+
+  const activeMalvinasCount = useMemo(
+    () =>
+      busEvents.filter(
+        (e) => e.direction === 'hacia_malvinas' && nowTs - (e.createdAtMs || 0) < 60000
+      ).length,
+    [busEvents, nowTs]
+  );
+
+  const triggerJoystickBusReport = (direction: 'hacia_zarate' | 'hacia_malvinas') => {
+    playMicroSound('ui_tap');
+    setHoveredJoystickBtn(null);
+    window.dispatchEvent(
+      new CustomEvent('uppa-map-hover-controls', { detail: { hovering: false } })
+    );
+    window.dispatchEvent(new CustomEvent('uppa-map-show-controls'));
+    window.dispatchEvent(
+      new CustomEvent('uppa-report-bus-direction', { detail: { direction } })
+    );
+  };
+
+  const setJoystickHover = (btn: 'zarate' | 'malvinas' | null) => {
+    setHoveredJoystickBtn(btn);
+    window.dispatchEvent(
+      new CustomEvent('uppa-map-hover-controls', { detail: { hovering: btn !== null } })
+    );
+  };
 
   // Arrastre táctil / mouse para ocultar el panel hacia abajo
   const [dragOffsetY, setDragOffsetY] = useState(0);
@@ -102,6 +159,7 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
     if (didDrag && deltaY > 30) {
       setIsExpanded(false);
       setIsMinimized(true);
+      window.dispatchEvent(new CustomEvent('uppa-map-show-controls'));
       return;
     }
 
@@ -146,54 +204,228 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
 
   if (isMinimized) {
     return (
-      <div className="w-full max-w-sm mx-auto px-4 pointer-events-auto flex items-center justify-center gap-2 pb-1 uppa-card-enter">
-        <motion.button
-          type="button"
-          whileHover={{ scale: 1.08, y: -1 }}
-          whileTap={{ scale: 0.92 }}
-          transition={{ type: 'spring', stiffness: 450, damping: 24 }}
-          onClick={() => {
-            playMicroSound('ui_tap');
-            setIsMinimized(false);
-            setDragOffsetY(0);
-          }}
-          className="relative w-11 h-11 rounded-2xl uppa-glass-ios hover:border-[#FFF19A] hover:shadow-[0_0_12px_rgba(255,241,154,0.45)] border-[#FFF19A]/60 text-white flex items-center justify-center cursor-pointer group transition-colors"
-          title="Opciones de transporte"
-          aria-label="Opciones de transporte"
+      <div
+        onTouchStart={() => window.dispatchEvent(new CustomEvent('uppa-map-show-controls'))}
+        className="relative w-full max-w-lg mx-auto px-2 sm:px-4 pointer-events-none flex flex-col items-center pb-1 uppa-card-enter"
+      >
+        {/* Hover informativo inteligente sobre los joysticks de colectivo */}
+        <AnimatePresence>
+          {!isMapFreeMode && hoveredJoystickBtn && (
+            <motion.div
+              key={hoveredJoystickBtn}
+              role="tooltip"
+              initial={{ opacity: 0, y: 8, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 6, scale: 0.95 }}
+              transition={{ duration: 0.18 }}
+              className={`pointer-events-none mb-2.5 w-full max-w-xs px-3.5 py-2.5 rounded-2xl bg-[#101114]/95 backdrop-blur-md border-2 shadow-[0_10px_28px_rgba(0,0,0,0.82)] text-left ${
+                hoveredJoystickBtn === 'zarate' ? 'border-[#FFF19A]/85' : 'border-[#B7F36B]/85'
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2 text-xs font-black">
+                <div className="flex items-center gap-1.5">
+                  <span>{hoveredJoystickBtn === 'zarate' ? '📍 ➡️' : '📍 ⬅️'}</span>
+                  <span
+                    className={
+                      hoveredJoystickBtn === 'zarate' ? 'text-[#FFF19A]' : 'text-[#B7F36B]'
+                    }
+                  >
+                    {hoveredJoystickBtn === 'zarate'
+                      ? 'Reportar colectivo hacia Zárate'
+                      : 'Reportar colectivo hacia Malvinas'}
+                  </span>
+                </div>
+                {(hoveredJoystickBtn === 'zarate' ? activeZarateCount : activeMalvinasCount) >
+                  0 && (
+                  <span className="px-1.5 py-0.5 rounded-full bg-cyan-500/20 text-cyan-200 border border-cyan-400/40 font-mono text-[9px]">
+                    {hoveredJoystickBtn === 'zarate' ? activeZarateCount : activeMalvinasCount}{' '}
+                    activo(s)
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-white/90 leading-snug mt-1">
+                {hoveredJoystickBtn === 'zarate'
+                  ? 'Marca en vivo tu ubicación GPS como colectivo rumbo a Zárate Centro / Terminal durante 1 minuto, detecta la calle exacta y avisa al Chat Comunitario.'
+                  : 'Marca en vivo tu ubicación GPS como colectivo rumbo a Barrio Malvinas (Campana) durante 1 minuto, detecta la calle exacta y avisa al Chat Comunitario.'}
+              </p>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Consola estilo Joystick: aparecen suavemente al tocar y desaparecen sin actividad */}
+        <div
+          onPointerDown={() => window.dispatchEvent(new CustomEvent('uppa-map-show-controls'))}
+          className="pointer-events-auto inline-flex items-center justify-center gap-2 sm:gap-2.5"
         >
-          <div className="flex items-center -space-x-1">
-            <Bus className="w-4 h-4 text-[#FFF19A]" />
-            <Car className="w-4 h-4 text-[#B7F36B]" />
+          <AnimatePresence>
+            {!isMapFreeMode && (
+              <motion.button
+                key="joystick-zarate"
+                type="button"
+                aria-label="Reportar colectivo hacia Zárate"
+                initial={{ opacity: 0, scale: 0.68, x: 14 }}
+                animate={{ opacity: 1, scale: 1, x: 0 }}
+                exit={{ opacity: 0, scale: 0.68, x: 14 }}
+                transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+                whileHover={{ scale: 1.08, y: -2 }}
+                whileTap={{ scale: 0.91, y: 2 }}
+                onClick={() => triggerJoystickBusReport('hacia_zarate')}
+                onMouseEnter={() => setJoystickHover('zarate')}
+                onMouseLeave={() => setJoystickHover(null)}
+                onFocus={() => setJoystickHover('zarate')}
+                onBlur={() => setJoystickHover(null)}
+                className="relative w-14 h-14 sm:w-[60px] sm:h-[60px] rounded-full bg-gradient-to-b from-[#FFF5AD] to-[#F2D94E] text-[#101114] border-[3px] border-[#101114] ring-2 ring-[#FFF19A]/45 shadow-[0_5px_0_#0A0B0D,0_8px_20px_rgba(255,241,154,0.34)] flex items-center justify-center cursor-pointer shrink-0"
+              >
+                <span className="w-11 h-11 sm:w-12 sm:h-12 rounded-full border border-[#101114]/25 bg-white/25 flex items-center justify-center gap-0.5 pointer-events-none">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.3"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="w-[18px] h-[18px] sm:w-5 sm:h-5 shrink-0"
+                    aria-hidden="true"
+                  >
+                    <path d="M8 6v6" />
+                    <path d="M15 6v6" />
+                    <path d="M2 12h19.6" />
+                    <path d="M18 18h3s.5-1.7.8-2.8c.1-.4.2-.8.2-1.2 0-.4-.1-.8-.2-1.2l-1.4-5C20.1 6.8 19.1 6 18 6H4a2 2 0 0 0-2 2v10h3" />
+                    <circle cx="7" cy="18" r="2" />
+                    <path d="M9 18h5" />
+                    <circle cx="16" cy="18" r="2" />
+                  </svg>
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0"
+                    aria-hidden="true"
+                  >
+                    <path d="M5 12h14" />
+                    <path d="m12 5 7 7-7 7" />
+                  </svg>
+                </span>
+                {activeZarateCount > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-cyan-400 border-2 border-[#101114] animate-pulse" />
+                )}
+              </motion.button>
+            )}
+          </AnimatePresence>
+
+          <div className="inline-flex items-center justify-center gap-2 px-2 py-1.5 rounded-2xl bg-[#101114]/75 backdrop-blur-md border border-white/10 shadow-[0_6px_18px_rgba(0,0,0,0.55)]">
+            <motion.button
+              type="button"
+              whileHover={{ scale: 1.08, y: -1 }}
+              whileTap={{ scale: 0.92 }}
+              transition={{ type: 'spring', stiffness: 450, damping: 24 }}
+              onClick={() => {
+                playMicroSound('ui_tap');
+                setHoveredJoystickBtn(null);
+                setIsMinimized(false);
+                setDragOffsetY(0);
+              }}
+              className="relative w-11 h-11 rounded-2xl uppa-glass-ios hover:border-[#FFF19A] hover:shadow-[0_0_12px_rgba(255,241,154,0.45)] border-[#FFF19A]/60 text-white flex items-center justify-center cursor-pointer group transition-colors"
+              title="Opciones de transporte"
+              aria-label="Opciones de transporte"
+            >
+              <div className="flex items-center -space-x-1">
+                <Bus className="w-4 h-4 text-[#FFF19A]" />
+                <Car className="w-4 h-4 text-[#B7F36B]" />
+              </div>
+              <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-[#FFF19A] text-[#101114] border border-[#101114] flex items-center justify-center shadow">
+                <ChevronUp className="w-2.5 h-2.5 stroke-[3]" />
+              </span>
+            </motion.button>
+
+            {isMapFreeMode && (
+              <motion.button
+                type="button"
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.92 }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  playMicroSound('ui_tap');
+                  window.dispatchEvent(new CustomEvent('uppa-map-show-controls'));
+                }}
+                className="relative w-7 h-7 rounded-full uppa-glass-ios border border-white/25 hover:border-[#FFF19A] hover:shadow-[0_0_10px_rgba(255,241,154,0.45)] text-[#FFF19A] flex items-center justify-center cursor-pointer transition-colors uppa-card-enter"
+                title="Modo Mapa Libre · Tocar para ver controles"
+                aria-label="Modo Mapa Libre · Tocar para ver controles"
+              >
+                <SlidersHorizontal className="w-3 h-3" />
+                <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-[#B7F36B] border border-[#101114] animate-pulse" />
+              </motion.button>
+            )}
+
+            <RankingPrestadoresDropdown
+              placement="top"
+              onOpenTaxiTab={onOpenTaxis}
+              triggerButtonClassName="w-8 h-8 rounded-full uppa-glass-ios border border-white/25 hover:border-[#FFF19A] hover:shadow-[0_0_10px_rgba(255,241,154,0.45)] text-[#FFF19A] flex items-center justify-center cursor-pointer transition-colors"
+            />
           </div>
-          <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-[#FFF19A] text-[#101114] border border-[#101114] flex items-center justify-center shadow">
-            <ChevronUp className="w-2.5 h-2.5 stroke-[3]" />
-          </span>
-        </motion.button>
 
-        {isMapFreeMode && (
-          <motion.button
-            type="button"
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.92 }}
-            onClick={(e) => {
-              e.stopPropagation();
-              playMicroSound('ui_tap');
-              window.dispatchEvent(new CustomEvent('uppa-map-show-controls'));
-            }}
-            className="relative w-7 h-7 rounded-full uppa-glass-ios border border-white/25 hover:border-[#FFF19A] hover:shadow-[0_0_10px_rgba(255,241,154,0.45)] text-[#FFF19A] flex items-center justify-center cursor-pointer transition-colors uppa-card-enter"
-            title="Modo Mapa Libre · Tocar para ver controles"
-            aria-label="Modo Mapa Libre · Tocar para ver controles"
-          >
-            <SlidersHorizontal className="w-3 h-3" />
-            <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-[#B7F36B] border border-[#101114] animate-pulse" />
-          </motion.button>
-        )}
-
-        <RankingPrestadoresDropdown
-          placement="top"
-          onOpenTaxiTab={onOpenTaxis}
-          triggerButtonClassName="w-8 h-8 rounded-full uppa-glass-ios border border-white/25 hover:border-[#FFF19A] hover:shadow-[0_0_10px_rgba(255,241,154,0.45)] text-[#FFF19A] flex items-center justify-center cursor-pointer transition-colors"
-        />
+          <AnimatePresence>
+            {!isMapFreeMode && (
+              <motion.button
+                key="joystick-malvinas"
+                type="button"
+                aria-label="Reportar colectivo hacia Malvinas"
+                initial={{ opacity: 0, scale: 0.68, x: -14 }}
+                animate={{ opacity: 1, scale: 1, x: 0 }}
+                exit={{ opacity: 0, scale: 0.68, x: -14 }}
+                transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+                whileHover={{ scale: 1.08, y: -2 }}
+                whileTap={{ scale: 0.91, y: 2 }}
+                onClick={() => triggerJoystickBusReport('hacia_malvinas')}
+                onMouseEnter={() => setJoystickHover('malvinas')}
+                onMouseLeave={() => setJoystickHover(null)}
+                onFocus={() => setJoystickHover('malvinas')}
+                onBlur={() => setJoystickHover(null)}
+                className="relative w-14 h-14 sm:w-[60px] sm:h-[60px] rounded-full bg-gradient-to-b from-[#CBF989] to-[#9EE149] text-[#101114] border-[3px] border-[#101114] ring-2 ring-[#B7F36B]/45 shadow-[0_5px_0_#0A0B0D,0_8px_20px_rgba(183,243,107,0.34)] flex items-center justify-center cursor-pointer shrink-0"
+              >
+                <span className="w-11 h-11 sm:w-12 sm:h-12 rounded-full border border-[#101114]/25 bg-white/25 flex items-center justify-center gap-0.5 pointer-events-none">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0"
+                    aria-hidden="true"
+                  >
+                    <path d="M19 12H5" />
+                    <path d="m12 19-7-7 7-7" />
+                  </svg>
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.3"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="w-[18px] h-[18px] sm:w-5 sm:h-5 shrink-0"
+                    aria-hidden="true"
+                  >
+                    <path d="M8 6v6" />
+                    <path d="M15 6v6" />
+                    <path d="M2 12h19.6" />
+                    <path d="M18 18h3s.5-1.7.8-2.8c.1-.4.2-.8.2-1.2 0-.4-.1-.8-.2-1.2l-1.4-5C20.1 6.8 19.1 6 18 6H4a2 2 0 0 0-2 2v10h3" />
+                    <circle cx="7" cy="18" r="2" />
+                    <path d="M9 18h5" />
+                    <circle cx="16" cy="18" r="2" />
+                  </svg>
+                </span>
+                {activeMalvinasCount > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-cyan-400 border-2 border-[#101114] animate-pulse" />
+                )}
+              </motion.button>
+            )}
+          </AnimatePresence>
+        </div>
       </div>
     );
   }
@@ -295,6 +527,7 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
                 playMicroSound('ui_tap');
                 setIsExpanded(false);
                 setIsMinimized(true);
+                window.dispatchEvent(new CustomEvent('uppa-map-show-controls'));
               }}
               className="w-9 h-9 rounded-xl bg-[#101114] hover:border-rose-400 text-[#9299A5] hover:text-rose-300 border border-white/15 flex items-center justify-center transition-colors cursor-pointer"
               title="Minimizar panel de opciones (x)"
@@ -489,23 +722,6 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
                 <MapPin className="w-3 h-3 text-[#FFF19A] shrink-0" />
                 <span className="truncate">Traza completa por RP 6 y Colectora</span>
               </span>
-              <button
-                type="button"
-                onClick={() => setIsExpanded((prev) => !prev)}
-                className={`min-h-[36px] px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer active:scale-95 shrink-0 border ${
-                  isExpanded
-                    ? 'bg-[#FFF19A] text-[#101114] border-[#FFF19A]'
-                    : 'bg-[#202329] hover:border-[#FFF19A] text-white border-white/15'
-                }`}
-                title={isExpanded ? 'Ocultar listado de paradas' : 'Explorar las 62 paradas de Línea 228'}
-              >
-                <span>{isExpanded ? 'Ocultar listado' : 'Explorar 62 paradas'}</span>
-                {isExpanded ? (
-                  <ChevronUp className="w-3.5 h-3.5 stroke-[3]" />
-                ) : (
-                  <ChevronDown className="w-3.5 h-3.5" />
-                )}
-              </button>
             </div>
           </div>
         </div>
@@ -682,6 +898,7 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
                   onClick={() => {
                     setIsExpanded(false);
                     setIsMinimized(true);
+                    window.dispatchEvent(new CustomEvent('uppa-map-show-controls'));
                   }}
                   className="min-h-[40px] px-3 py-2 rounded-xl bg-[#101114] hover:border-rose-400 text-white hover:text-rose-300 border border-white/15 font-bold text-xs flex items-center gap-1.5 cursor-pointer"
                   title="Minimizar panel (x)"
