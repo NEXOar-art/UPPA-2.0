@@ -75,28 +75,28 @@ export const MOCK_ROUTES: TransitRoute[] = [
     lastUpdated: 'Hace 4 min',
     coordinates: [
       [-34.095650, -59.038650], // Terminal Zárate (Centro de Transferencia)
-      [-34.113650, -59.016180], // Av. Lavalle y Perito Moreno (FONAVI)
+      [-34.118395, -59.019539], // Av. Lavalle y Perito Moreno (FONAVI)
       [-34.115650, -59.013400], // Rotonda Acceso RN 9 / Colectora
-      [-34.138650, -58.978250], // Paraje El Tatú / Colectora
-      [-34.144050, -58.972450], // Parque Industrial Campana / RP 6
-      [-34.174350, -58.958620], // Tenaris Siderca (Colectora Norte & Necochea)
+      [-34.145626, -59.003746], // Paraje El Tatú / Fernando Ochoa
+      [-34.152605, -58.997094], // Parque Industrial Campana / RP 6 y Bidegain
+      [-34.184349, -58.948380], // Tenaris Siderca (Colectora Norte & Necochea)
       [-34.163200, -58.958950], // Plaza Eduardo Costa (Palacio Municipal Campana)
-      [-34.178750, -58.955350], // Colectora Norte y Dr. Salk
-      [-34.191398, -58.944732], // McDonald's Campana (Panamericana Km 72.5)
-      [-34.192306, -58.943583], // Colectora Sur y Magaldi
+      [-34.185935, -58.946814], // Colectora Norte y Dr. Salk
+      [-34.191145, -58.944410], // McDonald's y Colectora Sur
+      [-34.192982, -58.943026], // Colectora Sur y Viale
       [-34.193448, -58.942756], // Colectora Sur y Secundaria 3
       [-34.200217, -58.940283], // Colectora Sur y Grassi
     ],
     stops: [
       { id: 'st-col-1', name: 'Terminal Zárate (Andén Colectora)', lat: -34.095650, lng: -59.038650, sequence: 1 },
-      { id: 'st-col-2', name: 'Barrio FONAVI / Av. Lavalle', lat: -34.113650, lng: -59.016180, sequence: 2 },
+      { id: 'st-col-2', name: 'Av. Lavalle y Perito Moreno', lat: -34.118395, lng: -59.019539, sequence: 2 },
       { id: 'st-col-3', name: 'Rotonda Acceso RN 9 / Colectora', lat: -34.115650, lng: -59.013400, sequence: 3 },
-      { id: 'st-col-4', name: 'Paraje El Tatú / Colectora', lat: -34.138650, lng: -58.978250, sequence: 4 },
-      { id: 'st-col-5', name: 'Parque Industrial Campana', lat: -34.144050, lng: -58.972450, sequence: 5 },
-      { id: 'st-col-6', name: 'Tenaris Siderca (Portería 1 / Necochea)', lat: -34.174350, lng: -58.958620, sequence: 6 },
+      { id: 'st-col-4', name: 'Ruta 6 y Fernando Ochoa', lat: -34.145626, lng: -59.003746, sequence: 4 },
+      { id: 'st-col-5', name: 'Ruta 6 y Bidegain', lat: -34.152605, lng: -58.997094, sequence: 5 },
+      { id: 'st-col-6', name: 'Colectora Norte y Necochea', lat: -34.184349, lng: -58.948380, sequence: 6 },
       { id: 'st-col-7', name: 'Plaza Eduardo Costa (Campana)', lat: -34.163200, lng: -58.958950, sequence: 7 },
-      { id: 'st-col-8', name: "McDonald's Campana / Colectora Sur", lat: -34.191398, lng: -58.944732, sequence: 8 },
-      { id: 'st-col-9', name: 'Colectora Sur y Magaldi', lat: -34.192306, lng: -58.943583, sequence: 9 },
+      { id: 'st-col-8', name: "McDonald's y Colectora Sur", lat: -34.191145, lng: -58.944410, sequence: 8 },
+      { id: 'st-col-9', name: 'Colectora Sur y Viale', lat: -34.192982, lng: -58.943026, sequence: 9 },
       { id: 'st-col-10', name: 'Escuela Secundaria N° 3 (Colectora)', lat: -34.193448, lng: -58.942756, sequence: 10 },
       { id: 'st-col-11', name: 'Colectora Sur y Grassi', lat: -34.200217, lng: -58.940283, sequence: 11 },
     ],
@@ -114,9 +114,9 @@ export const MOCK_ROUTES: TransitRoute[] = [
     lastUpdated: 'Hace 2 min',
     coordinates: [
       [-34.095650, -59.038650], // Terminal Zárate
-      [-34.115650, -59.013400], // Rotonda Zárate
-      [-34.163200, -58.958950], // Plaza Costa
-      [-34.191398, -58.944732], // McDonald's
+      [-34.123396, -59.016664], // Ruta 6 y Ruta 12
+      [-34.163534, -58.957937], // Belgrano y Mitre
+      [-34.191145, -58.944410], // McDonald's y Colectora Sur
       [-34.200625, -58.937410], // Escuela Técnica Roberto Rocca
       [-34.204011, -58.935267], // Galería Ariel del Plata
       [-34.202119, -58.936479], // Escuela Ariel del Plata
@@ -126,9 +126,9 @@ export const MOCK_ROUTES: TransitRoute[] = [
     ],
     stops: [
       { id: 'st-ap-1', name: 'Terminal Zárate (Andén Principal)', lat: -34.095650, lng: -59.038650, sequence: 1 },
-      { id: 'st-ap-2', name: 'Rotonda Zárate / RN 9', lat: -34.115650, lng: -59.013400, sequence: 2 },
-      { id: 'st-ap-3', name: 'Plaza Eduardo Costa (Campana)', lat: -34.163200, lng: -58.958950, sequence: 3 },
-      { id: 'st-ap-4', name: "McDonald's Campana (Colectora Sur)", lat: -34.191398, lng: -58.944732, sequence: 4 },
+      { id: 'st-ap-2', name: 'Ruta 6 y Ruta 12', lat: -34.123396, lng: -59.016664, sequence: 2 },
+      { id: 'st-ap-3', name: 'Belgrano y Mitre', lat: -34.163534, lng: -58.957937, sequence: 3 },
+      { id: 'st-ap-4', name: "McDonald's y Colectora Sur", lat: -34.191145, lng: -58.944410, sequence: 4 },
       { id: 'st-ap-5', name: 'Escuela Técnica Roberto Rocca', lat: -34.200625, lng: -58.937410, sequence: 5 },
       { id: 'st-ap-6', name: 'Galería Ariel del Plata', lat: -34.204011, lng: -58.935267, sequence: 6 },
       { id: 'st-ap-7', name: 'Escuela Ariel del Plata (Calle Aguer)', lat: -34.202119, lng: -58.936479, sequence: 7 },

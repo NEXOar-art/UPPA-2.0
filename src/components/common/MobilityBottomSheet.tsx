@@ -510,9 +510,9 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
                   ? 'text-[#101114] bg-[#FFF19A] border-[#FFF19A]'
                   : 'text-white hover:border-[#FFF19A] bg-[#101114] border-white/15'
               }`}
-              title={isExpanded ? 'Ocultar listado de paradas' : 'Ver 62 Paradas de Línea 228'}
+              title={isExpanded ? 'Ocultar listado de paradas' : `Ver ${LINEA_228_STOPS.length} Paradas de Línea 228`}
             >
-              <span>{isExpanded ? 'Ocultar listado' : '62 Paradas'}</span>
+              <span>{isExpanded ? 'Ocultar listado' : `${LINEA_228_STOPS.length} Paradas`}</span>
               {isExpanded ? (
                 <ChevronUp className="w-3.5 h-3.5 stroke-[3]" />
               ) : (
@@ -695,7 +695,7 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
                     <LottieMicroIcon variant="radar" size={16} />
                   </h3>
                   <p className="text-[10px] text-[#9299A5] font-medium">
-                    Corredor en vivo · <strong className="text-white">62 paradas</strong>
+                    Corredor en vivo · <strong className="text-white">{LINEA_228_STOPS.length} paradas</strong>
                   </p>
                 </div>
               </div>
@@ -740,7 +740,7 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
               <div className="flex items-center gap-2 min-w-0">
                 <span className="w-2.5 h-2.5 rounded-full bg-[#B7F36B] shrink-0" />
                 <span className="text-xs font-black text-white truncate">
-                  62 Paradas de Línea 228
+                  {LINEA_228_STOPS.length} Paradas de Línea 228
                 </span>
                 <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-[#101114] text-[#FFF19A] border border-white/15">
                   {filteredStops.length}
@@ -781,7 +781,7 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Buscar entre las 62 paradas (ej: McDonald's, Plaza, Alem)..."
+                  placeholder={`Buscar entre las ${LINEA_228_STOPS.length} paradas (ej: McDonald's, Plaza, Alem)...`}
                   className="w-full min-h-[40px] bg-[#101114] border-2 border-white/10 focus:border-[#FFF19A] rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-[#9299A5] focus:outline-none transition-colors"
                 />
               </div>

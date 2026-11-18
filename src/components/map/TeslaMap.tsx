@@ -372,6 +372,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
   const formatStopNameForSpeech = (rawName: string): string =>
     rawName
       .replace(/\bC\.\s*Chapuis\b/gi, 'Claudio Chapuis')
+      .replace(/\bDr\.\s*/gi, 'Doctor ')
       .replace(/\bAv\.\s*/gi, 'Avenida ')
       .replace(/\bB°\s*/gi, 'Barrio ')
       .replace(/\bRP\s*6\b/gi, 'Ruta Provincial 6')
