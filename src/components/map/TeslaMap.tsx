@@ -341,6 +341,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
   const [stopSearchQuery, setStopSearchQuery] = useState('');
   const [eventCustomNote, setEventCustomNote] = useState('');
   const [eventRegisteredToast, setEventRegisteredToast] = useState<string | null>(null);
+  const [hoveredTopBusBtn, setHoveredTopBusBtn] = useState<'zarate' | 'malvinas' | null>(null);
   const [selectedStop, setSelectedStop] = useState<{ stop: BusStop; route: TransitRoute } | null>(null);
 
   // Live 1-second ticker para expiración estricta de 1 minuto en "Ubicación de colectivo ahora"
@@ -1978,9 +1979,117 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
       {/* Map Container Element */}
       <div ref={mapContainerRef} className="w-full h-full z-0" />
 
+      {/* Barra Superior Inteligente: Ubicación de Colectivo Ahora (Hacia Zárate / Hacia Malvinas) */}
+      {(() => {
+        const primaryBusOption = TRANSIT_EVENT_TYPES[0];
+        const activeZarateCount = events.filter(
+          (e) =>
+            e.type === 'bus_location' &&
+            e.direction === 'hacia_zarate' &&
+            nowTimestamp - (e.createdAtMs || 0) < 60000
+        ).length;
+        const activeMalvinasCount = events.filter(
+          (e) =>
+            e.type === 'bus_location' &&
+            e.direction === 'hacia_malvinas' &&
+            nowTimestamp - (e.createdAtMs || 0) < 60000
+        ).length;
+
+        return (
+          <div className="absolute top-2.5 left-12 right-3 sm:left-14 sm:right-4 z-[25] flex flex-col items-center pointer-events-none">
+            <div className="pointer-events-auto inline-flex flex-col sm:flex-row items-center gap-1.5 px-2 py-1.5 rounded-2xl bg-[#101114]/92 backdrop-blur-md border border-white/15 shadow-[0_6px_22px_rgba(0,0,0,0.72)] max-w-full">
+              <div className="hidden md:flex items-center gap-1.5 pl-1.5 pr-1 text-[11px] font-black text-white whitespace-nowrap">
+                <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping shrink-0" />
+                <span className="text-cyan-200">📍 Ubicación de colectivo ahora:</span>
+              </div>
+
+              <div className="grid grid-cols-2 sm:flex items-center gap-1.5 w-full sm:w-auto">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setHoveredTopBusBtn(null);
+                    handleRegisterEventFromDropdown(primaryBusOption, 'hacia_zarate');
+                  }}
+                  onMouseEnter={() => {
+                    setHoveredTopBusBtn('zarate');
+                    handleCardMouseEnter();
+                  }}
+                  onMouseLeave={() => {
+                    setHoveredTopBusBtn((prev) => (prev === 'zarate' ? null : prev));
+                    handleCardMouseLeave();
+                  }}
+                  onFocus={() => setHoveredTopBusBtn('zarate')}
+                  onBlur={() => setHoveredTopBusBtn((prev) => (prev === 'zarate' ? null : prev))}
+                  className="min-h-[36px] px-2.5 sm:px-3 py-1 rounded-xl bg-[#FFF19A] hover:brightness-105 text-[#101114] border border-[#101114] font-black text-[10px] sm:text-xs flex items-center justify-center gap-1.5 shadow-[0_2px_0_#0A0B0D] active:scale-95 transition-all cursor-pointer leading-tight text-center"
+                >
+                  <span className="shrink-0">➡️</span>
+                  <span>Reportar colectivo hacia Zárate</span>
+                  {activeZarateCount > 0 && (
+                    <span className="ml-0.5 px-1.5 py-0.5 rounded-full bg-[#101114] text-[#FFF19A] font-mono text-[9px] font-black shrink-0">
+                      {activeZarateCount}
+                    </span>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setHoveredTopBusBtn(null);
+                    handleRegisterEventFromDropdown(primaryBusOption, 'hacia_malvinas');
+                  }}
+                  onMouseEnter={() => {
+                    setHoveredTopBusBtn('malvinas');
+                    handleCardMouseEnter();
+                  }}
+                  onMouseLeave={() => {
+                    setHoveredTopBusBtn((prev) => (prev === 'malvinas' ? null : prev));
+                    handleCardMouseLeave();
+                  }}
+                  onFocus={() => setHoveredTopBusBtn('malvinas')}
+                  onBlur={() => setHoveredTopBusBtn((prev) => (prev === 'malvinas' ? null : prev))}
+                  className="min-h-[36px] px-2.5 sm:px-3 py-1 rounded-xl bg-[#B7F36B] hover:brightness-105 text-[#101114] border border-[#101114] font-black text-[10px] sm:text-xs flex items-center justify-center gap-1.5 shadow-[0_2px_0_#0A0B0D] active:scale-95 transition-all cursor-pointer leading-tight text-center"
+                >
+                  <span className="shrink-0">⬅️</span>
+                  <span>Reportar colectivo hacia Malvinas</span>
+                  {activeMalvinasCount > 0 && (
+                    <span className="ml-0.5 px-1.5 py-0.5 rounded-full bg-[#101114] text-[#B7F36B] font-mono text-[9px] font-black shrink-0">
+                      {activeMalvinasCount}
+                    </span>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Hover informativo inteligente explicando para qué sirve cada botón */}
+            {hoveredTopBusBtn && (
+              <div
+                role="tooltip"
+                className={`pointer-events-none mt-2 w-full max-w-sm px-3.5 py-2.5 rounded-2xl bg-[#101114]/95 backdrop-blur-md border-2 shadow-[0_10px_28px_rgba(0,0,0,0.82)] text-left animate-in fade-in slide-in-from-top-1 duration-150 ${
+                  hoveredTopBusBtn === 'zarate' ? 'border-[#FFF19A]/85' : 'border-[#B7F36B]/85'
+                }`}
+              >
+                <div className="flex items-center gap-1.5 text-xs font-black">
+                  <span>{hoveredTopBusBtn === 'zarate' ? '📍 ➡️' : '📍 ⬅️'}</span>
+                  <span className={hoveredTopBusBtn === 'zarate' ? 'text-[#FFF19A]' : 'text-[#B7F36B]'}>
+                    {hoveredTopBusBtn === 'zarate'
+                      ? 'Reportar colectivo hacia Zárate'
+                      : 'Reportar colectivo hacia Malvinas'}
+                  </span>
+                </div>
+                <p className="text-[11px] text-white/90 leading-snug mt-1">
+                  {hoveredTopBusBtn === 'zarate'
+                    ? 'Marca en vivo tu ubicación GPS como colectivo rumbo a Zárate Centro / Terminal durante 1 minuto, determina tu calle exacta por geocodificación inversa y avisa al Chat Comunitario.'
+                    : 'Marca en vivo tu ubicación GPS como colectivo rumbo a Barrio Malvinas (Campana) durante 1 minuto, determina tu calle exacta por geocodificación inversa y avisa al Chat Comunitario.'}
+                </p>
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
       {/* Toast de confirmación de evento registrado en el mapa */}
       {eventRegisteredToast && (
-        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-50 pointer-events-none animate-in fade-in slide-in-from-top-3 duration-200">
+        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-50 pointer-events-none animate-in fade-in slide-in-from-top-3 duration-200">
           <div className="px-4 py-2.5 rounded-xl bg-[#202329] border-2 border-[#FFF19A] shadow-[3px_3px_0px_#101114] flex items-center gap-2.5 text-xs font-extrabold text-white">
             <span className="w-2.5 h-2.5 rounded-full bg-[#B7F36B] animate-ping" />
             <span>{eventRegisteredToast}</span>
