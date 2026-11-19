@@ -23,6 +23,7 @@ import {
   mapFirestoreRolToAppRole,
   HabilitacionChofer,
   SolicitudTransporteFirestore,
+  CalificacionChoferFirestore,
 } from './types';
 import { computeLineSentiment } from './utils/sentiment';
 import {
@@ -56,6 +57,7 @@ import { TicketConsultaModal } from './components/common/TicketConsultaModal';
 import { ActiveRideGlassWidget } from './components/common/ActiveRideGlassWidget';
 import { SectionInfoSheetModal, AppSectionId } from './components/common/SectionInfoSheetModal';
 import { ShareQrModal } from './components/common/ShareQrModal';
+import { CalificarChoferModal } from './components/taxi/CalificarChoferModal';
 import { Linea228Stop } from './data/linea228Stops';
 import { useAuth } from './context/AuthContext';
 import { playMicroSound } from './utils/soundEffects';
@@ -83,6 +85,7 @@ import {
   isRealCommunityReport,
   enviarMensajeChat,
   getMessageTimestampMs,
+  subscribeToRankingChoferes,
 } from './services/realtimeFirebaseService';
 import { ensureFirebaseAuthSession } from './config/firebase';
 
@@ -116,6 +119,7 @@ import {
   Info,
   AlertTriangle,
   QrCode,
+  Star,
 } from 'lucide-react';
 
 function GlobalHoverTooltip() {
@@ -745,9 +749,140 @@ export default function App() {
   const [communityChatList, setCommunityChatList] = useState<MensajeChatFirestore[]>([]);
   const [dismissedChatMsgId, setDismissedChatMsgId] = useState<string | null>(null);
   const [solicitudesList, setSolicitudesList] = useState<SolicitudTransporteFirestore[]>([]);
+  const [requestNowTick, setRequestNowTick] = useState<number>(() => Date.now());
+  const [ratedSolicitudIds, setRatedSolicitudIds] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem(`uppa_rated_solicitudes_${INITIAL_USER.id || 'anon'}`);
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [ratedDriverKeys, setRatedDriverKeys] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem(`uppa_rated_drivers_${INITIAL_USER.id || 'anon'}`);
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [rankingChoferesList, setRankingChoferesList] = useState<CalificacionChoferFirestore[]>([]);
+  const [dismissedRateBannerId, setDismissedRateBannerId] = useState<string | null>(null);
+  const [mapCalificarTarget, setMapCalificarTarget] = useState<{
+    driverId: string;
+    driverName: string;
+    solicitudId: string;
+  } | null>(null);
   const [activeMapGlassRideId, setActiveMapGlassRideId] = useState<string | null>(null);
   const shownMapGlassRideIdsRef = useRef<Set<string>>(new Set());
   const mapGlassAutoHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const timer = setInterval(() => setRequestNowTick(Date.now()), 10000);
+    return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    const unsub = subscribeToRankingChoferes((list) => {
+      setRankingChoferesList(list);
+    });
+    return () => unsub();
+  }, []);
+
+  useEffect(() => {
+    try {
+      const rawSol = localStorage.getItem(`uppa_rated_solicitudes_${currentUser.id || 'anon'}`);
+      setRatedSolicitudIds(rawSol ? JSON.parse(rawSol) : []);
+      const rawDrv = localStorage.getItem(`uppa_rated_drivers_${currentUser.id || 'anon'}`);
+      setRatedDriverKeys(rawDrv ? JSON.parse(rawDrv) : []);
+    } catch {
+      setRatedSolicitudIds([]);
+      setRatedDriverKeys([]);
+    }
+  }, [currentUser.id]);
+
+  const buildDriverKeys = (driverId?: string | null, driverName?: string | null): string[] => {
+    const keys: string[] = [];
+    const cleanId = (driverId || '').trim();
+    const cleanName = (driverName || '').trim().toLowerCase();
+    if (cleanId && cleanId !== 'chofer') keys.push(`id:${cleanId}`);
+    if (cleanName && cleanName !== 'prestador uppa') keys.push(`name:${cleanName}`);
+    return keys;
+  };
+
+  useEffect(() => {
+    const handleExternalRated = (ev: Event) => {
+      const detail = (
+        ev as CustomEvent<{ solicitudId?: string; driverId?: string; driverName?: string }>
+      ).detail;
+      if (!detail) return;
+      if (detail.solicitudId) {
+        setRatedSolicitudIds((prev) =>
+          prev.includes(detail.solicitudId!) ? prev : [...prev, detail.solicitudId!]
+        );
+      }
+      const dKeys = buildDriverKeys(detail.driverId, detail.driverName);
+      if (dKeys.length > 0) {
+        setRatedDriverKeys((prev) => {
+          const merged = Array.from(new Set([...prev, ...dKeys]));
+          return merged.length === prev.length ? prev : merged;
+        });
+      }
+    };
+    window.addEventListener('uppa-solicitud-calificada', handleExternalRated);
+    return () => window.removeEventListener('uppa-solicitud-calificada', handleExternalRated);
+  }, []);
+
+  const isDriverAlreadyRatedByMe = useCallback(
+    (driverId?: string | null, driverName?: string | null): boolean => {
+      const dKeys = buildDriverKeys(driverId, driverName);
+      if (dKeys.some((k) => ratedDriverKeys.includes(k))) return true;
+
+      const cleanId = (driverId || '').trim();
+      const cleanName = (driverName || '').trim().toLowerCase();
+      const myCleanName = (currentUser.name || '').trim().toLowerCase();
+
+      return rankingChoferesList.some((cal) => {
+        const isFromMe =
+          (currentUser.id && currentUser.id !== 'usr-anon' && cal.pasajeroId === currentUser.id) ||
+          (currentUser.uid && cal.pasajeroId === currentUser.uid) ||
+          Boolean(myCleanName && cal.pasajeroNombre?.trim().toLowerCase() === myCleanName);
+        if (!isFromMe) return false;
+        const matchId = Boolean(cleanId && cleanId !== 'chofer' && cal.driverId === cleanId);
+        const matchName = Boolean(
+          cleanName && cal.driverName?.trim().toLowerCase() === cleanName
+        );
+        return matchId || matchName;
+      });
+    },
+    [ratedDriverKeys, rankingChoferesList, currentUser.id, currentUser.uid, currentUser.name]
+  );
+
+  const markSolicitudAsRated = (solId: string, driverId?: string | null, driverName?: string | null) => {
+    setRatedSolicitudIds((prev) => {
+      if (prev.includes(solId)) return prev;
+      const next = [...prev, solId];
+      try {
+        localStorage.setItem(`uppa_rated_solicitudes_${currentUser.id || 'anon'}`, JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+    const dKeys = buildDriverKeys(driverId, driverName);
+    if (dKeys.length > 0) {
+      setRatedDriverKeys((prev) => {
+        const next = Array.from(new Set([...prev, ...dKeys]));
+        try {
+          localStorage.setItem(`uppa_rated_drivers_${currentUser.id || 'anon'}`, JSON.stringify(next));
+        } catch {}
+        return next;
+      });
+    }
+    window.dispatchEvent(
+      new CustomEvent('uppa-solicitud-calificada', {
+        detail: { solicitudId: solId, driverId, driverName },
+      })
+    );
+  };
 
   // Pop-up exclusivo de 10 segundos para el prestador cuando el pasajero recibe su código
   const [driverCodePopup, setDriverCodePopup] = useState<{
@@ -1833,6 +1968,53 @@ export default function App() {
     return sorted[0] || null;
   }, [solicitudesList, currentUser.id, currentUser.uid]);
 
+  // Solicitudes pendientes activas para mostrar luz roja superior sin texto
+  const activePendingTransportRequests = useMemo(() => {
+    return solicitudesList.filter(
+      (sol) => sol.estado === 'pendiente' && !isSolicitudExpired(sol, requestNowTick)
+    );
+  }, [solicitudesList, requestNowTick]);
+
+  // Viaje finalizado del pasajero pendiente de calificación (últimas 3 horas, solo si aún no calificó al prestador)
+  const unratedCompletedPassengerRide = useMemo(() => {
+    if (isDriverUser || currentUser.role === 'admin' || currentUser.rol === 'administrador') {
+      return null;
+    }
+    const cutoff = requestNowTick - 3 * 60 * 60 * 1000;
+    const cleanUser = (currentUser.name || '').trim().toLowerCase();
+    const candidates = solicitudesList
+      .filter((sol) => {
+        if (sol.estado !== 'completado') return false;
+        if (ratedSolicitudIds.includes(sol.id)) return false;
+        if (isDriverAlreadyRatedByMe(sol.choferId, sol.choferNombre)) return false;
+        const matchId =
+          (currentUser.id && currentUser.id !== 'usr-anon' && sol.pasajeroId === currentUser.id) ||
+          (currentUser.uid && sol.pasajeroId === currentUser.uid);
+        const cleanPass = (sol.nombrePasajero || '').trim().toLowerCase();
+        const matchName = Boolean(cleanUser && cleanPass && cleanPass === cleanUser);
+        if (!matchId && !matchName) return false;
+        const ts = Number(sol.fechaCompletado || sol.fechaAceptado || sol.fechaSolicitud || 0);
+        return !ts || ts >= cutoff;
+      })
+      .sort(
+        (a, b) =>
+          Number(b.fechaCompletado || b.fechaAceptado || 0) -
+          Number(a.fechaCompletado || a.fechaAceptado || 0)
+      );
+    return candidates[0] || null;
+  }, [
+    isDriverUser,
+    currentUser.role,
+    currentUser.rol,
+    currentUser.id,
+    currentUser.uid,
+    currentUser.name,
+    solicitudesList,
+    ratedSolicitudIds,
+    isDriverAlreadyRatedByMe,
+    requestNowTick,
+  ]);
+
   // Mostrar la tarjeta de viaje activo al pasajero: 4s mientras busca móvil, y permanente al confirmarse el viaje con su Código de Viaje
   useEffect(() => {
     if (activeTab !== 'map') return;
@@ -2140,7 +2322,7 @@ export default function App() {
         <div
           role="alertdialog"
           aria-label="Código facilitado por el pasajero"
-          className="fixed top-16 left-1/2 -translate-x-1/2 z-50 w-[calc(100vw-1.5rem)] max-w-md pointer-events-auto uppa-card-enter"
+          className="fixed top-16 left-1/2 -translate-x-1/2 z-[65] w-[calc(100vw-1.5rem)] max-w-md pointer-events-auto uppa-card-enter"
         >
           <div className="uppa-glass-ios rounded-2xl border-2 border-[#FFF19A] shadow-[0_12px_32px_rgba(0,0,0,0.7)] p-3.5 text-white space-y-2.5">
             <div className="flex items-start justify-between gap-2.5">
@@ -2208,7 +2390,7 @@ export default function App() {
 
       {/* Toast Notification */}
       {toastMessage && (
-        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 bg-[#202329] border-2 border-[#FFF19A] px-4 py-2.5 rounded-xl shadow-[3px_3px_0px_#101114] text-xs font-bold flex items-center gap-2 text-white animate-in fade-in duration-200 max-w-[92vw]">
+        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-[70] bg-[#202329] border-2 border-[#FFF19A] px-4 py-2.5 rounded-xl shadow-[3px_3px_0px_#101114] text-xs font-bold flex items-center gap-2 text-white animate-in fade-in duration-200 max-w-[92vw]">
           <Sparkles className="w-4 h-4 text-[#FFF19A] shrink-0" />
           <span className="truncate">{toastMessage}</span>
         </div>
@@ -2221,7 +2403,7 @@ export default function App() {
         );
         if (visiblePushEvents.length === 0) return null;
         return (
-          <aside aria-label="Eventos en tiempo real" className="fixed top-16 right-3 sm:right-6 z-40 max-w-sm w-[calc(100vw-1.5rem)] sm:w-88 space-y-2 pointer-events-none">
+          <aside aria-label="Eventos en tiempo real" className="fixed top-16 right-3 sm:right-6 z-[58] max-w-sm w-[calc(100vw-1.5rem)] sm:w-88 space-y-2 pointer-events-none">
             {visiblePushEvents.slice(0, 4).map((ev) => {
               const remainingMs = Math.max(0, (ev.exposureExpiresAt || 0) - Date.now());
               const remainingSec = Math.floor(remainingMs / 1000);
@@ -2328,8 +2510,8 @@ export default function App() {
 
       {/* Top Navigation Header — Luxury Dark Minimalist Automotive */}
       <header className="h-14 px-3 sm:px-4 bg-[#101114] border-b border-white/15 flex items-center justify-between shrink-0 z-30">
-        {/* Brand: Solo el texto UPPA sin icono */}
-        <div className="flex items-center gap-2">
+        {/* Brand: Solo el texto UPPA sin icono + Indicador luminoso rojo de solicitud de transporte */}
+        <div className="flex items-center gap-2.5">
           <button
             onClick={() => setActiveTab('map')}
             title="Ir a la vista principal del Mapa en vivo"
@@ -2339,6 +2521,22 @@ export default function App() {
               UPPA
             </span>
           </button>
+
+          {activePendingTransportRequests.length > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                playMicroSound('ui_tap');
+                setActiveTab('taxi');
+              }}
+              title="PASAJERO SOLICITANDO TRANSPORTE"
+              aria-label="PASAJERO SOLICITANDO TRANSPORTE"
+              className="relative w-8 h-8 rounded-full bg-red-500/15 border border-red-500/70 hover:border-red-400 flex items-center justify-center cursor-pointer active:scale-95 transition-all shrink-0"
+            >
+              <span className="animate-ping absolute inline-flex h-4 w-4 rounded-full bg-red-500 opacity-85" />
+              <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-red-500 shadow-[0_0_12px_#ef4444]" />
+            </button>
+          )}
         </div>
 
         {/* Route status indicator */}
@@ -2907,7 +3105,7 @@ export default function App() {
               !activeTrackingPassenger &&
               !activeTrackingTaxi &&
               (myLiveActiveSolicitud.id === activeMapGlassRideId ? (
-                <div className="absolute top-16 left-3 right-3 sm:left-4 sm:right-auto sm:w-[375px] z-20 pointer-events-auto">
+                <div className="absolute top-16 left-3 right-3 sm:left-4 sm:right-auto sm:w-[375px] z-[48] pointer-events-auto">
                   <ActiveRideGlassWidget
                     solicitud={myLiveActiveSolicitud}
                     matchedDriver={matchedLiveDriver}
@@ -2937,7 +3135,7 @@ export default function App() {
                   type="button"
                   onClick={() => setActiveMapGlassRideId(myLiveActiveSolicitud.id)}
                   title="Tocar para ver el detalle y Código de Viaje"
-                  className="absolute top-14 left-3 z-20 px-3 py-2 rounded-2xl bg-[#101114]/95 border-2 border-[#FFF19A] text-white shadow-[0_6px_18px_rgba(0,0,0,0.65)] flex items-center gap-2 cursor-pointer active:scale-95 transition-all"
+                  className="absolute top-14 left-3 z-[48] px-3 py-2 rounded-2xl bg-[#101114]/95 border-2 border-[#FFF19A] text-white shadow-[0_6px_18px_rgba(0,0,0,0.65)] flex items-center gap-2 cursor-pointer active:scale-95 transition-all"
                 >
                   <KeyRound className="w-4 h-4 text-[#FFF19A] shrink-0" />
                   <span className="text-[11px] font-bold">Código de Viaje:</span>
@@ -2952,7 +3150,7 @@ export default function App() {
               <div
                 role="status"
                 aria-live="polite"
-                className="absolute top-16 left-1/2 -translate-x-1/2 z-40 w-[calc(100vw-1.5rem)] max-w-md pointer-events-auto uppa-card-enter"
+                className="absolute top-16 left-1/2 -translate-x-1/2 z-[55] w-[calc(100vw-1.5rem)] max-w-md pointer-events-auto uppa-card-enter"
               >
                 <div className="uppa-glass-ios rounded-2xl border-2 border-[#B7F36B] shadow-[0_12px_32px_rgba(0,0,0,0.72)] p-3.5 text-white flex items-center justify-between gap-3">
                   <button
@@ -3004,7 +3202,7 @@ export default function App() {
                 <div
                   role="alert"
                   aria-live="assertive"
-                  className="absolute top-3 left-1/2 -translate-x-1/2 z-[45] w-[calc(100vw-2rem)] max-w-md pointer-events-auto animate-in fade-in slide-in-from-top-3 duration-200"
+                  className="absolute top-3 left-1/2 -translate-x-1/2 z-[60] w-[calc(100vw-2rem)] max-w-md pointer-events-auto animate-in fade-in slide-in-from-top-3 duration-200"
                 >
                   <div className="rounded-2xl bg-[#101114]/95 backdrop-blur-xl border-2 border-[#FFF19A] shadow-[0_12px_34px_rgba(0,0,0,0.82)] overflow-hidden text-white">
                     <div className="p-3.5 space-y-2">
@@ -3069,6 +3267,59 @@ export default function App() {
                 </div>
               );
             })()}
+
+            {/* Aviso en vivo para el pasajero al finalizar el viaje (por encima de los botones inferiores) */}
+            {unratedCompletedPassengerRide &&
+              unratedCompletedPassengerRide.id !== dismissedRateBannerId && (
+                <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-[56] w-[calc(100vw-1.5rem)] max-w-md pointer-events-auto uppa-card-enter">
+                  <div className="uppa-glass-ios rounded-2xl border-2 border-[#FFF19A]/75 shadow-[0_12px_32px_rgba(0,0,0,0.78)] p-3 text-white flex items-center justify-between gap-2.5">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-9 h-9 rounded-xl bg-[#B7F36B] text-[#101114] border border-[#101114] flex items-center justify-center shrink-0">
+                        <CheckCircle2 className="w-5 h-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-black text-[#B7F36B] truncate">
+                          Viaje finalizado con {unratedCompletedPassengerRide.choferNombre || 'tu chofer'}
+                        </p>
+                        <p className="text-[11px] text-[#9299A5] truncate">
+                          {unratedCompletedPassengerRide.destino || 'Calificá el servicio para el ranking en vivo'}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          playMicroSound('ui_tap');
+                          setMapCalificarTarget({
+                            driverId:
+                              unratedCompletedPassengerRide.choferId ||
+                              unratedCompletedPassengerRide.choferNombre ||
+                              'chofer',
+                            driverName: unratedCompletedPassengerRide.choferNombre || 'Prestador UPPA',
+                            solicitudId: unratedCompletedPassengerRide.id,
+                          });
+                        }}
+                        title="Calificar ahora a este prestador para ayudar a la comunidad"
+                        className="min-h-[38px] px-3 py-1.5 rounded-xl uppa-cta-yellow uppa-calificar-destello font-black text-xs flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Star className="w-3.5 h-3.5 fill-[#101114]" />
+                        <span>Calificar Viaje</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDismissedRateBannerId(unratedCompletedPassengerRide.id)}
+                        className="w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-[#9299A5] hover:text-white flex items-center justify-center cursor-pointer"
+                        title="Cerrar aviso"
+                        aria-label="Cerrar aviso"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
 
             {/* Cabify-Inspired Mobility Bottom Sheet (Panel inferior con scrolling web hacia arriba) */}
             <div className="absolute bottom-2 left-0 right-0 z-30 pointer-events-none">
@@ -3155,7 +3406,7 @@ export default function App() {
 
       {/* Barra Flotante de Acceso Rápido al Chat Comunitario (visible en otras pantallas excepto Chat y Taxis & Motos por 4.5s) */}
       {activeTab !== 'chat' && activeTab !== 'taxi' && latestCommunityMessage && latestCommunityMessage.id !== dismissedChatMsgId && (
-        <div className="fixed bottom-24 sm:bottom-28 right-3 sm:right-5 max-w-[calc(100vw-24px)] sm:max-w-sm z-30 animate-in slide-in-from-bottom-3 duration-300">
+        <div className="fixed bottom-24 sm:bottom-28 right-3 sm:right-5 max-w-[calc(100vw-24px)] sm:max-w-sm z-[46] animate-in slide-in-from-bottom-3 duration-300">
           <div className="p-2.5 rounded-2xl bg-[#202329] border-2 border-[#FFF19A]/45 shadow-[4px_4px_0px_#101114] flex items-center justify-between gap-2.5 text-xs">
             <button
               onClick={() => setActiveTab('chat')}
@@ -3509,6 +3760,25 @@ export default function App() {
         onClose={() => setIsShareQrModalOpen(false)}
         onCopied={(msg) => showToast(msg)}
       />
+
+      {mapCalificarTarget && (
+        <CalificarChoferModal
+          isOpen={Boolean(mapCalificarTarget)}
+          onClose={() => setMapCalificarTarget(null)}
+          driverId={mapCalificarTarget.driverId}
+          driverName={mapCalificarTarget.driverName}
+          pasajeroId={currentUser.id}
+          pasajeroNombre={currentUser.name}
+          onSuccess={() => {
+            markSolicitudAsRated(
+              mapCalificarTarget.solicitudId,
+              mapCalificarTarget.driverId,
+              mapCalificarTarget.driverName
+            );
+            showToast(`¡Calificación enviada para ${mapCalificarTarget.driverName}! Ranking actualizado.`);
+          }}
+        />
+      )}
 
       <AuthModal
         isOpen={isAuthModalOpen}

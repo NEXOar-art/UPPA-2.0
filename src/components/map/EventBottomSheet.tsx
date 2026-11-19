@@ -51,7 +51,7 @@ export const EventBottomSheet: React.FC<EventBottomSheetProps> = ({
   const isBusLocation = event.type === 'bus_location';
 
   return (
-    <div className="fixed inset-x-0 bottom-0 z-50 p-3 sm:p-5 flex justify-center pointer-events-none animate-in slide-in-from-bottom duration-300">
+    <div className="fixed inset-x-0 bottom-24 sm:bottom-24 z-[60] p-3 sm:p-5 flex justify-center pointer-events-none animate-in slide-in-from-bottom duration-300">
       <div className="w-full max-w-sm bg-[#202329] rounded-2xl p-4.5 pointer-events-auto text-white flex flex-col gap-3 shadow-[5px_5px_0px_#101114] border-2 border-white/15">
         {/* Grab Handle */}
         <div className="w-10 h-1 bg-white/25 rounded-full mx-auto cursor-pointer" onClick={onClose} />

@@ -164,16 +164,81 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
     }
   });
 
+  const [ratedDriverKeys, setRatedDriverKeys] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem(`uppa_rated_drivers_${currentUserId || 'anon'}`);
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
+
   useEffect(() => {
     try {
-      const raw = localStorage.getItem(`uppa_rated_solicitudes_${currentUserId || 'anon'}`);
-      setRatedSolicitudIds(raw ? JSON.parse(raw) : []);
+      const rawSol = localStorage.getItem(`uppa_rated_solicitudes_${currentUserId || 'anon'}`);
+      setRatedSolicitudIds(rawSol ? JSON.parse(rawSol) : []);
+      const rawDrv = localStorage.getItem(`uppa_rated_drivers_${currentUserId || 'anon'}`);
+      setRatedDriverKeys(rawDrv ? JSON.parse(rawDrv) : []);
     } catch {
       setRatedSolicitudIds([]);
+      setRatedDriverKeys([]);
     }
   }, [currentUserId]);
 
-  const markSolicitudAsRated = (solId: string) => {
+  const buildDriverKeys = (driverId?: string | null, driverName?: string | null): string[] => {
+    const keys: string[] = [];
+    const cleanId = (driverId || '').trim();
+    const cleanName = (driverName || '').trim().toLowerCase();
+    if (cleanId && cleanId !== 'chofer') keys.push(`id:${cleanId}`);
+    if (cleanName && cleanName !== 'prestador uppa') keys.push(`name:${cleanName}`);
+    return keys;
+  };
+
+  useEffect(() => {
+    const handleExternalRated = (ev: Event) => {
+      const detail = (
+        ev as CustomEvent<{ solicitudId?: string; driverId?: string; driverName?: string }>
+      ).detail;
+      if (!detail) return;
+      if (detail.solicitudId) {
+        setRatedSolicitudIds((prev) =>
+          prev.includes(detail.solicitudId!) ? prev : [...prev, detail.solicitudId!]
+        );
+      }
+      const dKeys = buildDriverKeys(detail.driverId, detail.driverName);
+      if (dKeys.length > 0) {
+        setRatedDriverKeys((prev) => {
+          const merged = Array.from(new Set([...prev, ...dKeys]));
+          return merged.length === prev.length ? prev : merged;
+        });
+      }
+    };
+    window.addEventListener('uppa-solicitud-calificada', handleExternalRated);
+    return () => window.removeEventListener('uppa-solicitud-calificada', handleExternalRated);
+  }, []);
+
+  const isDriverAlreadyRatedByMe = (driverId?: string | null, driverName?: string | null): boolean => {
+    const dKeys = buildDriverKeys(driverId, driverName);
+    if (dKeys.some((k) => ratedDriverKeys.includes(k))) return true;
+
+    const cleanId = (driverId || '').trim();
+    const cleanName = (driverName || '').trim().toLowerCase();
+    const myCleanName = (currentUserName || '').trim().toLowerCase();
+
+    return rankingList.some((cal) => {
+      const isFromMe =
+        (currentUserId && currentUserId !== 'usr-anon' && cal.pasajeroId === currentUserId) ||
+        Boolean(myCleanName && cal.pasajeroNombre?.trim().toLowerCase() === myCleanName);
+      if (!isFromMe) return false;
+      const matchId = Boolean(cleanId && cleanId !== 'chofer' && cal.driverId === cleanId);
+      const matchName = Boolean(
+        cleanName && cal.driverName?.trim().toLowerCase() === cleanName
+      );
+      return matchId || matchName;
+    });
+  };
+
+  const markSolicitudAsRated = (solId: string, driverId?: string | null, driverName?: string | null) => {
     setRatedSolicitudIds((prev) => {
       if (prev.includes(solId)) return prev;
       const next = [...prev, solId];
@@ -182,6 +247,21 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
       } catch {}
       return next;
     });
+    const dKeys = buildDriverKeys(driverId, driverName);
+    if (dKeys.length > 0) {
+      setRatedDriverKeys((prev) => {
+        const next = Array.from(new Set([...prev, ...dKeys]));
+        try {
+          localStorage.setItem(`uppa_rated_drivers_${currentUserId || 'anon'}`, JSON.stringify(next));
+        } catch {}
+        return next;
+      });
+    }
+    window.dispatchEvent(
+      new CustomEvent('uppa-solicitud-calificada', {
+        detail: { solicitudId: solId, driverId, driverName },
+      })
+    );
   };
 
   useEffect(() => {
@@ -371,7 +451,7 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
     return visibleSolicitudes.filter((sol) => doesSolicitudBelongToMeAsPassenger(sol));
   }, [visibleSolicitudes, currentUserId, currentUserName]);
 
-  // Viajes completados elegibles para calificar (del pasajero, últimas 3 horas)
+  // Viajes completados elegibles para calificar (del pasajero, últimas 3 horas, solo si aún no calificó al prestador)
   const eligibleCompletedRides = useMemo(() => {
     if (isPrestadorLogueado) return [];
     const cutoff = nowTimestamp - RANKING_WINDOW_MS;
@@ -380,6 +460,7 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
         if (s.estado !== 'completado') return false;
         if (!doesSolicitudBelongToMeAsPassenger(s)) return false;
         if (ratedSolicitudIds.includes(s.id)) return false;
+        if (isDriverAlreadyRatedByMe(s.choferId, s.choferNombre)) return false;
         const ts = Number(s.fechaCompletado || s.fechaAceptado || s.fechaSolicitud || 0);
         return !ts || ts >= cutoff;
       })
@@ -388,7 +469,7 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
           Number(b.fechaCompletado || b.fechaAceptado || 0) -
           Number(a.fechaCompletado || a.fechaAceptado || 0)
       );
-  }, [isPrestadorLogueado, solicitudes, ratedSolicitudIds, nowTimestamp, currentUserId, currentUserName]);
+  }, [isPrestadorLogueado, solicitudes, ratedSolicitudIds, ratedDriverKeys, rankingList, nowTimestamp, currentUserId, currentUserName]);
 
   const formatRemainingTime = (endsAt: number) => {
     const diff = endsAt - Date.now();
@@ -522,22 +603,26 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
           driverName.trim().toLowerCase() === currentUserName.trim().toLowerCase())
     );
 
-    const eligibleCompletedRide =
-      solicitudes
-        .filter(
-          (s) =>
-            s.estado === 'completado' &&
-            doesSolicitudMatchDriver(s, driverId, driverName) &&
-            doesSolicitudBelongToMeAsPassenger(s) &&
-            !ratedSolicitudIds.includes(s.id)
-        )
-        .sort(
-          (a, b) =>
-            Number(b.fechaAceptado || b.fechaSolicitud || 0) -
-            Number(a.fechaAceptado || a.fechaSolicitud || 0)
-        )[0] || null;
+    const alreadyRatedDriver = isDriverAlreadyRatedByMe(driverId, driverName);
 
-    const canRate = Boolean(eligibleCompletedRide && !isBusy && !isViewerOwnCard);
+    const eligibleCompletedRide = alreadyRatedDriver
+      ? null
+      : solicitudes
+          .filter(
+            (s) =>
+              s.estado === 'completado' &&
+              doesSolicitudMatchDriver(s, driverId, driverName) &&
+              doesSolicitudBelongToMeAsPassenger(s) &&
+              !ratedSolicitudIds.includes(s.id) &&
+              !isDriverAlreadyRatedByMe(s.choferId, s.choferNombre)
+          )
+          .sort(
+            (a, b) =>
+              Number(b.fechaAceptado || b.fechaSolicitud || 0) -
+              Number(a.fechaAceptado || a.fechaSolicitud || 0)
+          )[0] || null;
+
+    const canRate = Boolean(eligibleCompletedRide && !isBusy && !isViewerOwnCard && !alreadyRatedDriver);
     const isWhatsAppLocked = Boolean(isBusy && !isViewerActivePassenger && !isViewerOwnCard);
 
     return {
@@ -1741,7 +1826,7 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                           solicitudId: ride.id,
                         })
                       }
-                      className="min-h-[38px] px-3 py-1.5 rounded-xl uppa-cta-yellow font-black text-xs flex items-center gap-1.5 cursor-pointer shrink-0"
+                      className="min-h-[38px] px-3 py-1.5 rounded-xl uppa-cta-yellow uppa-calificar-destello font-black text-xs flex items-center gap-1.5 cursor-pointer shrink-0"
                     >
                       <Star className="w-3.5 h-3.5 fill-[#101114]" />
                       <span>Calificar Viaje</span>
@@ -2161,7 +2246,7 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                       }}
                       className={`min-h-[42px] px-3 py-2 rounded-xl border-2 text-xs font-black flex items-center justify-center gap-1.5 transition-all ${
                         featuredAccess.canRate
-                          ? 'bg-[#101114] hover:border-[#FFF19A] text-[#FFF19A] border-[#FFF19A]/45 cursor-pointer active:scale-95'
+                          ? 'uppa-cta-yellow uppa-calificar-destello border-[#101114] text-[#101114] cursor-pointer active:scale-95'
                           : 'bg-[#101114]/60 text-[#9299A5] border-white/10 opacity-45 cursor-not-allowed'
                       }`}
                       title={
@@ -2172,7 +2257,7 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                           : 'Solo podés calificar cuando tomes un servicio con este prestador y finalice el viaje'
                       }
                     >
-                      <Star className={`w-3.5 h-3.5 ${featuredAccess.canRate ? 'fill-[#FFF19A]' : ''}`} />
+                      <Star className={`w-3.5 h-3.5 ${featuredAccess.canRate ? 'fill-[#101114]' : ''}`} />
                       <span>Calificar</span>
                     </button>
 
@@ -2443,7 +2528,11 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
           pasajeroId={currentUserId}
           pasajeroNombre={currentUserName}
           onSuccess={() => {
-            markSolicitudAsRated(calificarTarget.solicitudId);
+            markSolicitudAsRated(
+              calificarTarget.solicitudId,
+              calificarTarget.driverId,
+              calificarTarget.driverName
+            );
           }}
         />
       )}

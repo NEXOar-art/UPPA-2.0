@@ -528,6 +528,60 @@ button:not(:disabled):active,
   animation: uppa-check-pop 280ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 }
 
+@keyframes uppa-calificar-twinkle {
+  0%, 100% {
+    box-shadow: 0 3px 0 #0A0B0D, 0 0 0 0 rgba(255, 241, 154, 0.55);
+    filter: brightness(1);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 3px 0 #0A0B0D, 0 0 18px 4px rgba(255, 241, 154, 0.52), 0 0 28px rgba(183, 243, 107, 0.25);
+    filter: brightness(1.07);
+    transform: scale(1.025);
+  }
+}
+
+@keyframes uppa-calificar-sheen {
+  0% {
+    transform: translateX(-140%) skewX(-18deg);
+    opacity: 0;
+  }
+  20% {
+    opacity: 0.75;
+  }
+  55% {
+    transform: translateX(220%) skewX(-18deg);
+    opacity: 0;
+  }
+  100% {
+    transform: translateX(220%) skewX(-18deg);
+    opacity: 0;
+  }
+}
+
+.uppa-calificar-destello {
+  position: relative;
+  overflow: hidden;
+  animation: uppa-calificar-twinkle 1.85s ease-in-out infinite;
+}
+
+.uppa-calificar-destello::after {
+  content: '';
+  position: absolute;
+  top: -20%;
+  bottom: -20%;
+  left: 0;
+  width: 48%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.62) 50%,
+    transparent 100%
+  );
+  pointer-events: none;
+  animation: uppa-calificar-sheen 2.4s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .uppa-vehicle-approach-track,
   .uppa-road-scroll,
@@ -537,7 +591,9 @@ button:not(:disabled):active,
   .uppa-match-left,
   .uppa-match-right,
   .uppa-match-pop,
-  .uppa-check-pop {
+  .uppa-check-pop,
+  .uppa-calificar-destello,
+  .uppa-calificar-destello::after {
     animation: none !important;
   }
   button:not(:disabled):active,

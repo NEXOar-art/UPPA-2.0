@@ -342,6 +342,8 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
   const [eventCustomNote, setEventCustomNote] = useState('');
   const [eventRegisteredToast, setEventRegisteredToast] = useState<string | null>(null);
   const [selectedStop, setSelectedStop] = useState<{ stop: BusStop; route: TransitRoute } | null>(null);
+  const userLocationRef = useRef<UserLocation | null | undefined>(userLocation);
+  userLocationRef.current = userLocation;
 
   // Live 1-second ticker para expiración estricta de 1 minuto en "Ubicación de colectivo ahora"
   const [nowTimestamp, setNowTimestamp] = useState<number>(Date.now());
@@ -1177,33 +1179,11 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
         }
       );
 
-      // Popup cartográfico con coordenadas de alta precisión y enlace de guía
-      stopMarker.bindPopup(`
-        <div style="font-family: inherit; padding: 4px; color: #0f172a; max-width: 250px;">
-          <div style="display: flex; align-items: center; justify-between; gap: 4px; margin-bottom: 2px;">
-            <span style="background: #0284c7; color: #fff; font-size: 10px; font-weight: 900; padding: 2px 6px; border-radius: 6px; font-family: monospace;">PARADA #${stop.sequence}</span>
-            <span style="font-size: 10px; color: #64748b; font-weight: 700;">${stop.zone || 'Línea 228'}</span>
-          </div>
-          <div style="font-size: 13px; font-weight: 800; color: #0f172a; margin-top: 4px; line-height: 1.25;">
-            🚏 ${stop.name}
-          </div>
-          ${stop.description ? `<div style="font-size: 10.5px; color: #475569; margin-top: 4px; background: #f1f5f9; padding: 4px 6px; border-radius: 6px;">${stop.description}</div>` : ''}
-          <div style="margin-top: 5px; font-family: monospace; font-size: 9.5px; color: #64748b; background: #f8fafc; padding: 3px 6px; border-radius: 4px; border: 1px solid #e2e8f0;">
-            📍 Coordenadas: ${stop.lat.toFixed(6)}, ${stop.lng.toFixed(6)}
-          </div>
-          <div style="margin-top: 8px;">
-            <a href="https://www.google.com/maps/dir/?api=1&destination=${stop.lat},${stop.lng}" target="_blank" rel="noopener noreferrer" title="Abrir guía GPS en Google Maps hacia ${stop.name}" style="display: block; text-align: center; background: #B7F36B; color: #101114; font-size: 11px; font-weight: 800; padding: 6px 10px; border-radius: 8px; text-decoration: none;">
-              Guía GPS a esta Parada ➔
-            </a>
-          </div>
-        </div>
-      `);
-
       stopMarker.on('click', () => {
-        // Mostrar la tarjeta con la información de la parada, anunciar por voz y centrar el mapa
+        // Abrir Google Maps directamente para iniciar el recorrido por medio del GPS + anunciar por voz
         resetHideTimer();
         setSelectedStop({ stop, route: totalRoute });
-        speakStopAnnouncement(stop, 'select');
+        speakStopAnnouncement(stop, 'gps');
         if (stopTrajectoryLayerRef.current) {
           stopTrajectoryLayerRef.current.clearLayers();
         }
@@ -1211,6 +1191,19 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
         if (mapInstanceRef.current) {
           mapInstanceRef.current.panTo([stop.lat, stop.lng], { animate: true });
         }
+
+        const currLoc = userLocationRef.current;
+        const originParam = currLoc ? `origin=${currLoc.lat},${currLoc.lng}&` : '';
+        const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&${originParam}destination=${stop.lat},${stop.lng}&travelmode=walking`;
+        try {
+          const anchor = document.createElement('a');
+          anchor.href = googleMapsUrl;
+          anchor.target = '_blank';
+          anchor.rel = 'noopener noreferrer';
+          document.body.appendChild(anchor);
+          anchor.click();
+          document.body.removeChild(anchor);
+        } catch {}
       });
       stopMarker.addTo(layer);
     });
@@ -2031,7 +2024,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
 
       {/* Toast de confirmación de evento registrado en el mapa */}
       {eventRegisteredToast && (
-        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-50 pointer-events-none animate-in fade-in slide-in-from-top-3 duration-200">
+        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-[65] pointer-events-none animate-in fade-in slide-in-from-top-3 duration-200">
           <div className="px-4 py-2.5 rounded-xl bg-[#202329] border-2 border-[#FFF19A] shadow-[3px_3px_0px_#101114] flex items-center gap-2.5 text-xs font-extrabold text-white">
             <span className="w-2.5 h-2.5 rounded-full bg-[#B7F36B] animate-ping" />
             <span>{eventRegisteredToast}</span>
@@ -2045,7 +2038,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
       <div
         onMouseEnter={handleCardMouseEnter}
         onMouseLeave={handleCardMouseLeave}
-        className={`absolute top-16 sm:top-20 right-3 sm:right-4 z-20 flex flex-col gap-2 items-end transition-all duration-500 ease-in-out ${
+        className={`absolute top-16 sm:top-20 right-3 sm:right-4 z-[42] flex flex-col gap-2 items-end transition-all duration-500 ease-in-out ${
           areCardsVisible
             ? 'opacity-100 translate-y-0 pointer-events-auto'
             : 'opacity-0 -translate-y-3 pointer-events-none'
@@ -2461,7 +2454,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
 
       {/* Contenedor Superior Centrado: Eventos e Inconvenientes */}
       {isEventsPanelOpen && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center pt-4 sm:pt-6 px-3 pointer-events-none">
+        <div className="fixed inset-0 z-[65] flex items-start justify-center pt-4 sm:pt-6 px-3 pointer-events-none">
           <div
             onClick={() => setIsEventsPanelOpen(false)}
             className="fixed inset-0 bg-black/75 backdrop-blur-sm pointer-events-auto transition-opacity"
@@ -2627,7 +2620,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
         <div
           onMouseEnter={handleCardMouseEnter}
           onMouseLeave={handleCardMouseLeave}
-          className={`absolute top-16 sm:top-18 left-3 right-3 sm:left-4 sm:right-auto sm:w-[380px] z-30 transition-all duration-500 ease-in-out ${
+          className={`absolute top-16 sm:top-18 left-3 right-3 sm:left-4 sm:right-auto sm:w-[380px] z-[45] transition-all duration-500 ease-in-out ${
             areCardsVisible
               ? 'opacity-100 translate-y-0 pointer-events-auto'
               : 'opacity-0 -translate-y-3 pointer-events-none'
@@ -2747,7 +2740,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
         <div
           onMouseEnter={handleCardMouseEnter}
           onMouseLeave={handleCardMouseLeave}
-          className={`absolute top-16 sm:top-18 left-3 right-3 sm:left-4 sm:right-auto sm:w-[390px] z-30 transition-all duration-500 ease-in-out ${
+          className={`absolute top-16 sm:top-18 left-3 right-3 sm:left-4 sm:right-auto sm:w-[390px] z-[45] transition-all duration-500 ease-in-out ${
             areCardsVisible
               ? 'opacity-100 translate-y-0 pointer-events-auto'
               : 'opacity-0 -translate-y-3 pointer-events-none'
@@ -2867,7 +2860,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
         <div
           onMouseEnter={handleCardMouseEnter}
           onMouseLeave={handleCardMouseLeave}
-          className={`absolute top-16 sm:top-18 left-3 right-3 sm:left-4 sm:right-auto sm:w-[400px] z-30 transition-all duration-500 ease-in-out ${
+          className={`absolute top-16 sm:top-18 left-3 right-3 sm:left-4 sm:right-auto sm:w-[400px] z-[45] transition-all duration-500 ease-in-out ${
             areCardsVisible
               ? 'opacity-100 translate-y-0 pointer-events-auto'
               : 'opacity-0 -translate-y-3 pointer-events-none'
@@ -3024,7 +3017,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
         <div
           onMouseEnter={handleCardMouseEnter}
           onMouseLeave={handleCardMouseLeave}
-          className={`absolute bottom-24 left-3 right-3 sm:right-auto sm:left-4 sm:w-92 z-[35] transition-all duration-500 ease-in-out ${
+          className={`absolute bottom-24 left-3 right-3 sm:right-auto sm:left-4 sm:w-92 z-[55] transition-all duration-500 ease-in-out ${
             areCardsVisible
               ? 'opacity-100 translate-y-0 pointer-events-auto'
               : 'opacity-0 translate-y-4 pointer-events-none'
