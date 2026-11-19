@@ -11,7 +11,6 @@ import {
   ChevronDown,
   ChevronUp,
   Search,
-  MapPin,
   Activity,
   SlidersHorizontal,
   Users,
@@ -875,185 +874,195 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
           </div>
         </div>
 
-        {/* Corredor Card Línea 228 — IA Comunitaria + 5 KPIs con Hover + Botón Ver Paradas abajo */}
+        {/* Corredor Card Línea 228 — Limpio, Icon-Only KPIs, Micro-Banner IA en movimiento y Botón Paradas arriba a la derecha */}
         <div className="px-3.5 sm:px-5 pb-3">
           <div className="p-3.5 rounded-2xl bg-[#101114] border-2 border-white/10 space-y-2.5">
-            <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div className="flex items-center justify-between gap-2">
               <div
-                className="flex items-center gap-2"
-                title={`Corredor Línea 228 en vivo: ${LINEA_228_STOPS.length} paradas geolocalizadas entre Barrio Malvinas, Campana y Zárate`}
+                className="flex items-center gap-2 min-w-0"
+                title={`Corredor Línea 228 en vivo: ${LINEA_228_STOPS.length} paradas geolocalizadas entre Barrio Malvinas, Campana y Zárate · ${corridorAiMetrics.communitySignalsCount} señal(es) comunitaria(s) activa(s)`}
               >
-                <div className="w-8 h-8 rounded-xl bg-[#202329] text-[#FFF19A] flex items-center justify-center border border-white/15">
+                <div className="w-9 h-9 rounded-xl bg-[#202329] text-[#FFF19A] flex items-center justify-center border border-white/15 shrink-0">
                   <Bus className="w-4 h-4" />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <h3 className="text-xs sm:text-sm font-black text-white flex items-center gap-1.5">
                     <span>Línea 228</span>
                     <LottieMicroIcon variant="radar" size={16} />
                   </h3>
-                  <p className="text-[10px] text-[#9299A5] font-medium">
+                  <p className="text-[10px] text-[#9299A5] font-medium truncate">
                     Corredor en vivo · <strong className="text-white">{LINEA_228_STOPS.length} paradas</strong>
                   </p>
                 </div>
               </div>
 
-              <span
-                title={`La propia comunidad aporta ${corridorAiMetrics.communitySignalsCount} señal(es) entre reportes GPS, estado en paradas y chat; la IA las transforma automáticamente en estas métricas en tiempo real.`}
-                className="px-2 py-1 rounded-xl text-[9.5px] font-extrabold bg-[#202329] text-[#FFF19A] border border-[#FFF19A]/35 flex items-center gap-1 cursor-help"
+              {/* Botón de "Ver 66 paradas de Línea 228" arriba a la derecha, solo icono de parada con el mismo diseño de los demás botones */}
+              <motion.button
+                type="button"
+                whileHover={{ y: -1, scale: 1.04 }}
+                whileTap={{ scale: 0.94 }}
+                transition={{ type: 'spring', stiffness: 420, damping: 24 }}
+                onClick={() => {
+                  playMicroSound('ui_tap');
+                  setIsExpanded((prev) => !prev);
+                }}
+                aria-label={
+                  isExpanded
+                    ? `Ocultar listado de ${LINEA_228_STOPS.length} paradas de Línea 228`
+                    : `Ver ${LINEA_228_STOPS.length} paradas de Línea 228`
+                }
+                title={
+                  isExpanded
+                    ? `Ocultar listado de ${LINEA_228_STOPS.length} paradas de Línea 228`
+                    : `Ver las ${LINEA_228_STOPS.length} paradas de Línea 228 con buscador predictivo y guía GPS directa a Google Maps`
+                }
+                className={`min-h-[46px] min-w-[46px] p-1.5 rounded-2xl border-2 transition-colors group cursor-pointer flex items-center justify-center shrink-0 ${
+                  isExpanded
+                    ? 'bg-[#181B20] border-[#FFF19A] shadow-[0_0_12px_rgba(255,241,154,0.28)]'
+                    : 'bg-[#181B20] border-[#FFF19A]/45 hover:border-[#FFF19A]'
+                }`}
               >
-                <Sparkles className="w-3 h-3 text-[#FFF19A]" />
-                <span>IA Comunitaria en vivo</span>
-              </span>
+                <div
+                  className={`w-8 h-8 rounded-xl flex items-center justify-center shadow-sm group-hover:scale-105 transition-transform ${
+                    isExpanded
+                      ? 'bg-[#B7F36B] text-[#101114]'
+                      : 'bg-[#FFF19A] text-[#101114]'
+                  }`}
+                >
+                  {/* Icono representativo de parada de colectivo (poste + cartel de parada) */}
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.1"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="w-[18px] h-[18px]"
+                    aria-hidden="true"
+                  >
+                    <path d="M7 21V4" />
+                    <path d="M4 21h6" />
+                    <rect x="7" y="4" width="12" height="9" rx="2" />
+                    <path d="M10 8h6" />
+                    <path d="M10 10.5h3.5" />
+                    <circle cx="17" cy="18.5" r="2.2" />
+                  </svg>
+                </div>
+              </motion.button>
             </div>
 
-            {/* 5 KPIs en tiempo real distribuidos como tarjetas de ícono ordenadas y simétricas (todos con hover explicativo) */}
+            {/* 5 KPIs en tiempo real — Diseño limpio solo íconos (mismo lenguaje que los 4 botones superiores) + hover informativo */}
             <div className="grid grid-cols-5 gap-1.5 sm:gap-2">
               {/* KPI 1: Demora estimada actual */}
               <div
-                className={`p-1.5 sm:p-2 rounded-2xl bg-[#181B20] border-2 transition-colors flex flex-col items-center justify-center gap-1 text-center cursor-help ${
+                className={`min-h-[48px] sm:min-h-[52px] p-1.5 rounded-2xl bg-[#181B20] border-2 transition-colors flex items-center justify-center cursor-help ${
                   corridorAiMetrics.delayMinutes >= 15
                     ? 'border-amber-400/50 hover:border-amber-300'
                     : 'border-[#FFF19A]/40 hover:border-[#FFF19A]'
                 }`}
                 title={corridorAiMetrics.delayHover}
+                aria-label={corridorAiMetrics.delayHover}
               >
                 <div
-                  className={`w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center shadow-sm ${
+                  className={`w-9 h-9 rounded-xl flex items-center justify-center shadow-sm ${
                     corridorAiMetrics.delayMinutes >= 15
                       ? 'bg-amber-400 text-[#101114]'
                       : 'bg-[#FFF19A] text-[#101114]'
                   }`}
                 >
-                  <Clock className="w-4 h-4 stroke-[2.4]" />
+                  <Clock className="w-[18px] h-[18px] stroke-[2.4]" />
                 </div>
-                <span className="text-[10px] sm:text-[11px] font-black text-white leading-none truncate w-full">
-                  {corridorAiMetrics.delayCompact}
-                </span>
-                <span className="text-[8px] sm:text-[9px] font-bold text-[#9299A5] uppercase tracking-tight leading-none truncate w-full">
-                  Demora
-                </span>
               </div>
 
               {/* KPI 2: Velocidad promedio */}
               <div
-                className="p-1.5 sm:p-2 rounded-2xl bg-[#181B20] border-2 border-white/15 hover:border-[#FFF19A]/65 transition-colors flex flex-col items-center justify-center gap-1 text-center cursor-help"
+                className="min-h-[48px] sm:min-h-[52px] p-1.5 rounded-2xl bg-[#181B20] border-2 border-white/15 hover:border-[#FFF19A]/65 transition-colors flex items-center justify-center cursor-help"
                 title={corridorAiMetrics.speedHover}
+                aria-label={corridorAiMetrics.speedHover}
               >
-                <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-[#202329] text-[#FFF19A] border border-white/20 flex items-center justify-center shadow-sm">
-                  <Gauge className="w-4 h-4 stroke-[2.2]" />
+                <div className="w-9 h-9 rounded-xl bg-[#202329] text-[#FFF19A] border border-white/20 flex items-center justify-center shadow-sm">
+                  <Gauge className="w-[18px] h-[18px] stroke-[2.2]" />
                 </div>
-                <span className="text-[10px] sm:text-[11px] font-black text-white leading-none truncate w-full">
-                  {corridorAiMetrics.avgSpeedKmH} km/h
-                </span>
-                <span className="text-[8px] sm:text-[9px] font-bold text-[#9299A5] uppercase tracking-tight leading-none truncate w-full">
-                  Velocidad
-                </span>
               </div>
 
               {/* KPI 3: Próximo arribo (ETA) */}
               <div
-                className="p-1.5 sm:p-2 rounded-2xl bg-[#181B20] border-2 border-[#B7F36B]/45 hover:border-[#B7F36B] transition-colors flex flex-col items-center justify-center gap-1 text-center cursor-help"
+                className="min-h-[48px] sm:min-h-[52px] p-1.5 rounded-2xl bg-[#181B20] border-2 border-[#B7F36B]/45 hover:border-[#B7F36B] transition-colors flex items-center justify-center cursor-help"
                 title={corridorAiMetrics.etaHover}
+                aria-label={corridorAiMetrics.etaHover}
               >
-                <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-[#B7F36B] text-[#101114] flex items-center justify-center shadow-sm">
-                  <Activity className="w-4 h-4 stroke-[2.5]" />
+                <div className="w-9 h-9 rounded-xl bg-[#B7F36B] text-[#101114] flex items-center justify-center shadow-sm">
+                  <Activity className="w-[18px] h-[18px] stroke-[2.5]" />
                 </div>
-                <span className="text-[10px] sm:text-[11px] font-black text-[#B7F36B] leading-none truncate w-full">
-                  {corridorAiMetrics.etaCompact}
-                </span>
-                <span className="text-[8px] sm:text-[9px] font-bold text-[#9299A5] uppercase tracking-tight leading-none truncate w-full">
-                  Arribo
-                </span>
               </div>
 
               {/* KPI 4: Nivel de ocupación */}
               <div
-                className={`p-1.5 sm:p-2 rounded-2xl bg-[#181B20] border-2 transition-colors flex flex-col items-center justify-center gap-1 text-center cursor-help ${corridorAiMetrics.occupancyTone}`}
+                className={`min-h-[48px] sm:min-h-[52px] p-1.5 rounded-2xl bg-[#181B20] border-2 transition-colors flex items-center justify-center cursor-help ${corridorAiMetrics.occupancyTone}`}
                 title={corridorAiMetrics.occupancyHover}
+                aria-label={corridorAiMetrics.occupancyHover}
               >
                 <div
-                  className={`w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center shadow-sm ${corridorAiMetrics.occupancyIconTone}`}
+                  className={`w-9 h-9 rounded-xl flex items-center justify-center shadow-sm ${corridorAiMetrics.occupancyIconTone}`}
                 >
-                  <Users className="w-4 h-4 stroke-[2.2]" />
+                  <Users className="w-[18px] h-[18px] stroke-[2.2]" />
                 </div>
-                <span
-                  className={`text-[10px] sm:text-[11px] font-black leading-none truncate w-full ${corridorAiMetrics.occupancyTextTone}`}
-                >
-                  {corridorAiMetrics.occupancyCompact}
-                </span>
-                <span className="text-[8px] sm:text-[9px] font-bold text-[#9299A5] uppercase tracking-tight leading-none truncate w-full">
-                  Ocupación
-                </span>
               </div>
 
               {/* KPI 5: Predicción de demanda */}
               <div
-                className={`p-1.5 sm:p-2 rounded-2xl bg-[#181B20] border-2 transition-colors flex flex-col items-center justify-center gap-1 text-center cursor-help ${corridorAiMetrics.demandTone}`}
+                className={`min-h-[48px] sm:min-h-[52px] p-1.5 rounded-2xl bg-[#181B20] border-2 transition-colors flex items-center justify-center cursor-help ${corridorAiMetrics.demandTone}`}
                 title={corridorAiMetrics.demandHover}
+                aria-label={corridorAiMetrics.demandHover}
               >
                 <div
-                  className={`w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center shadow-sm ${corridorAiMetrics.demandIconTone}`}
+                  className={`w-9 h-9 rounded-xl flex items-center justify-center shadow-sm ${corridorAiMetrics.demandIconTone}`}
                 >
-                  <TrendingUp className="w-4 h-4 stroke-[2.2]" />
+                  <TrendingUp className="w-[18px] h-[18px] stroke-[2.2]" />
                 </div>
-                <span
-                  className={`text-[10px] sm:text-[11px] font-black leading-none truncate w-full ${corridorAiMetrics.demandTextTone}`}
-                >
-                  {corridorAiMetrics.demandCompact}
-                </span>
-                <span className="text-[8px] sm:text-[9px] font-bold text-[#9299A5] uppercase tracking-tight leading-none truncate w-full">
-                  Demanda
-                </span>
               </div>
             </div>
 
-            {/* Información amigable generada por la IA con los datos de la comunidad */}
+            {/* Micro-Banner en movimiento con Lectura IA y métricas en tiempo real */}
             <div
-              className="px-2.5 py-2 rounded-xl bg-[#181B20] border border-white/10 text-[10.5px] text-white/90 leading-snug cursor-help"
-              title="Resumen amigable generado por IA: combina reportes de colectivos en mapa, incidentes viales, pedidos activos y mensajes del chat comunitario."
+              className="px-2.5 py-2 rounded-xl bg-[#181B20] border border-white/10 flex items-center gap-2 overflow-hidden cursor-help group"
+              title={`IA Comunitaria en vivo (${corridorAiMetrics.communitySignalsCount} señal(es)): ${corridorAiMetrics.friendlySummary} · Demora: ${corridorAiMetrics.delayLabel} · Velocidad: ${corridorAiMetrics.avgSpeedKmH} km/h · Próximo arribo: ${corridorAiMetrics.etaCompact} · Ocupación: ${corridorAiMetrics.occupancyLabel} · Demanda: ${corridorAiMetrics.demandLabel}`}
             >
-              <span className="font-bold text-[#B7F36B]">Lectura IA: </span>
-              <span>{corridorAiMetrics.friendlySummary}</span>
-            </div>
-
-            <div className="flex items-center justify-between pt-2 border-t border-white/10 text-[10.5px] gap-2 flex-wrap">
-              <span
-                className="text-[#9299A5] flex items-center gap-1 truncate"
-                title="Trazado oficial completo de Línea 228 entre Barrio Malvinas, Campana Centro y Zárate Terminal"
-              >
-                <MapPin className="w-3 h-3 text-[#FFF19A] shrink-0" />
-                <span className="truncate">Traza completa por RP 6 y Colectora</span>
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-[#202329] border border-[#B7F36B]/40 text-[9.5px] font-black text-[#B7F36B] shrink-0">
+                <Sparkles className="w-2.5 h-2.5 text-[#FFF19A]" />
+                <span>IA</span>
               </span>
 
-              <motion.button
-                type="button"
-                whileTap={{ scale: 0.96 }}
-                onClick={() => {
-                  playMicroSound('ui_tap');
-                  setIsExpanded((prev) => !prev);
-                }}
-                className={`min-h-[34px] flex items-center gap-1.5 text-[11px] font-black px-3 py-1.5 rounded-xl border-2 transition-colors cursor-pointer shrink-0 ${
-                  isExpanded
-                    ? 'text-[#101114] bg-[#FFF19A] border-[#FFF19A]'
-                    : 'text-[#101114] bg-[#FFF19A] hover:brightness-95 border-[#FFF19A]'
-                }`}
-                title={
-                  isExpanded
-                    ? `Ocultar listado de ${LINEA_228_STOPS.length} paradas de Línea 228`
-                    : `Ver las ${LINEA_228_STOPS.length} paradas de Línea 228 con búsqueda y guía GPS directa a Google Maps`
-                }
-              >
-                <span>
-                  {isExpanded
-                    ? 'Ocultar listado de paradas'
-                    : `Ver ${LINEA_228_STOPS.length} paradas de Línea 228`}
-                </span>
-                {isExpanded ? (
-                  <ChevronUp className="w-3.5 h-3.5 stroke-[3]" />
-                ) : (
-                  <ChevronDown className="w-3.5 h-3.5 stroke-[3]" />
-                )}
-              </motion.button>
+              <div className="flex-1 min-w-0 overflow-hidden">
+                <div className="animate-ai-micro-banner text-[10.5px] font-semibold text-white/95 whitespace-nowrap">
+                  <span className="pr-8">
+                    <strong className="text-[#B7F36B]">Lectura IA:</strong>{' '}
+                    {corridorAiMetrics.friendlySummary} ·{' '}
+                    <span className="text-[#FFF19A] font-bold">
+                      Demora {corridorAiMetrics.delayCompact}
+                    </span>{' '}
+                    · {corridorAiMetrics.avgSpeedKmH} km/h ·{' '}
+                    <span className="text-[#B7F36B] font-bold">
+                      Arribo {corridorAiMetrics.etaCompact}
+                    </span>{' '}
+                    · Ocupación {corridorAiMetrics.occupancyLabel} · Demanda{' '}
+                    {corridorAiMetrics.demandLabel}
+                  </span>
+                  <span className="pr-8" aria-hidden="true">
+                    <strong className="text-[#B7F36B]">Lectura IA:</strong>{' '}
+                    {corridorAiMetrics.friendlySummary} ·{' '}
+                    <span className="text-[#FFF19A] font-bold">
+                      Demora {corridorAiMetrics.delayCompact}
+                    </span>{' '}
+                    · {corridorAiMetrics.avgSpeedKmH} km/h ·{' '}
+                    <span className="text-[#B7F36B] font-bold">
+                      Arribo {corridorAiMetrics.etaCompact}
+                    </span>{' '}
+                    · Ocupación {corridorAiMetrics.occupancyLabel} · Demanda{' '}
+                    {corridorAiMetrics.demandLabel}
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
         </div>

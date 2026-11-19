@@ -2034,25 +2034,25 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
 
       {/* El indicador compacto sin texto de Modo Mapa Libre ahora se ubica junto al botón Opciones de transporte */}
 
-      {/* Margen Derecho del Mapa: Botones Flotantes (Paradas, Estación de Servicio, Escuelas) */}
+      {/* Parte Superior del Mapa: Barra Horizontal de Botones Flotantes (Paradas, Estaciones, Escuelas, Prestadores, Filtros, Eventos) */}
       <div
         onMouseEnter={handleCardMouseEnter}
         onMouseLeave={handleCardMouseLeave}
-        className={`absolute top-16 sm:top-20 right-3 sm:right-4 z-[42] flex flex-col gap-2 items-end transition-all duration-500 ease-in-out ${
+        className={`absolute top-3 left-12 right-3 sm:left-auto sm:right-4 z-[42] flex flex-row items-center justify-end gap-1.5 sm:gap-2 transition-all duration-500 ease-in-out ${
           areCardsVisible
             ? 'opacity-100 translate-y-0 pointer-events-auto'
             : 'opacity-0 -translate-y-3 pointer-events-none'
         }`}
       >
         {/* Botón 1: Paradas (solo icono 🚏 con alternancia de visibilidad) */}
-        <div className="relative">
+        <div>
           <button
             onClick={() => {
               resetHideTimer();
               const next = !showStops;
               setShowStops(next);
             }}
-            className={`w-11 h-11 rounded-xl flex items-center justify-center text-lg border-2 shadow-[2px_2px_0px_#101114] transition-all active:scale-95 cursor-pointer ${
+            className={`w-10 h-10 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center text-base sm:text-lg border-2 shadow-[2px_2px_0px_#101114] transition-all active:scale-95 cursor-pointer ${
               showStops
                 ? 'bg-[#FFF19A] text-[#101114] border-[#101114]'
                 : 'bg-[#202329]/90 text-[#9299A5] border-white/15 opacity-70 hover:opacity-100 grayscale'
@@ -2065,7 +2065,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
           {/* Desplegable de Paradas con información y buscador */}
           {isStopsPanelOpen && (
             <div
-              className="absolute top-0 right-13 w-80 sm:w-92 max-h-[70vh] rounded-2xl bg-[#202329] border-2 border-white/15 shadow-[4px_4px_0px_#101114] p-3.5 z-40 flex flex-col animate-in fade-in slide-in-from-right-2 duration-150"
+              className="absolute top-full mt-2 right-0 w-[calc(100vw-1.5rem)] max-w-sm sm:w-92 max-h-[68vh] rounded-2xl bg-[#202329] border-2 border-white/15 shadow-[4px_4px_0px_#101114] p-3.5 z-40 flex flex-col animate-in fade-in slide-in-from-top-2 duration-150"
             >
               <div className="flex items-center justify-between pb-2.5 border-b border-white/10 shrink-0">
                 <div className="flex items-center gap-2">
@@ -2186,7 +2186,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
               mapInstanceRef.current.panTo([-34.1683, -58.9592]);
             }
           }}
-          className={`w-11 h-11 rounded-xl flex items-center justify-center text-lg border-2 shadow-[2px_2px_0px_#101114] transition-all active:scale-95 cursor-pointer ${
+          className={`w-10 h-10 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center text-base sm:text-lg border-2 shadow-[2px_2px_0px_#101114] transition-all active:scale-95 cursor-pointer shrink-0 ${
             showGasStations
               ? 'bg-[#FFF19A] text-[#101114] border-[#101114]'
               : 'bg-[#202329]/90 text-[#9299A5] border-white/15 opacity-70 hover:opacity-100 grayscale'
@@ -2206,7 +2206,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
               mapInstanceRef.current.panTo([-34.1800, -58.9500]);
             }
           }}
-          className={`w-11 h-11 rounded-xl flex items-center justify-center text-lg border-2 shadow-[2px_2px_0px_#101114] transition-all active:scale-95 cursor-pointer ${
+          className={`w-10 h-10 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center text-base sm:text-lg border-2 shadow-[2px_2px_0px_#101114] transition-all active:scale-95 cursor-pointer shrink-0 ${
             showSchools
               ? 'bg-[#FFF19A] text-[#101114] border-[#101114]'
               : 'bg-[#202329]/90 text-[#9299A5] border-white/15 opacity-70 hover:opacity-100 grayscale'
@@ -2224,7 +2224,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
               const next = !showTaxis;
               setShowTaxis(next);
             }}
-            className={`w-11 h-11 rounded-xl flex items-center justify-center text-lg border-2 shadow-[2px_2px_0px_#101114] transition-all active:scale-95 cursor-pointer ${
+            className={`w-10 h-10 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center text-base sm:text-lg border-2 shadow-[2px_2px_0px_#101114] transition-all active:scale-95 cursor-pointer shrink-0 ${
               showTaxis
                 ? 'bg-[#B7F36B] text-[#101114] border-[#101114]'
                 : 'bg-[#202329]/90 text-[#9299A5] border-white/15 opacity-70 hover:opacity-100 grayscale'
@@ -2236,7 +2236,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
         )}
 
         {/* Botón 4: Filtro de Eventos y Capas por Categoría */}
-        <div className="relative">
+        <div>
           <button
             onClick={() => {
               resetHideTimer();
@@ -2247,7 +2247,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
                 setIsStopsPanelOpen(false);
               }
             }}
-            className={`w-11 h-11 rounded-xl flex items-center justify-center text-lg border-2 shadow-[2px_2px_0px_#101114] transition-all active:scale-95 cursor-pointer ${
+            className={`w-10 h-10 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center text-base sm:text-lg border-2 shadow-[2px_2px_0px_#101114] transition-all active:scale-95 cursor-pointer shrink-0 ${
               isEventFilterPanelOpen
                 ? 'bg-[#FFF19A] text-[#101114] border-[#101114]'
                 : 'bg-[#202329]/95 text-white border-white/15 hover:border-[#FFF19A]'
@@ -2259,7 +2259,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
 
           {/* Desplegable de Filtro de Eventos y Capas por Categoría */}
           {isEventFilterPanelOpen && (
-            <div className="absolute top-0 right-13 w-72 sm:w-80 rounded-2xl bg-[#202329] border-2 border-white/15 shadow-[4px_4px_0px_#101114] p-3.5 z-40 flex flex-col animate-in fade-in slide-in-from-right-2 duration-150">
+            <div className="absolute top-full mt-2 right-0 w-[calc(100vw-1.5rem)] max-w-xs sm:w-80 rounded-2xl bg-[#202329] border-2 border-white/15 shadow-[4px_4px_0px_#101114] p-3.5 z-40 flex flex-col animate-in fade-in slide-in-from-top-2 duration-150">
               <div className="flex items-center justify-between pb-2.5 border-b border-white/10 shrink-0">
                 <div className="flex items-center gap-1.5">
                   <div className="w-8 h-8 rounded-lg bg-[#101114] text-[#FFF19A] flex items-center justify-center text-xs border border-white/15">
@@ -2441,7 +2441,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
               setIsEventFilterPanelOpen(false);
             }
           }}
-          className={`w-11 h-11 rounded-xl flex items-center justify-center text-lg border-2 shadow-[2px_2px_0px_#101114] transition-all active:scale-95 cursor-pointer ${
+          className={`w-10 h-10 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center text-base sm:text-lg border-2 shadow-[2px_2px_0px_#101114] transition-all active:scale-95 cursor-pointer shrink-0 ${
             isEventsPanelOpen
               ? 'bg-[#FFF19A] text-[#101114] border-[#101114]'
               : 'bg-[#202329]/95 text-[#FFF19A] border-white/15 hover:border-[#FFF19A]'

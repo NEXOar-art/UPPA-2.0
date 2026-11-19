@@ -310,8 +310,16 @@
 }
 
 .animate-marquee-infinite:hover,
+.animate-ai-micro-banner:hover,
 .marquee-paused {
   animation-play-state: paused !important;
+}
+
+.animate-ai-micro-banner {
+  display: flex;
+  width: max-content;
+  will-change: transform;
+  animation: marquee-scroll 22s linear infinite;
 }
 
 /* Custom scrollbars matching Graphite & Gray */
@@ -593,7 +601,8 @@ button:not(:disabled):active,
   .uppa-match-pop,
   .uppa-check-pop,
   .uppa-calificar-destello,
-  .uppa-calificar-destello::after {
+  .uppa-calificar-destello::after,
+  .animate-ai-micro-banner {
     animation: none !important;
   }
   button:not(:disabled):active,
