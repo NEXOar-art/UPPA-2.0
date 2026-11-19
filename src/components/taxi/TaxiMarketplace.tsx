@@ -708,8 +708,8 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
 
     setRideSuccessNotice(
       nextDisp === 'desocupado'
-        ? 'Estado cambiado a DESOCUPADO. Ya podés ver las solicitudes de pasajeros disponibles.'
-        : 'Estado cambiado a OCUPADO. No recibirás nuevas solicitudes hasta pasar a DESOCUPADO.'
+        ? 'Estado cambiado a DISPONIBLE. Ya podés ver las solicitudes de pasajeros.'
+        : 'Estado cambiado a OCUPADO. No recibirás nuevas solicitudes hasta pasar a DISPONIBLE.'
     );
     setTimeout(() => setRideSuccessNotice(null), 5000);
   };
@@ -862,7 +862,7 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
       await anularViajePorCodigo(solId, motivo);
       setConfirmingAnularId(null);
       await handleToggleMyDisponibilidad('desocupado');
-      setRideSuccessNotice('Viaje anulado. Tu estado volvió a DESOCUPADO.');
+      setRideSuccessNotice('Viaje anulado. Tu estado volvió a DISPONIBLE.');
       setTimeout(() => setRideSuccessNotice(null), 5000);
     } catch (err: any) {
       showActionError('Error al anular viaje: ' + (err.message || ''));
@@ -925,7 +925,7 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
               className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full ring-2 ring-[#202329] ${
                 isOcupado ? 'bg-[#FFF19A]' : 'bg-[#B7F36B]'
               }`}
-              title={isOcupado ? 'En viaje (Ocupado)' : 'Disponible (Desocupado)'}
+              title={isOcupado ? 'En viaje (Ocupado)' : 'Disponible'}
             />
           </div>
 
@@ -1062,7 +1062,7 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
             <button
               type="button"
               disabled
-              title="Bloqueado mientras el prestador lleva un pasajero. Se habilita al presionar DESOCUPADO."
+              title="Bloqueado mientras el prestador lleva un pasajero. Se habilita al pasar a DISPONIBLE."
               className="flex-1 sm:flex-none min-h-[42px] px-3.5 py-2 rounded-xl bg-[#101114]/70 border-2 border-white/10 text-[#9299A5] font-black text-xs flex items-center justify-center gap-1.5 opacity-55 cursor-not-allowed"
             >
               <Lock className="w-3.5 h-3.5 text-[#FFF19A]" />
@@ -1137,10 +1137,10 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                     ? 'bg-[#FFF19A] text-[#101114] border-[#FFF19A]'
                     : 'bg-[#B7F36B] text-[#101114] border-[#B7F36B]'
                 }`}
-                title="Alternar tu disponibilidad como chofer (Ocupado / Desocupado)"
+                title="Alternar tu disponibilidad como chofer (Ocupado / Disponible)"
               >
                 <span className="w-2.5 h-2.5 rounded-full bg-[#101114]" />
-                <span>{isLoggedDriverOcupado ? 'Estado: OCUPADO' : 'Estado: DESOCUPADO'}</span>
+                <span>{isLoggedDriverOcupado ? 'Estado: OCUPADO' : 'Estado: DISPONIBLE'}</span>
               </button>
             )}
 
@@ -1504,7 +1504,7 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                             <button
                               type="button"
                               onClick={() => handleAnularRide(sol.id, 'Código incorrecto o pasajero no abordó')}
-                              title="Confirmar anulación del viaje y volver a estado desocupado"
+                              title="Confirmar anulación del viaje y volver a estado disponible"
                               className="flex-1 min-h-[38px] py-1.5 px-2.5 text-[11px] font-black bg-rose-600 text-white rounded-xl cursor-pointer"
                             >
                               Confirmar Anulación
@@ -1546,7 +1546,7 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                         title="Finalizar este viaje y volver a estar disponible para recibir nuevas solicitudes"
                       >
                         <Flag className="w-4 h-4 shrink-0" />
-                        <span>FINALIZAR Y PASAR A DESOCUPADO</span>
+                        <span>FINALIZAR Y PASAR A DISPONIBLE</span>
                       </button>
                       <p className="text-[10.5px] text-center text-[#9299A5] leading-snug">
                         El seguimiento animado permanece activo para vos y el pasajero hasta que presiones este botón.
@@ -1642,7 +1642,7 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                 <div className="space-y-0.5">
                   <div className="font-black text-[#FFF19A]">Estás en estado OCUPADO</div>
                   <p className="text-[11px] text-[#9299A5]">
-                    Solo los choferes disponibles (<strong className="text-[#B7F36B]">DESOCUPADO</strong>) reciben solicitudes de pasajeros.
+                    Solo los choferes en estado <strong className="text-[#B7F36B]">DISPONIBLE</strong> reciben solicitudes de pasajeros.
                   </p>
                 </div>
                 <button
@@ -1650,7 +1650,7 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                   onClick={() => handleToggleMyDisponibilidad('desocupado')}
                   className="min-h-[40px] px-3.5 py-2 rounded-xl uppa-cta-green font-black text-xs shrink-0 cursor-pointer"
                 >
-                  Pasar a DESOCUPADO
+                  Pasar a DISPONIBLE
                 </button>
               </div>
             ) : null}
@@ -2065,7 +2065,7 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                             className={`absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full ring-2 ring-[#101114] ${
                               isFeaturedOcupado ? 'bg-[#FFF19A]' : 'bg-[#B7F36B]'
                             }`}
-                            title={isFeaturedOcupado ? 'En viaje (Ocupado)' : 'Disponible (Desocupado)'}
+                            title={isFeaturedOcupado ? 'En viaje (Ocupado)' : 'Disponible'}
                           />
                         </div>
 
@@ -2279,14 +2279,14 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                       <button
                         type="button"
                         disabled
-                        title="WhatsApp bloqueado mientras el prestador lleva un pasajero. Se habilita al presionar DESOCUPADO."
+                        title="WhatsApp bloqueado mientras el prestador lleva un pasajero. Se habilita al pasar a DISPONIBLE."
                         className="w-full min-h-[46px] p-1.5 rounded-xl bg-[#101114]/70 border-2 border-white/10 flex items-center justify-between opacity-60 cursor-not-allowed"
                       >
                         <div className="w-9 h-9 rounded-lg bg-[#202329] border border-white/15 flex items-center justify-center text-[#FFF19A] shrink-0">
                           <Lock className="w-4 h-4" />
                         </div>
                         <div className="text-[11px] font-black text-[#9299A5] px-2 text-center truncate">
-                          {activeDriverFeatured.driverName} en viaje · WhatsApp bloqueado hasta DESOCUPADO
+                          {activeDriverFeatured.driverName} en viaje · WhatsApp bloqueado hasta DISPONIBLE
                         </div>
                         <span className="w-4 mr-2 shrink-0" />
                       </button>

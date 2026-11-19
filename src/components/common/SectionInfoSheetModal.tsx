@@ -75,7 +75,7 @@ const SECTIONS: SectionConfig[] = [
       {
         title: 'Avisos de Vehículos Disponibles',
         description:
-          'Cuando un prestador finaliza su viaje y presiona DESOCUPADO, aparece un aviso breve de 5 segundos en el mapa para que los pasajeros puedan solicitarlo.',
+          'Cuando un prestador finaliza su viaje y presiona DISPONIBLE, aparece un aviso breve de 5 segundos en el mapa para que los pasajeros puedan solicitarlo.',
         icon: <Bell className="w-4 h-4 text-[#FFF19A]" />,
       },
     ],
@@ -96,7 +96,7 @@ const SECTIONS: SectionConfig[] = [
       {
         title: 'Solicitudes Solo para Choferes Disponibles',
         description:
-          'Los prestadores habilitados en estado DESOCUPADO ven en Taxis & Motos las solicitudes de pasajeros con su destino para aceptar el traslado.',
+          'Los prestadores habilitados en estado DISPONIBLE ven en Taxis & Motos las solicitudes de pasajeros con su destino para aceptar el traslado.',
         icon: <CheckCircle2 className="w-4 h-4 text-[#B7F36B]" />,
       },
       {

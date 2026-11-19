@@ -404,12 +404,29 @@ export default function App() {
     };
   }, []);
 
-  const isAdminViewer = Boolean(
-    currentUser.role === 'admin' ||
+  const prevSessionIdentityRef = useRef<string | null>(null);
+  useEffect(() => {
+    const currIdentity = currentUser.uid || currentUser.id || null;
+    if (
+      prevSessionIdentityRef.current &&
+      currIdentity &&
+      prevSessionIdentityRef.current !== currIdentity
+    ) {
+      setIsAdminPinUnlocked(false);
+      try {
+        sessionStorage.removeItem('uppa_admin_unlocked');
+      } catch {}
+    }
+    prevSessionIdentityRef.current = currIdentity;
+  }, [currentUser.uid, currentUser.id]);
+
+  const isOfficialAdminUser = Boolean(
     isFirebaseAdmin ||
-    currentUser.rol === 'administrador' ||
-    isAdminPinUnlocked
+      ((currentUser.role === 'admin' || currentUser.rol === 'administrador') &&
+        currentUser.email?.toLowerCase() === 'gastonrobertogimenez@gmail.com')
   );
+
+  const isAdminViewer = Boolean(isOfficialAdminUser || isAdminPinUnlocked);
   const isAdminViewerRef = useRef(isAdminViewer);
   isAdminViewerRef.current = isAdminViewer;
 
@@ -689,7 +706,7 @@ export default function App() {
     showToast(
       nextState === 'ocupado'
         ? '🟡 Estado: OCUPADO (En viaje activo con pasajero)'
-        : '🟢 ¡Estado: DESOCUPADO! Viaje finalizado con éxito. Toda la comunidad ve que estás activo y disponible para nuevos viajes.'
+        : '🟢 ¡Estado: DISPONIBLE! Viaje finalizado con éxito. Toda la comunidad ve que estás activo y disponible para nuevos viajes.'
     );
   };
 
@@ -2298,7 +2315,9 @@ export default function App() {
         <GlobalHoverTooltip />
         <LoginPage
           onLogin={(user) => {
+            setIsAdminPinUnlocked(false);
             try {
+              sessionStorage.removeItem('uppa_admin_unlocked');
               localStorage.setItem('uppa_session_user', JSON.stringify(user));
             } catch {}
             setCurrentUser(user);
@@ -2522,7 +2541,7 @@ export default function App() {
             </span>
           </button>
 
-          {activePendingTransportRequests.length > 0 && (
+          {isDriverUser && activePendingTransportRequests.length > 0 && (
             <button
               type="button"
               onClick={() => {
@@ -2628,7 +2647,7 @@ export default function App() {
                   isDriverUser
                     ? isDriverHabilitado
                       ? driverDisponibilidad === 'ocupado'
-                        ? `Mi Perfil: ${currentUser.name} (EN VIAJE - Abrir menú para cambiar a Desocupado)`
+                        ? `Mi Perfil: ${currentUser.name} (EN VIAJE - Abrir menú para cambiar a Disponible)`
                         : `Mi Perfil: ${currentUser.name} (Chofer Habilitado - Disponible)`
                       : `Mi Perfil: ${currentUser.name} (Chofer Pendiente de Habilitación)`
                     : `Mi Perfil y opciones de cuenta: ${currentUser.name}`
@@ -2666,7 +2685,7 @@ export default function App() {
                     </span>
                   ) : (
                     <span className="text-[10px] font-black uppercase tracking-wider text-[#101114] hidden sm:inline px-2 py-0.5 rounded-md bg-[#B7F36B]">
-                      DESOCUPADO
+                      DISPONIBLE
                     </span>
                   )
                 )}
@@ -2867,7 +2886,7 @@ export default function App() {
                           </span>
                         ) : (
                           <span className="text-[10px] font-black text-[#101114] bg-[#B7F36B] px-2 py-0.5 rounded flex items-center gap-1">
-                            DESOCUPADO
+                            DISPONIBLE
                           </span>
                         )}
                       </div>
@@ -2883,7 +2902,7 @@ export default function App() {
                           }}
                           className="w-full min-h-[44px] bg-[#202329] border border-white/15 hover:border-[#FFF19A] rounded-xl px-3 py-2 text-xs text-white font-bold focus:outline-none focus:border-[#FFF19A] transition-colors cursor-pointer"
                         >
-                          <option value="desocupado">DESOCUPADO (Disponible para la comunidad)</option>
+                          <option value="desocupado">DISPONIBLE (Listo para recibir viajes)</option>
                           <option value="ocupado">OCUPADO (En viaje activo con pasajero)</option>
                         </select>
                       </div>
@@ -2899,7 +2918,7 @@ export default function App() {
                           className="w-full min-h-[44px] py-2.5 px-3 rounded-xl bg-[#B7F36B] hover:brightness-95 text-[#101114] border-2 border-[#101114] font-black text-xs flex items-center justify-center gap-2 active:scale-95 transition-all cursor-pointer"
                         >
                           <CheckCircle2 className="w-4 h-4 text-[#101114] stroke-[2.5]" />
-                          <span>Colocar DESOCUPADO (Disponible)</span>
+                          <span>Colocar DISPONIBLE</span>
                         </button>
                       ) : (
                         <button
@@ -2917,7 +2936,7 @@ export default function App() {
                       )}
 
                       <p className="text-[10px] text-[#9299A5] leading-tight">
-                        Al colocar <strong className="text-white">Desocupado</strong>, toda la comunidad en <em>Taxis & Motos</em> sabrá de inmediato que estás disponible.
+                        Al colocar <strong className="text-white">Disponible</strong>, toda la comunidad en <em>Taxis & Motos</em> sabrá de inmediato que estás listo para viajar.
                       </p>
                     </div>
                   )}
@@ -3171,7 +3190,7 @@ export default function App() {
                     </div>
                     <div className="min-w-0">
                       <p className="text-xs sm:text-[13px] font-black text-[#B7F36B] group-hover:text-[#FFF19A] transition-colors leading-snug tracking-wide">
-                        VEHICULO DESOCUPADO IR A TAXIS &amp; MOTOS
+                        VEHICULO DISPONIBLE IR A TAXIS &amp; MOTOS
                       </p>
                       <p className="text-[11px] text-white/85 truncate mt-0.5">
                         {desocupadoMapPopup.driverName} · Disponible ahora
@@ -3845,6 +3864,10 @@ export default function App() {
             </button>
             <LoginPage
               onLogin={(user) => {
+                setIsAdminPinUnlocked(false);
+                try {
+                  sessionStorage.removeItem('uppa_admin_unlocked');
+                } catch {}
                 setCurrentUser(user);
                 setIsLoggedIn(true);
                 setIsLoginModalOpen(false);

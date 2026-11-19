@@ -586,7 +586,7 @@ export const ActiveRideGlassWidget: React.FC<ActiveRideGlassWidgetProps> = ({
 
               <p className="text-[10px] text-[#B7F36B]/95 font-semibold leading-tight">
                 {isDriverViewer
-                  ? 'El viaje permanece activo en pantalla hasta que presiones "FINALIZAR Y PASAR A DESOCUPADO".'
+                  ? 'El viaje permanece activo en pantalla hasta que presiones "FINALIZAR Y PASAR A DISPONIBLE".'
                   : 'Tu viaje está en transcurso y permanecerá activo hasta que el chofer finalice el traslado.'}
               </p>
             </div>

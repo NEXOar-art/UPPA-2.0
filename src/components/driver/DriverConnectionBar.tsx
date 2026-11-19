@@ -127,19 +127,19 @@ export const DriverConnectionBar: React.FC<DriverConnectionBarProps> = ({
             }`}
             title={
               disponibilidad === 'ocupado'
-                ? 'Estás en estado OCUPADO. Clic para pasar a DESOCUPADO'
-                : 'Estás en estado DESOCUPADO. Clic para pasar a OCUPADO'
+                ? 'Estás en estado OCUPADO. Clic para pasar a DISPONIBLE'
+                : 'Estás en estado DISPONIBLE. Clic para pasar a OCUPADO'
             }
           >
             {disponibilidad === 'ocupado' ? (
               <>
                 <span className="w-2 h-2 rounded-full bg-[#101114] animate-pulse" />
-                <span>Pasar a Desocupado</span>
+                <span>Pasar a Disponible</span>
               </>
             ) : (
               <>
                 <span className="w-2 h-2 rounded-full bg-[#B7F36B]" />
-                <span>Desocupado (Listo)</span>
+                <span>Disponible (Listo)</span>
               </>
             )}
           </button>

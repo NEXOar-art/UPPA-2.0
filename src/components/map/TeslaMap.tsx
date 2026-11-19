@@ -1470,7 +1470,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
           <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:4px;">
             <span style="font-size:12px;font-weight:900;color:#FFFFFF;">${isMoto ? '🏍️' : '🚕'} ${safeDriver}</span>
             <span style="background:${isOcupado ? '#FFF19A' : '#B7F36B'};color:#101114;font-size:9px;font-weight:900;padding:1px 6px;border-radius:6px;flex-shrink:0;">
-              ${isOcupado ? 'OCUPADO' : 'DESOCUPADO'}
+              ${isOcupado ? 'OCUPADO' : 'DISPONIBLE'}
             </span>
           </div>
           <div style="font-size:10.5px;color:#E2E8F0;font-weight:700;margin-bottom:4px;">

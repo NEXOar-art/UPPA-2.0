@@ -1215,13 +1215,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                           ) : (
                             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-black tracking-wider uppercase bg-[#B7F36B]/15 text-[#B7F36B] border border-[#B7F36B]/50">
                               <span className="w-2 h-2 rounded-full bg-[#B7F36B]" />
-                              <span>DESOCUPADO (DISPONIBLE)</span>
+                              <span>DISPONIBLE</span>
                             </span>
                           )}
                         </div>
 
                         <p className="text-[11px] text-[#9299A5] leading-snug">
-                          Al aceptar un viaje pasás automáticamente a <em className="text-white">Ocupado</em>. Cuando finalices tu viaje, usá este botón para volver a <em className="text-white">Desocupado</em>.
+                          Al aceptar un viaje pasás automáticamente a <em className="text-white">Ocupado</em>. Cuando finalices tu viaje, usá este botón para volver a <em className="text-white">Disponible</em>.
                         </p>
 
                         <div className="pt-1">
@@ -1257,7 +1257,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                             aria-label="Cambiar disponibilidad de conductor"
                             className="bg-[#202329] border border-white/20 rounded-xl px-2.5 min-h-[38px] text-xs text-white font-bold cursor-pointer"
                           >
-                            <option value="desocupado">🟢 DESOCUPADO (Disponible)</option>
+                            <option value="desocupado">🟢 DISPONIBLE</option>
                             <option value="ocupado">🟡 OCUPADO (En viaje activo)</option>
                           </select>
                         </div>
@@ -1272,14 +1272,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                           }`}
                           title={
                             driverDisponibilidad === 'ocupado'
-                              ? 'Pasar a estado Desocupado al terminar el viaje'
+                              ? 'Pasar a estado Disponible al terminar el viaje'
                               : 'Marcar estado como Ocupado'
                           }
                         >
                           {driverDisponibilidad === 'ocupado' ? (
                             <>
                               <CheckCircle2 className="w-4 h-4 stroke-[3]" />
-                              <span>Colocar DESOCUPADO</span>
+                              <span>Colocar DISPONIBLE</span>
                             </>
                           ) : (
                             <>
