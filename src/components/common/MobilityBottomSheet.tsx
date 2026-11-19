@@ -12,23 +12,33 @@ import {
   ChevronUp,
   Search,
   MapPin,
-  ExternalLink,
-  Sparkles,
   Activity,
-  Layers,
-  Minimize2,
   SlidersHorizontal,
+  Users,
+  TrendingUp,
+  Sparkles,
   X,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { LINEA_228_STOPS, Linea228Stop } from '../../data/linea228Stops';
-import { RankingPrestadoresDropdown } from '../taxi/RankingPrestadoresDropdown';
 import { LottieMicroIcon } from './LottieMicroIcon';
 import { playMicroSound } from '../../utils/soundEffects';
+import { MapEvent, MensajeChatFirestore } from '../../types';
+import { calculateRealBusSpeed } from '../../utils/busSpeedEstimator';
+import { getDistanceKm } from '../../utils/geolocation';
+import {
+  searchLinea228Stops,
+  getPredictiveStopSuggestions,
+  POPULAR_STREET_CHIPS,
+} from '../../utils/stopSearchPredictor';
 
 interface BusReportEventSummary {
   direction?: string;
   createdAtMs?: number;
+  lat?: number;
+  lng?: number;
+  velocidadKmH?: number;
+  streetAddress?: string;
 }
 
 interface MobilityBottomSheetProps {
@@ -40,6 +50,10 @@ interface MobilityBottomSheetProps {
   onSelectStop?: (stop: Linea228Stop) => void;
   unreadChatCount?: number;
   busEvents?: BusReportEventSummary[];
+  allEvents?: MapEvent[];
+  recentChatMessages?: MensajeChatFirestore[];
+  pendingRequestsCount?: number;
+  userLocation?: { lat: number; lng: number } | null;
 }
 
 export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
@@ -51,10 +65,16 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
   onSelectStop,
   unreadChatCount = 0,
   busEvents = [],
+  allEvents = [],
+  recentChatMessages = [],
+  pendingRequestsCount = 0,
+  userLocation = null,
 }) => {
   const [isMinimized, setIsMinimized] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [selectedZone, setSelectedZone] = useState<string>('all');
   const [isMapFreeMode, setIsMapFreeMode] = useState(false);
   const [hoveredJoystickBtn, setHoveredJoystickBtn] = useState<'zarate' | 'malvinas' | null>(null);
@@ -97,6 +117,252 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
       ).length,
     [busEvents, nowTs]
   );
+
+  // IA Comunitaria en tiempo real: transforma reportes, GPS y chat en 5 KPIs amigables
+  const corridorAiMetrics = useMemo(() => {
+    const recentWindowMs = 35 * 60 * 1000;
+    const recentEvents = allEvents.filter(
+      (ev) => !ev.createdAtMs || nowTs - ev.createdAtMs <= recentWindowMs
+    );
+    const recentChat = recentChatMessages.slice(-20);
+
+    // 1. Demora estimada actual
+    let delayMinutes = 0;
+    let incidentCount = 0;
+    let positiveMovingCount = 0;
+
+    recentEvents.forEach((ev) => {
+      const weight = 1 + Math.min(ev.confirmations || 0, 5) * 0.18;
+      if (ev.type === 'breakdown' || ev.type === 'accident' || ev.type === 'danger') {
+        delayMinutes += Math.round(14 * weight);
+        incidentCount++;
+      } else if (ev.type === 'late' || ev.type === 'missed') {
+        delayMinutes += Math.round(9 * weight);
+        incidentCount++;
+      } else if (ev.type === 'traffic' || ev.type === 'control') {
+        delayMinutes += Math.round(6 * weight);
+      } else if (ev.type === 'moving' || ev.type === 'bus_location') {
+        positiveMovingCount++;
+      }
+    });
+
+    const delayKeywords = ['tarde', 'demora', 'no pasó', 'no pasa', 'esperando', 'cortado', 'averiado', 'lento', 'trancado'];
+    const smoothKeywords = ['pasó', 'llegó', 'rápido', 'libre', 'circula', 'normal', 'buen ritmo'];
+    let chatDelayHits = 0;
+    let chatSmoothHits = 0;
+    let chatFullHits = 0;
+    let chatEmptyHits = 0;
+
+    const fullKeywords = ['lleno', 'hasta las manos', 'repleto', 'mucha gente', 'no para', 'parado', 'cargado'];
+    const emptyKeywords = ['vacío', 'vacio', 'asientos', 'tranquilo', 'lugar', 'libre'];
+
+    recentChat.forEach((msg) => {
+      const txt = (msg.texto || '').toLowerCase();
+      if (delayKeywords.some((k) => txt.includes(k))) chatDelayHits++;
+      if (smoothKeywords.some((k) => txt.includes(k))) chatSmoothHits++;
+      if (fullKeywords.some((k) => txt.includes(k))) chatFullHits++;
+      if (emptyKeywords.some((k) => txt.includes(k))) chatEmptyHits++;
+    });
+
+    delayMinutes = Math.max(0, Math.min(45, delayMinutes + chatDelayHits * 4 - Math.min(positiveMovingCount + chatSmoothHits, 4) * 2));
+    if (delayMinutes === 0 && incidentCount === 0 && chatDelayHits === 0) {
+      delayMinutes = 0;
+    }
+
+    const delayLabel = delayMinutes === 0 ? 'Sin demora' : `+${delayMinutes}m`;
+    const delayHover =
+      delayMinutes === 0
+        ? 'Demora estimada actual: Sin demoras registradas. La comunidad reporta circulación habitual en el corredor Línea 228.'
+        : `Demora estimada actual: +${delayMinutes} min sobre el horario base. Calculado por IA a partir de ${incidentCount} alerta(s) viales y ${chatDelayHits} mención(es) en el chat comunitario.`;
+
+    // 2. Velocidad promedio real
+    const recentBusEvents = busEvents
+      .filter((b) => !b.createdAtMs || nowTs - b.createdAtMs <= 25 * 60 * 1000)
+      .sort((a, b) => (b.createdAtMs || 0) - (a.createdAtMs || 0));
+
+    const speedWithExplicitValues = recentBusEvents
+      .map((b) => b.velocidadKmH)
+      .filter((v): v is number => typeof v === 'number' && v >= 8 && v <= 90);
+
+    let avgSpeedKmH: number;
+    let speedMethodDesc: string;
+
+    if (speedWithExplicitValues.length > 0) {
+      avgSpeedKmH = Math.round(
+        speedWithExplicitValues.reduce((acc, v) => acc + v, 0) / speedWithExplicitValues.length
+      );
+      speedMethodDesc = `promedio de ${speedWithExplicitValues.length} unidad(es) reportada(s) en vivo`;
+    } else {
+      const newestBus = recentBusEvents[0];
+      const prevBus = recentBusEvents[1];
+      const realCalc = calculateRealBusSpeed(
+        newestBus?.lat,
+        newestBus?.lng,
+        prevBus && prevBus.lat && prevBus.lng
+          ? { lat: prevBus.lat, lng: prevBus.lng, createdAtMs: prevBus.createdAtMs }
+          : null
+      );
+      avgSpeedKmH = realCalc.speedKmH;
+      speedMethodDesc = realCalc.description;
+    }
+
+    if (delayMinutes >= 20) {
+      avgSpeedKmH = Math.max(16, Math.round(avgSpeedKmH * 0.72));
+    } else if (delayMinutes >= 8) {
+      avgSpeedKmH = Math.max(22, Math.round(avgSpeedKmH * 0.86));
+    }
+
+    const speedHover = `Velocidad promedio: ${avgSpeedKmH} km/h (${speedMethodDesc}). Ajustada en tiempo real según alertas de tránsito en Ruta 6 y Colectora.`;
+
+    // 3. Próximo arribo (ETA)
+    let etaMinutes = 8;
+    let etaPrefix = 'ETA ~';
+    let etaSourceNote = 'estimado por frecuencia habitual del corredor';
+
+    const latestBusWithCoords = recentBusEvents.find(
+      (b) => typeof b.lat === 'number' && typeof b.lng === 'number'
+    );
+
+    if (latestBusWithCoords && typeof latestBusWithCoords.lat === 'number' && typeof latestBusWithCoords.lng === 'number') {
+      const refLat = userLocation?.lat ?? -34.185;
+      const refLng = userLocation?.lng ?? -58.952;
+      const distKm = getDistanceKm(refLat, refLng, latestBusWithCoords.lat, latestBusWithCoords.lng);
+      const elapsedMins = latestBusWithCoords.createdAtMs
+        ? Math.max(0, (nowTs - latestBusWithCoords.createdAtMs) / 60000)
+        : 1;
+      const travelMins = (distKm / Math.max(15, avgSpeedKmH)) * 60;
+      const remaining = Math.max(1, Math.round(travelMins - elapsedMins * 0.55));
+      etaMinutes = Math.min(35, remaining);
+      etaPrefix = 'ETA ';
+      etaSourceNote = latestBusWithCoords.streetAddress
+        ? `unidad avistada cerca de ${latestBusWithCoords.streetAddress} (${distKm.toFixed(1)} km)`
+        : `unidad geolocalizada por la comunidad a ${distKm.toFixed(1)} km`;
+    } else {
+      const hour = new Date(nowTs).getHours();
+      const baseHeadway = (hour >= 6 && hour <= 9) || (hour >= 17 && hour <= 20) ? 7 : 12;
+      etaMinutes = Math.max(2, Math.min(30, Math.round(baseHeadway * 0.6 + delayMinutes * 0.35)));
+    }
+
+    const etaLabel = `${etaPrefix}${etaMinutes}m`;
+    const etaHover = `Próximo arribo estimado: en ${etaMinutes} minuto(s) (${etaSourceNote}). Se actualiza automáticamente con cada reporte de colectivo en el mapa.`;
+
+    // 4. Nivel de ocupación
+    const currentDate = new Date(nowTs);
+    const hourFloat = currentDate.getHours() + currentDate.getMinutes() / 60;
+    const isWeekday = currentDate.getDay() >= 1 && currentDate.getDay() <= 5;
+    const isPeakHour =
+      (hourFloat >= 6.5 && hourFloat <= 9.0) ||
+      (hourFloat >= 12.0 && hourFloat <= 14.0) ||
+      (hourFloat >= 17.0 && hourFloat <= 20.0);
+
+    let occupancyScore = isPeakHour ? (isWeekday ? 62 : 48) : 30;
+    occupancyScore += chatFullHits * 15 - chatEmptyHits * 14;
+    occupancyScore += Math.min(delayMinutes, 25);
+    occupancyScore += Math.min(pendingRequestsCount * 4, 16);
+    occupancyScore = Math.max(10, Math.min(98, occupancyScore));
+
+    let occupancyLabel: 'Baja' | 'Media' | 'Alta' | 'Muy alta' = 'Media';
+    let occupancyTone = 'border-[#FFF19A]/40 hover:border-[#FFF19A]';
+    let occupancyIconTone = 'bg-[#FFF19A]/15 text-[#FFF19A] border border-[#FFF19A]/45';
+    let occupancyTextTone = 'text-[#FFF19A]';
+    if (occupancyScore < 36) {
+      occupancyLabel = 'Baja';
+      occupancyTone = 'border-[#B7F36B]/45 hover:border-[#B7F36B]';
+      occupancyIconTone = 'bg-[#B7F36B]/20 text-[#B7F36B] border border-[#B7F36B]/45';
+      occupancyTextTone = 'text-[#B7F36B]';
+    } else if (occupancyScore < 64) {
+      occupancyLabel = 'Media';
+      occupancyTone = 'border-[#FFF19A]/40 hover:border-[#FFF19A]';
+      occupancyIconTone = 'bg-[#FFF19A]/15 text-[#FFF19A] border border-[#FFF19A]/45';
+      occupancyTextTone = 'text-[#FFF19A]';
+    } else if (occupancyScore < 82) {
+      occupancyLabel = 'Alta';
+      occupancyTone = 'border-amber-400/50 hover:border-amber-400';
+      occupancyIconTone = 'bg-amber-500/20 text-amber-300 border border-amber-400/50';
+      occupancyTextTone = 'text-amber-300';
+    } else {
+      occupancyLabel = 'Muy alta';
+      occupancyTone = 'border-rose-400/55 hover:border-rose-400';
+      occupancyIconTone = 'bg-rose-500/20 text-rose-300 border border-rose-400/50';
+      occupancyTextTone = 'text-rose-300';
+    }
+
+    const occupancyHover = `Nivel de ocupación estimado: ${occupancyLabel} (${occupancyScore}% de capacidad estimada). La IA combina comentarios del chat sobre asientos/pasajeros, demoras acumuladas y franja horaria.`;
+
+    // 5. Predicción de demanda
+    let demandScore = isPeakHour ? (isWeekday ? 65 : 50) : 28;
+    demandScore += pendingRequestsCount * 10;
+    demandScore += recentChat.length >= 6 ? 12 : recentChat.length * 2;
+    demandScore += incidentCount * 8;
+    demandScore = Math.max(12, Math.min(99, demandScore));
+
+    let demandLabel: 'Tranquila' | 'Moderada' | 'Alta' | 'Pico' = 'Moderada';
+    let demandCompact: string = 'Mod.';
+    let demandTone = 'border-[#FFF19A]/40 hover:border-[#FFF19A]';
+    let demandIconTone = 'bg-[#FFF19A]/15 text-[#FFF19A] border border-[#FFF19A]/45';
+    let demandTextTone = 'text-[#FFF19A]';
+    if (demandScore < 35) {
+      demandLabel = 'Tranquila';
+      demandCompact = 'Baja';
+      demandTone = 'border-[#B7F36B]/45 hover:border-[#B7F36B]';
+      demandIconTone = 'bg-[#B7F36B]/20 text-[#B7F36B] border border-[#B7F36B]/45';
+      demandTextTone = 'text-[#B7F36B]';
+    } else if (demandScore < 62) {
+      demandLabel = 'Moderada';
+      demandCompact = 'Mod.';
+      demandTone = 'border-[#FFF19A]/40 hover:border-[#FFF19A]';
+      demandIconTone = 'bg-[#FFF19A]/15 text-[#FFF19A] border border-[#FFF19A]/45';
+      demandTextTone = 'text-[#FFF19A]';
+    } else if (demandScore < 82) {
+      demandLabel = 'Alta';
+      demandCompact = 'Alta';
+      demandTone = 'border-amber-400/50 hover:border-amber-400';
+      demandIconTone = 'bg-amber-500/20 text-amber-300 border border-amber-400/50';
+      demandTextTone = 'text-amber-300';
+    } else {
+      demandLabel = 'Pico';
+      demandCompact = 'Pico';
+      demandTone = 'border-rose-400/55 hover:border-rose-400';
+      demandIconTone = 'bg-rose-500/20 text-rose-300 border border-rose-400/50';
+      demandTextTone = 'text-rose-300';
+    }
+
+    const demandHover = `Predicción de demanda: ${demandLabel} (${demandScore}% de intensidad). Proyectada con ${pendingRequestsCount} pedido(s) activo(s) de transporte alternativo, reportes en paradas y ritmo horario Zárate–Campana.`;
+
+    const communitySignalsCount = recentEvents.length + recentChat.length + pendingRequestsCount;
+    const friendlySummary =
+      delayMinutes >= 15
+        ? `Corredor con demoras (+${delayMinutes}m) y ocupación ${occupancyLabel.toLowerCase()}. Conviene anticipar tu salida o evaluar transporte alternativo.`
+        : occupancyLabel === 'Alta' || occupancyLabel === 'Muy alta'
+        ? `Unidades circulando a ${avgSpeedKmH} km/h con ocupación ${occupancyLabel.toLowerCase()} y demanda ${demandLabel.toLowerCase()}.`
+        : `Corredor estable a ${avgSpeedKmH} km/h · Demanda ${demandLabel.toLowerCase()} y ocupación ${occupancyLabel.toLowerCase()}.`;
+
+    return {
+      delayLabel,
+      delayCompact: delayMinutes === 0 ? '0 min' : `+${delayMinutes} min`,
+      delayHover,
+      delayMinutes,
+      avgSpeedKmH,
+      speedHover,
+      etaLabel,
+      etaCompact: etaPrefix === 'ETA ' ? `${etaMinutes} min` : `~${etaMinutes} min`,
+      etaHover,
+      occupancyLabel,
+      occupancyCompact: occupancyLabel === 'Muy alta' ? 'Máx.' : occupancyLabel,
+      occupancyTone,
+      occupancyIconTone,
+      occupancyTextTone,
+      occupancyHover,
+      demandLabel,
+      demandCompact,
+      demandTone,
+      demandIconTone,
+      demandTextTone,
+      demandHover,
+      communitySignalsCount,
+      friendlySummary,
+    };
+  }, [allEvents, busEvents, recentChatMessages, pendingRequestsCount, userLocation, nowTs]);
 
   const triggerJoystickBusReport = (direction: 'hacia_zarate' | 'hacia_malvinas') => {
     playMicroSound('ui_tap');
@@ -181,18 +447,16 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
     setDragOffsetY(0);
   };
 
-  // Filter stops by query and zone
-  const filteredStops = useMemo(() => {
-    return LINEA_228_STOPS.filter((stop) => {
-      const matchesSearch =
-        stop.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        stop.zone.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        String(stop.sequence).includes(searchQuery);
+  // Búsqueda predictiva por calle, frase, número de parada y "entre qué calles"
+  const stopSearchResults = useMemo(
+    () => searchLinea228Stops(searchQuery, selectedZone),
+    [searchQuery, selectedZone]
+  );
 
-      const matchesZone = selectedZone === 'all' || stop.zone === selectedZone;
-      return matchesSearch && matchesZone;
-    });
-  }, [searchQuery, selectedZone]);
+  const predictiveSuggestions = useMemo(
+    () => getPredictiveStopSuggestions(searchQuery),
+    [searchQuery]
+  );
 
   const zones = useMemo(() => {
     const list: string[] = [];
@@ -359,12 +623,6 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
                 <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-[#B7F36B] border border-[#101114] animate-pulse" />
               </motion.button>
             )}
-
-            <RankingPrestadoresDropdown
-              placement="top"
-              onOpenTaxiTab={onOpenTaxis}
-              triggerButtonClassName="w-8 h-8 rounded-full uppa-glass-ios border border-white/25 hover:border-[#FFF19A] hover:shadow-[0_0_10px_rgba(255,241,154,0.45)] text-[#FFF19A] flex items-center justify-center cursor-pointer transition-colors"
-            />
           </div>
 
           <AnimatePresence>
@@ -492,34 +750,6 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
               </motion.button>
             )}
 
-            <RankingPrestadoresDropdown
-              placement="top"
-              onOpenTaxiTab={onOpenTaxis}
-              triggerButtonClassName="w-8 h-8 rounded-full uppa-glass-ios border border-white/25 hover:border-[#FFF19A] hover:shadow-[0_0_10px_rgba(255,241,154,0.45)] text-[#FFF19A] flex items-center justify-center transition-all cursor-pointer"
-            />
-
-            <motion.button
-              type="button"
-              whileTap={{ scale: 0.95 }}
-              onClick={() => {
-                playMicroSound('ui_tap');
-                setIsExpanded((prev) => !prev);
-              }}
-              className={`min-h-[38px] flex items-center gap-1.5 text-[11px] font-black px-3 py-1.5 rounded-xl border-2 transition-colors cursor-pointer ${
-                isExpanded
-                  ? 'text-[#101114] bg-[#FFF19A] border-[#FFF19A]'
-                  : 'text-white hover:border-[#FFF19A] bg-[#101114] border-white/15'
-              }`}
-              title={isExpanded ? 'Ocultar listado de paradas' : `Ver ${LINEA_228_STOPS.length} Paradas de Línea 228`}
-            >
-              <span>{isExpanded ? 'Ocultar listado' : `${LINEA_228_STOPS.length} Paradas`}</span>
-              {isExpanded ? (
-                <ChevronUp className="w-3.5 h-3.5 stroke-[3]" />
-              ) : (
-                <ChevronDown className="w-3.5 h-3.5" />
-              )}
-            </motion.button>
-
             <motion.button
               type="button"
               whileTap={{ scale: 0.92 }}
@@ -538,80 +768,55 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
           </div>
         </div>
 
-        {/* 4 Action Cards */}
+        {/* 4 Action Cards (Solo iconos con funcionalidad completa y hover informativo) */}
         <div className="px-3.5 sm:px-5 pb-3">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            {/* Card 1: Pedir Transporte Alternativo */}
+          <div className="grid grid-cols-4 gap-2">
+            {/* Botón 1: Pedir Transporte Alternativo */}
             <motion.button
               type="button"
-              whileHover={{ y: -2, scale: 1.015 }}
-              whileTap={{ scale: 0.96 }}
+              whileHover={{ y: -2, scale: 1.03 }}
+              whileTap={{ scale: 0.95 }}
               transition={{ type: 'spring', stiffness: 420, damping: 24 }}
               onClick={() => {
                 playMicroSound('ui_tap');
                 onOpenPedirTransporte();
               }}
-              title="Emitir una solicitud rápida de Moto Taxi o Auto Taxi"
-              className="min-h-[76px] p-2.5 rounded-2xl bg-[#101114] hover:border-[#FFF19A] border-2 border-[#FFF19A]/40 text-left transition-colors group cursor-pointer flex flex-col justify-between"
+              title="Pedir Transporte Alternativo: emití una solicitud rápida de Moto Taxi o Auto Taxi y consultá el ranking de prestadores"
+              aria-label="Pedir Transporte Alternativo"
+              className="min-h-[56px] p-2 rounded-2xl bg-[#101114] hover:border-[#FFF19A] border-2 border-[#FFF19A]/45 transition-colors group cursor-pointer flex items-center justify-center"
             >
-              <div className="flex items-center justify-between mb-1.5">
-                <div className="w-8 h-8 rounded-xl bg-[#FFF19A] text-[#101114] flex items-center justify-center">
-                  <Zap className="w-4 h-4 fill-[#101114]" />
-                </div>
-                <span className="px-1.5 py-0.5 rounded text-[8.5px] font-black uppercase tracking-wider bg-[#FFF19A]/15 text-[#FFF19A] border border-[#FFF19A]/40 flex items-center gap-1">
-                  <LottieMicroIcon variant="spark" size={12} />
-                  <span>Rápido</span>
-                </span>
-              </div>
-              <div>
-                <span className="text-[11px] sm:text-xs font-black text-white block leading-tight group-hover:text-[#FFF19A]">
-                  Pedir Transporte
-                </span>
-                <span className="text-[9.5px] text-[#9299A5] block mt-0.5 truncate">
-                  Moto & Auto Taxi
-                </span>
+              <div className="w-10 h-10 rounded-xl bg-[#FFF19A] text-[#101114] flex items-center justify-center shadow-sm group-hover:scale-105 transition-transform">
+                <Zap className="w-5 h-5 fill-[#101114]" />
               </div>
             </motion.button>
 
-            {/* Card 2: Taxi & Motos */}
+            {/* Botón 2: Taxi & Motos */}
             <motion.button
               type="button"
-              whileHover={{ y: -2, scale: 1.015 }}
-              whileTap={{ scale: 0.96 }}
+              whileHover={{ y: -2, scale: 1.03 }}
+              whileTap={{ scale: 0.95 }}
               transition={{ type: 'spring', stiffness: 420, damping: 24 }}
               onClick={() => {
                 playMicroSound('ui_tap');
                 onOpenTaxis();
               }}
-              title="Ver prestadores habilitados en Taxis & Motos"
-              className="min-h-[76px] p-2.5 rounded-2xl bg-[#101114] hover:border-[#B7F36B] border-2 border-[#B7F36B]/40 text-left transition-colors group cursor-pointer flex flex-col justify-between"
+              title="Taxis & Motos: ver prestadores disponibles en vivo y seguir viajes"
+              aria-label="Taxis y Motos"
+              className="min-h-[56px] p-2 rounded-2xl bg-[#101114] hover:border-[#B7F36B] border-2 border-[#B7F36B]/45 transition-colors group cursor-pointer flex items-center justify-center"
             >
-              <div className="flex items-center justify-between mb-1.5">
-                <div className="w-8 h-8 rounded-xl bg-[#B7F36B] text-[#101114] flex items-center justify-center">
-                  <div className="flex items-center -space-x-1">
-                    <Bike className="w-3.5 h-3.5" />
-                    <Car className="w-3.5 h-3.5" />
-                  </div>
+              <div className="w-10 h-10 rounded-xl bg-[#B7F36B] text-[#101114] flex items-center justify-center shadow-sm group-hover:scale-105 transition-transform">
+                <div className="flex items-center -space-x-1">
+                  <Bike className="w-4 h-4" />
+                  <Car className="w-4 h-4" />
                 </div>
-                <span className="px-1.5 py-0.5 rounded text-[8.5px] font-black uppercase tracking-wider bg-[#B7F36B]/15 text-[#B7F36B] border border-[#B7F36B]/40">
-                  En vivo
-                </span>
-              </div>
-              <div>
-                <span className="text-[11px] sm:text-xs font-black text-white block leading-tight group-hover:text-[#B7F36B]">
-                  Taxi & Motos
-                </span>
-                <span className="text-[9.5px] text-[#9299A5] block mt-0.5 truncate">
-                  Prestadores en vivo
-                </span>
               </div>
             </motion.button>
 
-            {/* Card 3: Prestar Servicio */}
+            {/* Botón 3: Prestar Servicio (Choferes - Icono de Volante) */}
             <motion.button
               type="button"
-              whileHover={{ y: -2, scale: 1.015 }}
-              whileTap={{ scale: 0.96 }}
+              whileHover={{ y: -2, scale: 1.03 }}
+              whileTap={{ scale: 0.95 }}
               transition={{ type: 'spring', stiffness: 420, damping: 24 }}
               onClick={() => {
                 playMicroSound('ui_tap');
@@ -621,71 +826,63 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
                   onOpenTaxis();
                 }
               }}
-              title="Habilitar mi Auto o Moto para prestar servicio de traslado"
-              className="min-h-[76px] p-2.5 rounded-2xl bg-[#101114] hover:border-white/50 border-2 border-white/15 text-left transition-colors group cursor-pointer flex flex-col justify-between"
+              title="Choferes / Prestar Servicio: habilitá tu Auto o Moto para tomar viajes de la comunidad"
+              aria-label="Choferes - Prestar Servicio"
+              className="min-h-[56px] p-2 rounded-2xl bg-[#101114] hover:border-[#FFF19A] border-2 border-white/20 transition-colors group cursor-pointer flex items-center justify-center"
             >
-              <div className="flex items-center justify-between mb-1.5">
-                <div className="w-8 h-8 rounded-xl bg-[#202329] text-[#FFF19A] border border-white/15 flex items-center justify-center">
-                  <Sparkles className="w-4 h-4" />
-                </div>
-                <span className="px-1.5 py-0.5 rounded text-[8.5px] font-black uppercase tracking-wider bg-[#202329] text-white border border-white/15">
-                  Choferes
-                </span>
-              </div>
-              <div>
-                <span className="text-[11px] sm:text-xs font-black text-white block leading-tight group-hover:text-[#FFF19A]">
-                  Prestar Servicio
-                </span>
-                <span className="text-[9.5px] text-[#9299A5] block mt-0.5 truncate">
-                  Habilitá tu unidad
-                </span>
+              <div className="w-10 h-10 rounded-xl bg-[#202329] text-[#FFF19A] border border-white/20 group-hover:border-[#FFF19A]/60 flex items-center justify-center group-hover:scale-105 transition-transform">
+                {/* Icono de Volante para identificar rápidamente a choferes */}
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.1"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="w-5 h-5"
+                  aria-hidden="true"
+                >
+                  <circle cx="12" cy="12" r="9" />
+                  <circle cx="12" cy="12" r="2.2" />
+                  <path d="M12 14.2V21" />
+                  <path d="M3.4 9.8C6.2 10.7 9 11.1 12 11.1s5.8-.4 8.6-1.3" />
+                </svg>
               </div>
             </motion.button>
 
-            {/* Card 4: Chat Comunitario */}
+            {/* Botón 4: Chat Comunitario */}
             <motion.button
               type="button"
-              whileHover={{ y: -2, scale: 1.015 }}
-              whileTap={{ scale: 0.96 }}
+              whileHover={{ y: -2, scale: 1.03 }}
+              whileTap={{ scale: 0.95 }}
               transition={{ type: 'spring', stiffness: 420, damping: 24 }}
               onClick={() => {
                 playMicroSound('ui_tap');
                 onOpenChat();
               }}
-              title="Abrir Chat Comunitario de pasajeros y choferes"
-              className="min-h-[76px] p-2.5 rounded-2xl bg-[#101114] hover:border-white/50 border-2 border-white/15 text-left transition-colors group cursor-pointer flex flex-col justify-between"
+              title={
+                unreadChatCount > 0
+                  ? `Chat Comunitario: abrir alertas y mensajes en vivo (${unreadChatCount} mensaje(s) reciente(s))`
+                  : 'Chat Comunitario: alertas de pasajeros y choferes en directo'
+              }
+              aria-label="Chat Comunitario"
+              className="relative min-h-[56px] p-2 rounded-2xl bg-[#101114] hover:border-white/60 border-2 border-white/20 transition-colors group cursor-pointer flex items-center justify-center"
             >
-              <div className="flex items-center justify-between mb-1.5">
-                <div className="w-8 h-8 rounded-xl bg-[#202329] text-white border border-white/15 flex items-center justify-center">
-                  <MessageSquare className="w-4 h-4" />
-                </div>
-                {unreadChatCount > 0 ? (
-                  <span className="px-1.5 py-0.5 rounded-md text-[9.5px] font-black bg-[#FFF19A] text-[#101114]">
-                    {unreadChatCount}
-                  </span>
-                ) : (
-                  <span className="px-1.5 py-0.5 rounded text-[8.5px] font-black uppercase tracking-wider bg-[#202329] text-[#9299A5] border border-white/10">
-                    Vecinos
-                  </span>
-                )}
-              </div>
-              <div>
-                <span className="text-[11px] sm:text-xs font-black text-white block leading-tight group-hover:text-[#FFF19A]">
-                  Chat Comunitario
-                </span>
-                <span className="text-[9.5px] text-[#9299A5] block mt-0.5 truncate">
-                  Alertas en directo
-                </span>
+              <div className="w-10 h-10 rounded-xl bg-[#202329] text-white border border-white/20 group-hover:text-[#FFF19A] group-hover:border-[#FFF19A]/50 flex items-center justify-center group-hover:scale-105 transition-all">
+                <MessageSquare className="w-5 h-5" />
               </div>
             </motion.button>
           </div>
         </div>
 
-        {/* Corredor Card Línea 228 */}
+        {/* Corredor Card Línea 228 — IA Comunitaria + 5 KPIs con Hover + Botón Ver Paradas abajo */}
         <div className="px-3.5 sm:px-5 pb-3">
           <div className="p-3.5 rounded-2xl bg-[#101114] border-2 border-white/10 space-y-2.5">
             <div className="flex items-center justify-between gap-2 flex-wrap">
-              <div className="flex items-center gap-2">
+              <div
+                className="flex items-center gap-2"
+                title={`Corredor Línea 228 en vivo: ${LINEA_228_STOPS.length} paradas geolocalizadas entre Barrio Malvinas, Campana y Zárate`}
+              >
                 <div className="w-8 h-8 rounded-xl bg-[#202329] text-[#FFF19A] flex items-center justify-center border border-white/15">
                   <Bus className="w-4 h-4" />
                 </div>
@@ -700,28 +897,163 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
                 </div>
               </div>
 
-              {/* Live telemetry badges */}
-              <div className="flex items-center gap-1.5">
-                <span className="px-2 py-0.5 rounded-lg text-[10px] font-black bg-[#202329] text-[#FFF19A] border border-white/10 flex items-center gap-1" title="Demora estimada actual">
-                  <Clock className="w-3 h-3" />
-                  <span>+18m</span>
+              <span
+                title={`La propia comunidad aporta ${corridorAiMetrics.communitySignalsCount} señal(es) entre reportes GPS, estado en paradas y chat; la IA las transforma automáticamente en estas métricas en tiempo real.`}
+                className="px-2 py-1 rounded-xl text-[9.5px] font-extrabold bg-[#202329] text-[#FFF19A] border border-[#FFF19A]/35 flex items-center gap-1 cursor-help"
+              >
+                <Sparkles className="w-3 h-3 text-[#FFF19A]" />
+                <span>IA Comunitaria en vivo</span>
+              </span>
+            </div>
+
+            {/* 5 KPIs en tiempo real distribuidos como tarjetas de ícono ordenadas y simétricas (todos con hover explicativo) */}
+            <div className="grid grid-cols-5 gap-1.5 sm:gap-2">
+              {/* KPI 1: Demora estimada actual */}
+              <div
+                className={`p-1.5 sm:p-2 rounded-2xl bg-[#181B20] border-2 transition-colors flex flex-col items-center justify-center gap-1 text-center cursor-help ${
+                  corridorAiMetrics.delayMinutes >= 15
+                    ? 'border-amber-400/50 hover:border-amber-300'
+                    : 'border-[#FFF19A]/40 hover:border-[#FFF19A]'
+                }`}
+                title={corridorAiMetrics.delayHover}
+              >
+                <div
+                  className={`w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center shadow-sm ${
+                    corridorAiMetrics.delayMinutes >= 15
+                      ? 'bg-amber-400 text-[#101114]'
+                      : 'bg-[#FFF19A] text-[#101114]'
+                  }`}
+                >
+                  <Clock className="w-4 h-4 stroke-[2.4]" />
+                </div>
+                <span className="text-[10px] sm:text-[11px] font-black text-white leading-none truncate w-full">
+                  {corridorAiMetrics.delayCompact}
                 </span>
-                <span className="px-2 py-0.5 rounded-lg text-[10px] font-black bg-[#202329] text-white border border-white/10 flex items-center gap-1" title="Velocidad promedio">
-                  <Gauge className="w-3 h-3 text-[#FFF19A]" />
-                  <span>42 km/h</span>
+                <span className="text-[8px] sm:text-[9px] font-bold text-[#9299A5] uppercase tracking-tight leading-none truncate w-full">
+                  Demora
                 </span>
-                <span className="px-2 py-0.5 rounded-lg text-[10px] font-black bg-[#B7F36B] text-[#101114] flex items-center gap-1" title="Próximo arribo">
-                  <Activity className="w-3 h-3" />
-                  <span>ETA 1m</span>
+              </div>
+
+              {/* KPI 2: Velocidad promedio */}
+              <div
+                className="p-1.5 sm:p-2 rounded-2xl bg-[#181B20] border-2 border-white/15 hover:border-[#FFF19A]/65 transition-colors flex flex-col items-center justify-center gap-1 text-center cursor-help"
+                title={corridorAiMetrics.speedHover}
+              >
+                <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-[#202329] text-[#FFF19A] border border-white/20 flex items-center justify-center shadow-sm">
+                  <Gauge className="w-4 h-4 stroke-[2.2]" />
+                </div>
+                <span className="text-[10px] sm:text-[11px] font-black text-white leading-none truncate w-full">
+                  {corridorAiMetrics.avgSpeedKmH} km/h
+                </span>
+                <span className="text-[8px] sm:text-[9px] font-bold text-[#9299A5] uppercase tracking-tight leading-none truncate w-full">
+                  Velocidad
+                </span>
+              </div>
+
+              {/* KPI 3: Próximo arribo (ETA) */}
+              <div
+                className="p-1.5 sm:p-2 rounded-2xl bg-[#181B20] border-2 border-[#B7F36B]/45 hover:border-[#B7F36B] transition-colors flex flex-col items-center justify-center gap-1 text-center cursor-help"
+                title={corridorAiMetrics.etaHover}
+              >
+                <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-[#B7F36B] text-[#101114] flex items-center justify-center shadow-sm">
+                  <Activity className="w-4 h-4 stroke-[2.5]" />
+                </div>
+                <span className="text-[10px] sm:text-[11px] font-black text-[#B7F36B] leading-none truncate w-full">
+                  {corridorAiMetrics.etaCompact}
+                </span>
+                <span className="text-[8px] sm:text-[9px] font-bold text-[#9299A5] uppercase tracking-tight leading-none truncate w-full">
+                  Arribo
+                </span>
+              </div>
+
+              {/* KPI 4: Nivel de ocupación */}
+              <div
+                className={`p-1.5 sm:p-2 rounded-2xl bg-[#181B20] border-2 transition-colors flex flex-col items-center justify-center gap-1 text-center cursor-help ${corridorAiMetrics.occupancyTone}`}
+                title={corridorAiMetrics.occupancyHover}
+              >
+                <div
+                  className={`w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center shadow-sm ${corridorAiMetrics.occupancyIconTone}`}
+                >
+                  <Users className="w-4 h-4 stroke-[2.2]" />
+                </div>
+                <span
+                  className={`text-[10px] sm:text-[11px] font-black leading-none truncate w-full ${corridorAiMetrics.occupancyTextTone}`}
+                >
+                  {corridorAiMetrics.occupancyCompact}
+                </span>
+                <span className="text-[8px] sm:text-[9px] font-bold text-[#9299A5] uppercase tracking-tight leading-none truncate w-full">
+                  Ocupación
+                </span>
+              </div>
+
+              {/* KPI 5: Predicción de demanda */}
+              <div
+                className={`p-1.5 sm:p-2 rounded-2xl bg-[#181B20] border-2 transition-colors flex flex-col items-center justify-center gap-1 text-center cursor-help ${corridorAiMetrics.demandTone}`}
+                title={corridorAiMetrics.demandHover}
+              >
+                <div
+                  className={`w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center shadow-sm ${corridorAiMetrics.demandIconTone}`}
+                >
+                  <TrendingUp className="w-4 h-4 stroke-[2.2]" />
+                </div>
+                <span
+                  className={`text-[10px] sm:text-[11px] font-black leading-none truncate w-full ${corridorAiMetrics.demandTextTone}`}
+                >
+                  {corridorAiMetrics.demandCompact}
+                </span>
+                <span className="text-[8px] sm:text-[9px] font-bold text-[#9299A5] uppercase tracking-tight leading-none truncate w-full">
+                  Demanda
                 </span>
               </div>
             </div>
 
-            <div className="flex items-center justify-between pt-2 border-t border-white/10 text-[10.5px] gap-2">
-              <span className="text-[#9299A5] flex items-center gap-1 truncate">
+            {/* Información amigable generada por la IA con los datos de la comunidad */}
+            <div
+              className="px-2.5 py-2 rounded-xl bg-[#181B20] border border-white/10 text-[10.5px] text-white/90 leading-snug cursor-help"
+              title="Resumen amigable generado por IA: combina reportes de colectivos en mapa, incidentes viales, pedidos activos y mensajes del chat comunitario."
+            >
+              <span className="font-bold text-[#B7F36B]">Lectura IA: </span>
+              <span>{corridorAiMetrics.friendlySummary}</span>
+            </div>
+
+            <div className="flex items-center justify-between pt-2 border-t border-white/10 text-[10.5px] gap-2 flex-wrap">
+              <span
+                className="text-[#9299A5] flex items-center gap-1 truncate"
+                title="Trazado oficial completo de Línea 228 entre Barrio Malvinas, Campana Centro y Zárate Terminal"
+              >
                 <MapPin className="w-3 h-3 text-[#FFF19A] shrink-0" />
                 <span className="truncate">Traza completa por RP 6 y Colectora</span>
               </span>
+
+              <motion.button
+                type="button"
+                whileTap={{ scale: 0.96 }}
+                onClick={() => {
+                  playMicroSound('ui_tap');
+                  setIsExpanded((prev) => !prev);
+                }}
+                className={`min-h-[34px] flex items-center gap-1.5 text-[11px] font-black px-3 py-1.5 rounded-xl border-2 transition-colors cursor-pointer shrink-0 ${
+                  isExpanded
+                    ? 'text-[#101114] bg-[#FFF19A] border-[#FFF19A]'
+                    : 'text-[#101114] bg-[#FFF19A] hover:brightness-95 border-[#FFF19A]'
+                }`}
+                title={
+                  isExpanded
+                    ? `Ocultar listado de ${LINEA_228_STOPS.length} paradas de Línea 228`
+                    : `Ver las ${LINEA_228_STOPS.length} paradas de Línea 228 con búsqueda y guía GPS directa a Google Maps`
+                }
+              >
+                <span>
+                  {isExpanded
+                    ? 'Ocultar listado de paradas'
+                    : `Ver ${LINEA_228_STOPS.length} paradas de Línea 228`}
+                </span>
+                {isExpanded ? (
+                  <ChevronUp className="w-3.5 h-3.5 stroke-[3]" />
+                ) : (
+                  <ChevronDown className="w-3.5 h-3.5 stroke-[3]" />
+                )}
+              </motion.button>
             </div>
           </div>
         </div>
@@ -743,7 +1075,7 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
                   {LINEA_228_STOPS.length} Paradas de Línea 228
                 </span>
                 <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-[#101114] text-[#FFF19A] border border-white/15">
-                  {filteredStops.length}
+                  {stopSearchResults.length}
                 </span>
               </div>
 
@@ -773,18 +1105,137 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
               </div>
             </div>
 
-            {/* Search and zone filters */}
+            {/* Buscador inteligente y predictivo por calle, frase, parada o entre qué calles */}
             <div className="space-y-2 mb-2.5">
               <div className="relative">
-                <Search className="w-3.5 h-3.5 text-[#9299A5] absolute left-3 top-1/2 -translate-y-1/2" />
+                <Search className="w-3.5 h-3.5 text-[#FFF19A] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                 <input
+                  ref={searchInputRef}
                   type="text"
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder={`Buscar entre las ${LINEA_228_STOPS.length} paradas (ej: McDonald's, Plaza, Alem)...`}
-                  className="w-full min-h-[40px] bg-[#101114] border-2 border-white/10 focus:border-[#FFF19A] rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-[#9299A5] focus:outline-none transition-colors"
+                  onFocus={() => setIsSearchFocused(true)}
+                  onBlur={() => {
+                    setTimeout(() => setIsSearchFocused(false), 180);
+                  }}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    if (selectedZone !== 'all' && e.target.value.trim().length > 0) {
+                      setSelectedZone('all');
+                    }
+                  }}
+                  placeholder="Escribí calle, frase, parada o 'entre Alberdi y Mitre'..."
+                  title="Buscador predictivo: busca por nombre de calle, frase, número de parada (#14) o cruce entre calles (ej: entre Salmini y Bertolini)"
+                  className="w-full min-h-[42px] bg-[#101114] border-2 border-white/15 focus:border-[#FFF19A] rounded-xl pl-8 pr-9 py-1.5 text-xs text-white placeholder-[#9299A5] focus:outline-none transition-colors"
                 />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchQuery('');
+                      searchInputRef.current?.focus();
+                    }}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 w-6 h-6 rounded-lg bg-[#202329] hover:bg-[#FFF19A] text-[#9299A5] hover:text-[#101114] flex items-center justify-center transition-colors cursor-pointer"
+                    title="Limpiar búsqueda"
+                    aria-label="Limpiar búsqueda"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+
+                {/* Sugerencias predictivas en tiempo real al escribir */}
+                {isSearchFocused && searchQuery.trim().length > 0 && predictiveSuggestions.length > 0 && (
+                  <div className="mt-1.5 rounded-2xl bg-[#101114] border-2 border-[#FFF19A]/45 shadow-[0_12px_28px_rgba(0,0,0,0.8)] overflow-hidden divide-y divide-white/10">
+                    <div className="px-3 py-1.5 bg-[#181B20] flex items-center justify-between text-[9.5px] font-bold text-[#FFF19A]">
+                      <span className="flex items-center gap-1">
+                        <Sparkles className="w-3 h-3" />
+                        <span>Predicciones rápidas de parada / calle</span>
+                      </span>
+                      <span className="text-[#9299A5] font-mono">{predictiveSuggestions.length} sugerencias</span>
+                    </div>
+                    {predictiveSuggestions.map((s) => (
+                      <div
+                        key={s.id}
+                        className="px-3 py-2 hover:bg-[#202329] flex items-center justify-between gap-2 transition-colors"
+                      >
+                        <button
+                          type="button"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            playMicroSound('ui_tap');
+                            setSelectedZone('all');
+                            setSearchQuery(s.query);
+                            setIsSearchFocused(false);
+                          }}
+                          className="flex-1 min-w-0 text-left cursor-pointer"
+                          title={`Filtrar por ${s.label}`}
+                        >
+                          <p className="text-[11px] font-bold text-white truncate flex items-center gap-1.5">
+                            <span
+                              className={`px-1.5 py-0.5 rounded text-[8.5px] font-black uppercase shrink-0 ${
+                                s.kind === 'street'
+                                  ? 'bg-[#FFF19A]/15 text-[#FFF19A] border border-[#FFF19A]/35'
+                                  : s.kind === 'between'
+                                  ? 'bg-cyan-500/20 text-cyan-200 border border-cyan-400/40'
+                                  : 'bg-[#B7F36B]/15 text-[#B7F36B] border border-[#B7F36B]/35'
+                              }`}
+                            >
+                              {s.kind === 'street' ? 'Calle' : s.kind === 'between' ? 'Entre' : 'Parada'}
+                            </span>
+                            <span className="truncate">{s.label}</span>
+                          </p>
+                          <p className="text-[9.5px] text-[#9299A5] truncate mt-0.5">
+                            {s.subtitle}
+                          </p>
+                        </button>
+
+                        {s.stop && onSelectStop && (
+                          <button
+                            type="button"
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              playMicroSound('ui_tap');
+                              setIsExpanded(false);
+                              setIsMinimized(true);
+                              window.dispatchEvent(new CustomEvent('uppa-map-show-controls'));
+                              onSelectStop(s.stop!);
+                            }}
+                            className="px-2 py-1 rounded-lg bg-[#FFF19A] text-[#101114] font-black text-[10px] flex items-center gap-1 shrink-0 cursor-pointer hover:brightness-95"
+                            title={`Ir directo a ${s.stop.name} en el mapa y abrir guía GPS`}
+                          >
+                            <Navigation className="w-3 h-3" />
+                            <span>Ver</span>
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
+
+              {/* Accesos predictivos por calle cuando la búsqueda está vacía */}
+              {!searchQuery.trim() && (
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 text-[10px] scrollbar-none">
+                  <span className="text-[9.5px] font-extrabold text-[#FFF19A] shrink-0 flex items-center gap-1">
+                    <Sparkles className="w-3 h-3" />
+                    <span>Calles rápidas:</span>
+                  </span>
+                  {POPULAR_STREET_CHIPS.map((chip) => (
+                    <button
+                      key={chip.label}
+                      type="button"
+                      onClick={() => {
+                        playMicroSound('ui_tap');
+                        setSelectedZone('all');
+                        setSearchQuery(chip.query);
+                      }}
+                      title={`Buscar paradas sobre ${chip.label}`}
+                      className="px-2 py-1 rounded-lg bg-[#181B20] hover:bg-[#FFF19A] text-white/90 hover:text-[#101114] border border-white/15 font-bold shrink-0 transition-colors cursor-pointer"
+                    >
+                      {chip.label}
+                    </button>
+                  ))}
+                </div>
+              )}
 
               {/* Zone pills */}
               <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-[10px] scrollbar-none">
@@ -798,7 +1249,7 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
                       : 'bg-[#101114] border-white/10 text-[#9299A5] hover:text-white'
                   }`}
                 >
-                  Todas (62)
+                  Todas ({LINEA_228_STOPS.length})
                 </button>
                 {zones.map((zone) => (
                   <button
@@ -818,9 +1269,9 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
               </div>
             </div>
 
-            {/* Scrollable container with all 62 stops */}
+            {/* Scrollable container with all 66 stops */}
             <div className="max-h-60 sm:max-h-72 overflow-y-auto space-y-1.5 pr-1">
-              {filteredStops.map((stop) => (
+              {stopSearchResults.map(({ stop, betweenLabel }) => (
                 <div
                   key={stop.id}
                   className="p-2.5 rounded-xl bg-[#101114] hover:border-[#FFF19A]/50 border border-white/10 flex items-center justify-between gap-2 transition-all group"
@@ -842,7 +1293,7 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
                             CABECERA ORIGEN
                           </span>
                         )}
-                        {stop.sequence === 62 && (
+                        {stop.sequence === LINEA_228_STOPS.length && (
                           <span className="text-[8.5px] font-black text-rose-200 bg-rose-500/20 border border-rose-400/30 px-1.5 rounded">
                             TERMINAL DESTINO
                           </span>
@@ -853,6 +1304,11 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
                           </span>
                         )}
                       </div>
+                      {betweenLabel && (
+                        <p className="text-[9.5px] text-[#9299A5]/90 truncate mt-0.5">
+                          {betweenLabel}
+                        </p>
+                      )}
                     </div>
                   </div>
 
@@ -867,7 +1323,7 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
                         onSelectStop(stop);
                       }}
                       className="min-h-[36px] px-2.5 py-1 rounded-lg bg-[#202329] hover:bg-[#FFF19A] hover:text-[#101114] border border-white/15 text-white font-bold text-[10.5px] flex items-center gap-1 shrink-0 cursor-pointer active:scale-95 transition-all"
-                      title={`Centrar parada ${stop.name} en el mapa`}
+                      title={`Centrar parada ${stop.name} en el mapa y abrir guía GPS`}
                     >
                       <Navigation className="w-3 h-3" />
                       <span>Ver</span>
@@ -876,9 +1332,16 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
                 </div>
               ))}
 
-              {filteredStops.length === 0 && (
-                <div className="text-center py-6 text-[#9299A5] text-xs">
-                  No se encontraron paradas con ese criterio.
+              {stopSearchResults.length === 0 && (
+                <div className="text-center py-6 space-y-2 text-[#9299A5] text-xs">
+                  <p>No encontramos paradas exactas con "{searchQuery}".</p>
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery('')}
+                    className="px-3 py-1.5 rounded-xl bg-[#202329] hover:bg-[#FFF19A] text-white hover:text-[#101114] border border-white/15 font-bold text-[11px] cursor-pointer transition-colors"
+                  >
+                    Ver las {LINEA_228_STOPS.length} paradas
+                  </button>
                 </div>
               )}
             </div>

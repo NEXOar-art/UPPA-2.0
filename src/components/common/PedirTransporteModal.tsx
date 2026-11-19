@@ -14,6 +14,7 @@ import {
   ShieldAlert,
 } from 'lucide-react';
 import { PoliticasTransporteModal } from '../taxi/PoliticasTransporteModal';
+import { RankingPrestadoresDropdown } from '../taxi/RankingPrestadoresDropdown';
 
 interface PedirTransporteModalProps {
   isOpen: boolean;
@@ -24,6 +25,7 @@ interface PedirTransporteModalProps {
   initialOrigin?: string;
   userLocation?: { lat: number; lng: number; address?: string } | null;
   onSuccess?: (solicitud: SolicitudTransporteFirestore) => void;
+  onOpenTaxiTab?: () => void;
 }
 
 export const PedirTransporteModal: React.FC<PedirTransporteModalProps> = ({
@@ -35,6 +37,7 @@ export const PedirTransporteModal: React.FC<PedirTransporteModalProps> = ({
   initialOrigin = 'Campana Centro (Plaza Eduardo Costa)',
   userLocation,
   onSuccess,
+  onOpenTaxiTab,
 }) => {
   const [origen, setOrigen] = useState(initialOrigin);
   const [destino, setDestino] = useState('');
@@ -140,6 +143,15 @@ export const PedirTransporteModal: React.FC<PedirTransporteModalProps> = ({
                   <ShieldAlert className="w-3 h-3 text-[#101114]" />
                   <span>Políticas & Descargo</span>
                 </button>
+                <RankingPrestadoresDropdown
+                  useFixedOverlay
+                  triggerLabel="Ver ranking de prestadores"
+                  onOpenTaxiTab={() => {
+                    onClose();
+                    if (onOpenTaxiTab) onOpenTaxiTab();
+                  }}
+                  triggerButtonClassName="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-extrabold text-[#FFF19A] bg-[#101114] hover:bg-[#FFF19A] hover:text-[#101114] border border-[#FFF19A]/50 transition-all cursor-pointer active:scale-95"
+                />
               </div>
               <p className="text-[11px] text-[#9299A5] mt-0.5">
                 Privacidad protegida: solo el chofer que acepte verá tu GPS y WhatsApp

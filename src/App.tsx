@@ -3357,6 +3357,10 @@ export default function App() {
                 }}
                 unreadChatCount={communityChatList.length}
                 busEvents={eventsWithStreet.filter((e) => e.type === 'bus_location')}
+                allEvents={eventsWithStreet}
+                recentChatMessages={communityChatList}
+                pendingRequestsCount={activePendingTransportRequests.length}
+                userLocation={userLocation}
               />
             </div>
 
@@ -3705,6 +3709,7 @@ export default function App() {
         currentUserPhone={currentUser.phone}
         initialOrigin={userLocation?.address || 'Campana Centro (Plaza Eduardo Costa)'}
         userLocation={userLocation}
+        onOpenTaxiTab={() => setActiveTab('taxi')}
         onSuccess={() => {
           showToast('¡Aviso emitido! Solo los choferes disponibles recibirán tu solicitud.');
           setActiveTab('taxi');
