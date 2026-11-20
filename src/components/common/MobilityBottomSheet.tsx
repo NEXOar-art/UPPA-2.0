@@ -53,6 +53,7 @@ interface MobilityBottomSheetProps {
   recentChatMessages?: MensajeChatFirestore[];
   pendingRequestsCount?: number;
   userLocation?: { lat: number; lng: number } | null;
+  hasActivePassengerTracking?: boolean;
 }
 
 export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
@@ -68,8 +69,9 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
   recentChatMessages = [],
   pendingRequestsCount = 0,
   userLocation = null,
+  hasActivePassengerTracking = false,
 }) => {
-  const [isMinimized, setIsMinimized] = useState(false);
+  const [isMinimized, setIsMinimized] = useState(hasActivePassengerTracking);
   const [isExpanded, setIsExpanded] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchFocused, setIsSearchFocused] = useState(false);
@@ -80,6 +82,13 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
   const [nowTs, setNowTs] = useState<number>(() => Date.now());
 
   useEffect(() => {
+    if (hasActivePassengerTracking) {
+      setIsExpanded(false);
+      setIsMinimized(true);
+    }
+  }, [hasActivePassengerTracking]);
+
+  useEffect(() => {
     const handleVisibility = (e: Event) => {
       const custom = e as CustomEvent<{ visible: boolean }>;
       const visible = Boolean(custom.detail?.visible);
@@ -88,8 +97,16 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
         setHoveredJoystickBtn(null);
       }
     };
+    const handleMinimizeBottomSheet = () => {
+      setIsExpanded(false);
+      setIsMinimized(true);
+    };
     window.addEventListener('uppa-map-cards-visibility', handleVisibility);
-    return () => window.removeEventListener('uppa-map-cards-visibility', handleVisibility);
+    window.addEventListener('uppa-minimize-bottom-sheet', handleMinimizeBottomSheet);
+    return () => {
+      window.removeEventListener('uppa-map-cards-visibility', handleVisibility);
+      window.removeEventListener('uppa-minimize-bottom-sheet', handleMinimizeBottomSheet);
+    };
   }, []);
 
   useEffect(() => {

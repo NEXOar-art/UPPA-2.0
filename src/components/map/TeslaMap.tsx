@@ -33,6 +33,7 @@ import {
   MapPin,
   ChevronRight,
   ChevronDown,
+  ChevronUp,
   X,
   Maximize2,
   Key,
@@ -313,6 +314,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
     passengerLat: number;
     passengerLng: number;
   } | null>(null);
+  const [isPassengerHudMinimized, setIsPassengerHudMinimized] = useState(false);
 
   // Map state
   const [activeTileStyle, setActiveTileStyle] = useState<'streets' | 'tesla-dark' | 'osm'>('osm');
@@ -1728,6 +1730,8 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
       return;
     }
 
+    setIsPassengerHudMinimized(false);
+    window.dispatchEvent(new CustomEvent('uppa-minimize-bottom-sheet'));
     passengerAlarmUntilRef.current = Date.now() + 10000;
     scheduleHideTimerRef.current(10000);
     const stopAlarm = startPassengerApproachAlarm(10000);
@@ -2038,7 +2042,9 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
       <div
         onMouseEnter={handleCardMouseEnter}
         onMouseLeave={handleCardMouseLeave}
-        className={`absolute top-3 left-12 right-3 sm:left-auto sm:right-4 z-[42] flex flex-row items-center justify-end gap-1.5 sm:gap-2 transition-all duration-500 ease-in-out ${
+        className={`absolute top-3 left-12 right-3 sm:left-auto sm:right-4 z-[42] ${
+          passengerTrajectoryInfo && !isPassengerHudMinimized ? 'hidden sm:flex' : 'flex'
+        } flex-row items-center justify-end gap-1.5 sm:gap-2 transition-all duration-500 ease-in-out ${
           areCardsVisible
             ? 'opacity-100 translate-y-0 pointer-events-auto'
             : 'opacity-0 -translate-y-3 pointer-events-none'
@@ -2860,154 +2866,200 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
         <div
           onMouseEnter={handleCardMouseEnter}
           onMouseLeave={handleCardMouseLeave}
-          className={`absolute top-16 sm:top-18 left-3 right-3 sm:left-4 sm:right-auto sm:w-[400px] z-[45] transition-all duration-500 ease-in-out ${
+          className={`absolute top-2 left-2 right-2 sm:top-2.5 sm:left-12 sm:right-auto sm:w-[315px] md:w-[370px] lg:w-[395px] z-[56] max-h-[calc(100%-78px)] overflow-y-auto overscroll-contain rounded-2xl transition-all duration-500 ease-in-out ${
             areCardsVisible
               ? 'opacity-100 translate-y-0 pointer-events-auto'
               : 'opacity-0 -translate-y-3 pointer-events-none'
           }`}
         >
-          <div className="uppa-glass-ios uppa-card-enter p-4 rounded-2xl border-[#B7F36B]/75 relative overflow-hidden">
-            <div className="flex items-start justify-between gap-2 pb-2.5 border-b border-white/10">
-              <div className="flex items-center gap-2">
-                <span className="relative flex h-3 w-3">
+          <div
+            className={`uppa-glass-ios uppa-card-enter rounded-2xl border-[#B7F36B]/75 relative overflow-hidden ${
+              isPassengerHudMinimized ? 'p-2.5' : 'p-2.5 sm:p-3.5'
+            }`}
+          >
+            <div
+              className={`flex items-center justify-between gap-2 ${
+                isPassengerHudMinimized ? '' : 'pb-2 border-b border-white/10'
+              }`}
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="relative flex h-2.5 w-2.5 shrink-0">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#B7F36B] opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-3 w-3 bg-[#B7F36B]"></span>
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#B7F36B]"></span>
                 </span>
-                <span className="text-xs font-black text-[#B7F36B] uppercase tracking-wider font-mono flex items-center gap-1.5">
-                  <Navigation className="w-3.5 h-3.5 text-[#B7F36B]" />
-                  <span>Ubicación GPS del Pasajero Habilitada</span>
-                </span>
-              </div>
-              {onClearTrackingPassenger && (
-                <button
-                  onClick={onClearTrackingPassenger}
-                  className="w-8 h-8 rounded-lg bg-[#101114] border border-white/15 hover:border-[#FFF19A] text-[#9299A5] hover:text-white flex items-center justify-center transition-colors cursor-pointer"
-                  title="Cerrar"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              )}
-            </div>
-
-            <div className="pt-3 space-y-3">
-              <div className="p-3.5 rounded-xl bg-[#101114] border border-white/10 flex items-center justify-between">
-                <div>
-                  <div className="text-[10px] text-[#9299A5] font-mono uppercase tracking-wider font-bold">
-                    Distancia al Pasajero
-                  </div>
-                  <div className="text-2xl font-black text-white font-display flex items-baseline gap-1.5 mt-0.5">
-                    <span>
-                      {passengerTrajectoryInfo.distKm < 1
-                        ? `${Math.round(passengerTrajectoryInfo.distKm * 1000)} m`
-                        : `${passengerTrajectoryInfo.distKm} km`}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="text-right space-y-1">
-                  <div className="text-xs font-mono text-[#101114] font-black flex items-center justify-end gap-1.5 bg-[#FFF19A] px-2.5 py-1 rounded-md">
-                    <span>🚗 ~{passengerTrajectoryInfo.etaDriveMin} min</span>
-                  </div>
-                  <div className="text-[10px] font-mono text-[#B7F36B] flex items-center justify-end gap-1">
-                    <span>Ruta óptima trazada</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="rounded-xl bg-[#101114]/65 border border-white/15 px-3 py-1.5 space-y-1">
-                <div className="flex items-center justify-between text-[10px] font-bold">
-                  <span className="text-[#B7F36B]">Acercándose al pasajero</span>
-                  <span className="text-[#FFF19A] font-mono">~{passengerTrajectoryInfo.etaDriveMin} min</span>
-                </div>
-                <div className="relative h-5 flex items-center justify-between overflow-hidden px-1">
-                  <div className="absolute inset-x-3 top-1/2 -translate-y-1/2 border-t-2 border-dashed border-[#FFF19A]/45" />
-                  <div className="relative z-10 flex-1 pr-6 overflow-hidden">
-                    <div className="w-full uppa-vehicle-approach-track">
-                      <span className="text-sm leading-none inline-block" aria-hidden="true">
-                        {passengerTrajectoryInfo.solicitud.tipoVehiculoRequerido === 'moto' ? '🛵' : '🚗'}
+                <div className="min-w-0">
+                  <span className="text-[11px] sm:text-xs font-black text-[#B7F36B] uppercase tracking-wider font-mono flex items-center gap-1.5 truncate">
+                    <Navigation className="w-3.5 h-3.5 text-[#B7F36B] shrink-0" />
+                    <span className="truncate">Ubicación GPS del Pasajero Habilitada</span>
+                  </span>
+                  {isPassengerHudMinimized && (
+                    <div className="text-[11px] font-bold text-white/90 truncate mt-0.5">
+                      {passengerTrajectoryInfo.solicitud.nombrePasajero} ·{' '}
+                      <span className="text-[#FFF19A] font-mono">
+                        {passengerTrajectoryInfo.distKm < 1
+                          ? `${Math.round(passengerTrajectoryInfo.distKm * 1000)} m`
+                          : `${passengerTrajectoryInfo.distKm} km`}{' '}
+                        (~{passengerTrajectoryInfo.etaDriveMin} min)
                       </span>
                     </div>
-                  </div>
-                  <span className="relative z-10 text-sm leading-none shrink-0" aria-hidden="true">
-                    📍
-                  </span>
+                  )}
                 </div>
               </div>
 
-              <div className="space-y-2 text-xs bg-[#101114]/70 p-3 rounded-xl border border-white/10">
-                <div className="flex items-center justify-between pb-1.5 mb-1 border-b border-white/10">
-                  <div className="flex items-center gap-2">
-                    <span className="w-6 h-6 rounded-lg bg-[#202329] border border-white/15 text-white flex items-center justify-center font-bold text-xs">
-                      🧑
-                    </span>
-                    <span className="font-extrabold text-white text-xs">
-                      {passengerTrajectoryInfo.solicitud.nombrePasajero}
-                    </span>
-                  </div>
-                  <span className="text-[9.5px] uppercase font-black text-[#101114] bg-[#B7F36B] px-2 py-0.5 rounded-md">
-                    {passengerTrajectoryInfo.solicitud.tipoVehiculoRequerido === 'moto' ? 'Moto Taxi' : 'Auto Taxi'}
-                  </span>
-                </div>
-
-                <div className="flex items-start gap-2 text-white">
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#B7F36B] shrink-0 mt-1" />
-                  <div className="min-w-0 flex-1">
-                    <span className="text-[10px] font-bold text-[#B7F36B] uppercase tracking-wider block">Punto de Encuentro:</span>
-                    <span className="text-white font-medium text-xs block leading-tight">
-                      {passengerTrajectoryInfo.solicitud.origen}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-2 text-white pt-1">
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#FFF19A] shrink-0 mt-1" />
-                  <div className="min-w-0 flex-1">
-                    <span className="text-[10px] font-bold text-[#FFF19A] uppercase tracking-wider block">Destino Final:</span>
-                    <span className="text-white font-medium text-xs block leading-tight">
-                      {passengerTrajectoryInfo.solicitud.destino}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2 pt-1 flex-wrap">
-                <a
-                  href={`https://www.google.com/maps/dir/?api=1&destination=${passengerTrajectoryInfo.passengerLat},${passengerTrajectoryInfo.passengerLng}&travelmode=driving`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex-1 min-h-[44px] px-3 rounded-xl bg-[#B7F36B] hover:brightness-95 text-[#101114] border border-[#101114] font-black text-xs flex items-center justify-center gap-1.5 active:scale-95 transition-all cursor-pointer"
-                  title="Abrir Google Maps"
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setIsPassengerHudMinimized((prev) => !prev)}
+                  className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-[#101114] border border-white/15 hover:border-[#B7F36B] text-[#9299A5] hover:text-white flex items-center justify-center transition-colors cursor-pointer"
+                  title={isPassengerHudMinimized ? 'Expandir tarjeta GPS' : 'Minimizar tarjeta GPS'}
+                  aria-label={isPassengerHudMinimized ? 'Expandir tarjeta GPS' : 'Minimizar tarjeta GPS'}
                 >
-                  <Navigation className="w-4 h-4 text-[#101114]" />
-                  <span>Google Maps GPS</span>
-                </a>
-
-                {passengerTrajectoryInfo.solicitud.telefonoPasajero && (
-                  <a
-                    href={`https://wa.me/${passengerTrajectoryInfo.solicitud.telefonoPasajero}?text=${encodeURIComponent(
-                      `¡Hola ${passengerTrajectoryInfo.solicitud.nombrePasajero}! Soy tu chofer de UPPA. Voy en camino hacia ${passengerTrajectoryInfo.solicitud.origen}.`
-                    )}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="min-h-[44px] px-3 rounded-xl bg-[#FFF19A] hover:brightness-95 border border-[#101114] text-[#101114] font-black text-xs flex items-center justify-center gap-1.5 transition-all"
-                    title="WhatsApp pasajero"
-                  >
-                    <MessageCircle className="w-4 h-4" />
-                    <span>WhatsApp</span>
-                  </a>
-                )}
-
+                  {isPassengerHudMinimized ? (
+                    <ChevronDown className="w-4 h-4" />
+                  ) : (
+                    <ChevronUp className="w-4 h-4" />
+                  )}
+                </button>
                 {onClearTrackingPassenger && (
                   <button
+                    type="button"
                     onClick={onClearTrackingPassenger}
-                    className="px-3 min-h-[44px] rounded-xl bg-[#101114] border border-white/15 hover:border-[#FFF19A] text-xs font-bold text-white cursor-pointer"
-                    title="Finalizar viaje"
+                    className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-[#101114] border border-white/15 hover:border-[#FFF19A] text-[#9299A5] hover:text-white flex items-center justify-center transition-colors cursor-pointer"
+                    title="Cerrar"
+                    aria-label="Cerrar seguimiento GPS"
                   >
-                    Llegué / Finalizar
+                    <X className="w-4 h-4" />
                   </button>
                 )}
               </div>
             </div>
+
+            {!isPassengerHudMinimized && (
+              <div className="pt-2 sm:pt-2.5 space-y-2 sm:space-y-2.5">
+                <div className="p-2.5 sm:p-3 rounded-xl bg-[#101114] border border-white/10 flex items-center justify-between gap-2">
+                  <div>
+                    <div className="text-[9.5px] sm:text-[10px] text-[#9299A5] font-mono uppercase tracking-wider font-bold">
+                      Distancia al Pasajero
+                    </div>
+                    <div className="text-xl sm:text-2xl font-black text-white font-display flex items-baseline gap-1.5 mt-0.5 leading-none">
+                      <span>
+                        {passengerTrajectoryInfo.distKm < 1
+                          ? `${Math.round(passengerTrajectoryInfo.distKm * 1000)} m`
+                          : `${passengerTrajectoryInfo.distKm} km`}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="text-right space-y-1 shrink-0">
+                    <div className="text-[11px] sm:text-xs font-mono text-[#101114] font-black flex items-center justify-end gap-1.5 bg-[#FFF19A] px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md">
+                      <span>🚗 ~{passengerTrajectoryInfo.etaDriveMin} min</span>
+                    </div>
+                    <div className="text-[10px] font-mono text-[#B7F36B] flex items-center justify-end gap-1">
+                      <span>Ruta óptima trazada</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-xl bg-[#101114]/65 border border-white/15 px-2.5 py-1 space-y-0.5">
+                  <div className="flex items-center justify-between text-[10px] font-bold">
+                    <span className="text-[#B7F36B]">Acercándose al pasajero</span>
+                    <span className="text-[#FFF19A] font-mono">~{passengerTrajectoryInfo.etaDriveMin} min</span>
+                  </div>
+                  <div className="relative h-4 sm:h-5 flex items-center justify-between overflow-hidden px-1">
+                    <div className="absolute inset-x-3 top-1/2 -translate-y-1/2 border-t-2 border-dashed border-[#FFF19A]/45" />
+                    <div className="relative z-10 flex-1 pr-6 overflow-hidden">
+                      <div className="w-full uppa-vehicle-approach-track">
+                        <span className="text-sm leading-none inline-block" aria-hidden="true">
+                          {passengerTrajectoryInfo.solicitud.tipoVehiculoRequerido === 'moto' ? '🛵' : '🚗'}
+                        </span>
+                      </div>
+                    </div>
+                    <span className="relative z-10 text-sm leading-none shrink-0" aria-hidden="true">
+                      📍
+                    </span>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5 text-xs bg-[#101114]/70 p-2.5 rounded-xl border border-white/10">
+                  <div className="flex items-center justify-between pb-1 mb-0.5 border-b border-white/10">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="w-5 h-5 sm:w-6 sm:h-6 rounded-lg bg-[#202329] border border-white/15 text-white flex items-center justify-center font-bold text-xs shrink-0">
+                        🧑
+                      </span>
+                      <span className="font-extrabold text-white text-xs truncate">
+                        {passengerTrajectoryInfo.solicitud.nombrePasajero}
+                      </span>
+                    </div>
+                    <span className="text-[9.5px] uppercase font-black text-[#101114] bg-[#B7F36B] px-2 py-0.5 rounded-md shrink-0">
+                      {passengerTrajectoryInfo.solicitud.tipoVehiculoRequerido === 'moto' ? 'Moto Taxi' : 'Auto Taxi'}
+                    </span>
+                  </div>
+
+                  <div className="flex items-start gap-2 text-white">
+                    <span className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-[#B7F36B] shrink-0 mt-1" />
+                    <div className="min-w-0 flex-1">
+                      <span className="text-[9.5px] sm:text-[10px] font-bold text-[#B7F36B] uppercase tracking-wider block">
+                        Punto de Encuentro:
+                      </span>
+                      <span className="text-white font-medium text-[11.5px] sm:text-xs block leading-tight">
+                        {passengerTrajectoryInfo.solicitud.origen}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-2 text-white pt-0.5">
+                    <span className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-[#FFF19A] shrink-0 mt-1" />
+                    <div className="min-w-0 flex-1">
+                      <span className="text-[9.5px] sm:text-[10px] font-bold text-[#FFF19A] uppercase tracking-wider block">
+                        Destino Final:
+                      </span>
+                      <span className="text-white font-medium text-[11.5px] sm:text-xs block leading-tight">
+                        {passengerTrajectoryInfo.solicitud.destino}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5 sm:gap-2 pt-0.5 flex-wrap">
+                  <a
+                    href={`https://www.google.com/maps/dir/?api=1&destination=${passengerTrajectoryInfo.passengerLat},${passengerTrajectoryInfo.passengerLng}&travelmode=driving`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex-1 min-h-[38px] sm:min-h-[42px] px-2.5 sm:px-3 rounded-xl bg-[#B7F36B] hover:brightness-95 text-[#101114] border border-[#101114] font-black text-[11px] sm:text-xs flex items-center justify-center gap-1.5 active:scale-95 transition-all cursor-pointer"
+                    title="Abrir Google Maps"
+                  >
+                    <Navigation className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#101114]" />
+                    <span>Google Maps GPS</span>
+                  </a>
+
+                  {passengerTrajectoryInfo.solicitud.telefonoPasajero && (
+                    <a
+                      href={`https://wa.me/${passengerTrajectoryInfo.solicitud.telefonoPasajero}?text=${encodeURIComponent(
+                        `¡Hola ${passengerTrajectoryInfo.solicitud.nombrePasajero}! Soy tu chofer de UPPA. Voy en camino hacia ${passengerTrajectoryInfo.solicitud.origen}.`
+                      )}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="min-h-[38px] sm:min-h-[42px] px-2.5 sm:px-3 rounded-xl bg-[#FFF19A] hover:brightness-95 border border-[#101114] text-[#101114] font-black text-[11px] sm:text-xs flex items-center justify-center gap-1.5 transition-all"
+                      title="WhatsApp pasajero"
+                    >
+                      <MessageCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                      <span>WhatsApp</span>
+                    </a>
+                  )}
+
+                  {onClearTrackingPassenger && (
+                    <button
+                      type="button"
+                      onClick={onClearTrackingPassenger}
+                      className="px-2.5 sm:px-3 min-h-[38px] sm:min-h-[42px] rounded-xl bg-[#101114] border border-white/15 hover:border-[#FFF19A] text-[11px] sm:text-xs font-bold text-white cursor-pointer"
+                      title="Finalizar viaje"
+                    >
+                      Llegué / Finalizar
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

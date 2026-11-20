@@ -3361,6 +3361,7 @@ export default function App() {
                 recentChatMessages={communityChatList}
                 pendingRequestsCount={activePendingTransportRequests.length}
                 userLocation={userLocation}
+                hasActivePassengerTracking={Boolean(liveActiveTrackingPassenger)}
               />
             </div>
 
