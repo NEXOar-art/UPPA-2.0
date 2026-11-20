@@ -274,7 +274,7 @@ export const AdBanner: React.FC<AdBannerProps> = ({ ads, onOpenContactModal }) =
                       rel="noopener noreferrer"
                       onClick={() => playMicroSound('ad_spark')}
                       className="h-7 px-2.5 rounded-none bg-[#101114] hover:bg-white/10 border border-white/20 hover:border-[#FFF19A] text-white text-[11px] font-bold flex items-center gap-1 transition-all"
-                      title={`Abrir sitio web oficial de ${ad.businessName}`}
+                      title={`Web de ${ad.businessName}`}
                     >
                       <span>Web</span>
                       <ExternalLink className="w-2.5 h-2.5 text-[#FFF19A]" />
@@ -289,7 +289,7 @@ export const AdBanner: React.FC<AdBannerProps> = ({ ads, onOpenContactModal }) =
                         rel="noopener noreferrer"
                         onClick={() => playMicroSound('ad_spark')}
                         className="h-7 px-2.5 rounded-none bg-[#B7F36B] hover:bg-[#c5f784] text-[#101114] text-[11px] font-black flex items-center gap-1 shadow-[0_0_10px_rgba(183,243,107,0.3)] transition-all"
-                        title={`Contactar o pedir a ${ad.businessName} por WhatsApp`}
+                        title={`WhatsApp ${ad.businessName}`}
                       >
                         <MessageCircle className="w-3 h-3" />
                         <span className="hidden sm:inline">WhatsApp</span>
@@ -313,7 +313,7 @@ export const AdBanner: React.FC<AdBannerProps> = ({ ads, onOpenContactModal }) =
               onOpenContactModal();
             }}
             className="hidden lg:flex px-2.5 py-1.5 rounded-lg text-[10.5px] font-black text-[#FFF19A] hover:bg-[#202329] border border-transparent hover:border-[#FFF19A]/40 transition-colors cursor-pointer items-center gap-1"
-            title="Pedir incluir mi negocio en el banner"
+            title="Anunciar mi negocio"
           >
             <Sparkles className="w-3 h-3" />
             <span>Anunciar</span>
@@ -326,7 +326,7 @@ export const AdBanner: React.FC<AdBannerProps> = ({ ads, onOpenContactModal }) =
               setIsDismissed(true);
             }}
             className="w-8 h-8 rounded-lg text-[#9299A5] hover:text-white hover:bg-[#202329] flex items-center justify-center transition-colors cursor-pointer"
-            title="Cerrar banner publicitario (podrás habilitarlo nuevamente en cualquier momento)"
+            title="Cerrar banner"
             aria-label="Cerrar banner"
           >
             <X className="w-4 h-4" />

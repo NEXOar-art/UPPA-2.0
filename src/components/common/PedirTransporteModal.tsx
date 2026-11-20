@@ -138,7 +138,7 @@ export const PedirTransporteModal: React.FC<PedirTransporteModalProps> = ({
                   type="button"
                   onClick={() => setIsPoliticasOpen(true)}
                   className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-extrabold text-[#101114] bg-[#FFF19A] hover:brightness-105 border border-white transition-all cursor-pointer"
-                  title="Leer Políticas de Uso y Descargo de Responsabilidad antes de pedir viaje"
+                  title="Políticas y Descargo"
                 >
                   <ShieldAlert className="w-3 h-3 text-[#101114]" />
                   <span>Políticas & Descargo</span>
@@ -163,7 +163,7 @@ export const PedirTransporteModal: React.FC<PedirTransporteModalProps> = ({
             type="button"
             onClick={onClose}
             className="w-10 h-10 rounded-xl bg-[#101114] hover:bg-white/10 border border-white/15 text-[#9299A5] hover:text-white flex items-center justify-center transition-colors cursor-pointer shrink-0"
-            title="Cerrar formulario de pedido de transporte"
+            title="Cerrar"
           >
             <X className="w-4 h-4" />
           </button>
@@ -201,7 +201,7 @@ export const PedirTransporteModal: React.FC<PedirTransporteModalProps> = ({
               <button
                 type="button"
                 onClick={() => setTipoVehiculo('moto')}
-                title="Seleccionar Moto Taxi para viaje rápido"
+                title="Elegir Moto Taxi"
                 className={`min-h-[48px] p-3 rounded-2xl border-2 text-center transition-all flex items-center justify-center gap-2 font-extrabold text-xs cursor-pointer ${
                   tipoVehiculo === 'moto'
                     ? 'bg-[#FFF19A] border-white text-[#101114] shadow-[0_3px_0_#0A0B0D]'
@@ -215,7 +215,7 @@ export const PedirTransporteModal: React.FC<PedirTransporteModalProps> = ({
               <button
                 type="button"
                 onClick={() => setTipoVehiculo('auto')}
-                title="Seleccionar Auto Taxi para viaje en automóvil"
+                title="Elegir Auto Taxi"
                 className={`min-h-[48px] p-3 rounded-2xl border-2 text-center transition-all flex items-center justify-center gap-2 font-extrabold text-xs cursor-pointer ${
                   tipoVehiculo === 'auto'
                     ? 'bg-[#B7F36B] border-white text-[#101114] shadow-[0_3px_0_#0A0B0D]'
@@ -240,7 +240,7 @@ export const PedirTransporteModal: React.FC<PedirTransporteModalProps> = ({
                     type="button"
                     onClick={() => setOrigen('')}
                     className="text-[10px] text-[#9299A5] hover:text-[#FFF19A] transition-colors cursor-pointer"
-                    title="Limpiar campo de dirección de origen"
+                    title="Limpiar origen"
                   >
                     Borrar texto
                   </button>
@@ -268,7 +268,7 @@ export const PedirTransporteModal: React.FC<PedirTransporteModalProps> = ({
                     type="button"
                     onClick={() => setDestino('')}
                     className="text-[10px] text-[#9299A5] hover:text-[#FFF19A] transition-colors cursor-pointer"
-                    title="Limpiar campo de dirección de destino"
+                    title="Limpiar destino"
                   >
                     Borrar texto
                   </button>
@@ -342,7 +342,7 @@ export const PedirTransporteModal: React.FC<PedirTransporteModalProps> = ({
                     e.stopPropagation();
                     setIsPoliticasOpen(true);
                   }}
-                  title="Abrir documento completo de Política & Descargo de Responsabilidad"
+                  title="Leer Política y Descargo"
                   className="font-bold text-[#FFF19A] hover:underline underline-offset-2 transition-colors cursor-pointer inline-flex items-center gap-1"
                 >
                   <ShieldAlert className="w-3.5 h-3.5 text-[#FFF19A] inline" />
@@ -359,7 +359,7 @@ export const PedirTransporteModal: React.FC<PedirTransporteModalProps> = ({
             <button
               type="submit"
               disabled={isLoading || !!successMsg || !aceptaPoliticas || !origen.trim() || !destino.trim()}
-              title="Enviar solicitud de transporte alternativo con temporizador de 12 minutos"
+              title="Emitir pedido de viaje"
               className={`w-full h-12 font-extrabold text-xs uppercase tracking-wider rounded-2xl flex items-center justify-center gap-2 transition-all ${
                 !aceptaPoliticas || !origen.trim() || !destino.trim() || isLoading
                   ? 'bg-[#101114] text-[#9299A5] border border-white/10 cursor-not-allowed opacity-60'

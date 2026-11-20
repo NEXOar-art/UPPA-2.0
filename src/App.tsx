@@ -133,7 +133,7 @@ function GlobalHoverTooltip() {
 
     const showForElement = (target: EventTarget | null) => {
       if (!(target instanceof Element)) return;
-      const el = target.closest('button[title], a[title], [role="button"][title]') as HTMLElement | null;
+      const el = target.closest('[title]') as HTMLElement | null;
       if (!el) {
         if (currentEl) {
           currentEl = null;
@@ -2384,7 +2384,7 @@ export default function App() {
                   showToast(`📍 GPS activado hacia ${driverCodePopup.pasajeroNombre} · Viaje iniciado`);
                 }}
                 className="flex-1 min-h-[38px] px-3 py-1.5 rounded-xl uppa-cta-yellow text-[11px] font-black flex items-center justify-center gap-1.5 cursor-pointer"
-                title="Activar GPS hacia el pasajero y avanzar al paso Viaje iniciado"
+                title="Activar GPS hacia pasajero"
               >
                 <Navigation className="w-3.5 h-3.5 text-[#101114]" />
                 <span>GPS Pasajero</span>
@@ -2397,7 +2397,7 @@ export default function App() {
                   setDriverCodePopup(null);
                 }}
                 className="flex-1 min-h-[38px] px-3 py-1.5 rounded-xl bg-[#B7F36B] hover:brightness-95 text-[#101114] border border-[#101114] text-[11px] font-black flex items-center justify-center gap-1.5 cursor-pointer"
-                title="Ir a Taxis & Motos para ingresar el código del pasajero"
+                title="Ir a Taxis & Motos"
               >
                 <KeyRound className="w-3.5 h-3.5" />
                 <span>Ir a Taxis &amp; Motos</span>
@@ -2467,7 +2467,7 @@ export default function App() {
                     <button
                       onClick={() => setScreenPushEvents((prev) => prev.filter((p) => p.id !== ev.id))}
                       className="text-[#9299A5] hover:text-white p-1.5 rounded-lg bg-[#101114] border border-white/10 cursor-pointer shrink-0"
-                      title="Cerrar notificación en pantalla"
+                      title="Cerrar"
                     >
                       <X className="w-3.5 h-3.5" />
                     </button>
@@ -2503,7 +2503,7 @@ export default function App() {
               setEmailVerificationFocusTick((n) => n + 1);
               setIsAuthModalOpen(true);
             }}
-            title="Abrir UPPA Mi Perfil en Email Pendiente de Verificación"
+            title="Verificar correo en Mi Perfil"
             className="flex items-center gap-2 min-w-0 flex-1 text-left cursor-pointer group"
           >
             <Mail className="w-3.5 h-3.5 text-[#FFF19A] shrink-0" />
@@ -2519,7 +2519,7 @@ export default function App() {
               setEmailVerificationFocusTick((n) => n + 1);
               setIsAuthModalOpen(true);
             }}
-            title="Ir a UPPA Mi Perfil para enviar el correo de verificación"
+            title="Verificar correo"
             className="text-[11px] font-black bg-[#FFF19A] text-[#101114] hover:brightness-95 cursor-pointer shrink-0 px-2.5 py-1 rounded-lg border border-[#101114] active:scale-95 transition-all"
           >
             Verificar Mail
@@ -2533,7 +2533,7 @@ export default function App() {
         <div className="flex items-center gap-2.5">
           <button
             onClick={() => setActiveTab('map')}
-            title="Ir a la vista principal del Mapa en vivo"
+            title="Ir al Mapa"
             className="flex items-center min-h-[44px] px-1 cursor-pointer active:scale-95 transition-transform"
           >
             <span className="text-xl font-black tracking-widest text-white font-display">
@@ -2548,8 +2548,8 @@ export default function App() {
                 playMicroSound('ui_tap');
                 setActiveTab('taxi');
               }}
-              title="PASAJERO SOLICITANDO TRANSPORTE"
-              aria-label="PASAJERO SOLICITANDO TRANSPORTE"
+              title="Pasajero solicitando transporte"
+              aria-label="Pasajero solicitando transporte"
               className="relative w-8 h-8 rounded-full bg-red-500/15 border border-red-500/70 hover:border-red-400 flex items-center justify-center cursor-pointer active:scale-95 transition-all shrink-0"
             >
               <span className="animate-ping absolute inline-flex h-4 w-4 rounded-full bg-red-500 opacity-85" />
@@ -2572,7 +2572,7 @@ export default function App() {
             <button
               onClick={() => setIsHeaderMenuOpen((prev) => !prev)}
               className="h-11 w-11 rounded-xl bg-[#202329] border border-white/15 hover:border-[#FFF19A]/60 flex items-center justify-center text-white active:scale-95 transition-all cursor-pointer"
-              title="Más opciones: Prestar Servicio o Pedir Transporte Alternativo"
+              title="Más opciones"
             >
               <MoreVertical className="w-4 h-4" />
             </button>
@@ -2585,7 +2585,7 @@ export default function App() {
                     setIsPublishTaxiOpen(true);
                     setIsHeaderMenuOpen(false);
                   }}
-                  title="Registrarme como chofer de auto o moto en UPPA"
+                  title="Registrarme como chofer"
                   className="w-full min-h-[44px] text-left px-3 py-2.5 rounded-xl text-xs font-black text-[#101114] bg-[#B7F36B] hover:brightness-95 border border-[#101114] flex items-center gap-2.5 transition-all cursor-pointer"
                 >
                   <div className="flex items-center gap-0.5">
@@ -2600,7 +2600,7 @@ export default function App() {
                     setIsPedirTransporteOpen(true);
                     setIsHeaderMenuOpen(false);
                   }}
-                  title="Solicitar un auto o moto para que te pase a buscar"
+                  title="Pedir Auto o Moto"
                   className="w-full min-h-[44px] text-left px-3 py-2.5 rounded-xl text-xs font-black text-[#101114] bg-[#FFF19A] hover:brightness-95 border border-[#101114] flex items-center gap-2.5 transition-all cursor-pointer"
                 >
                   <Zap className="w-4 h-4 fill-[#101114] text-[#101114]" />
@@ -2615,7 +2615,7 @@ export default function App() {
             <button
               type="button"
               onClick={() => setActiveTab('admin')}
-              title={`Habilitación pendiente (${pendingAdminHabilitaciones.length}): Hay solicitudes de chofer esperando aprobación. Tocá para ir a Administración UPPA`}
+              title={`Habilitar (${pendingAdminHabilitaciones.length}): ir a Admin`}
               aria-label="Indicador de habilitación pendiente para Administrador"
               className="relative min-h-[44px] px-2.5 py-1.5 rounded-xl bg-[#202329] border-2 border-blue-400 text-blue-200 hover:bg-blue-500/15 flex items-center gap-2 cursor-pointer transition-all shrink-0"
             >
@@ -2647,10 +2647,10 @@ export default function App() {
                   isDriverUser
                     ? isDriverHabilitado
                       ? driverDisponibilidad === 'ocupado'
-                        ? `Mi Perfil: ${currentUser.name} (EN VIAJE - Abrir menú para cambiar a Disponible)`
-                        : `Mi Perfil: ${currentUser.name} (Chofer Habilitado - Disponible)`
-                      : `Mi Perfil: ${currentUser.name} (Chofer Pendiente de Habilitación)`
-                    : `Mi Perfil y opciones de cuenta: ${currentUser.name}`
+                        ? 'Mi Perfil (Ocupado)'
+                        : 'Mi Perfil (Disponible)'
+                      : 'Mi Perfil (Pendiente)'
+                    : 'Mi Perfil'
                 }
               >
                 {/* Indicador: SOLO para prestador de servicio habilitado */}
@@ -2759,7 +2759,7 @@ export default function App() {
                           type="button"
                           disabled={isSwitchingRole}
                           onClick={() => handleSwitchRoleInSession('pasajero')}
-                          title="Operar como Pasajero sin cerrar sesión"
+                          title="Cambiar a Pasajero"
                           className={`py-2 px-1.5 rounded-lg border text-[10.5px] font-black flex flex-col items-center justify-center gap-0.5 transition-all cursor-pointer disabled:opacity-60 ${
                             !isDriverUser
                               ? 'bg-[#FFF19A] text-[#101114] border-[#101114]'
@@ -2773,7 +2773,7 @@ export default function App() {
                           type="button"
                           disabled={isSwitchingRole}
                           onClick={() => handleSwitchRoleInSession('chofer_auto')}
-                          title="Cambiar a Prestador de Servicio Auto Taxi sin cerrar sesión"
+                          title="Cambiar a Auto Taxi"
                           className={`py-2 px-1.5 rounded-lg border text-[10.5px] font-black flex flex-col items-center justify-center gap-0.5 transition-all cursor-pointer disabled:opacity-60 ${
                             isDriverUser && currentUser.rol !== 'chofer_moto' && currentUser.tipoVehiculo !== 'moto'
                               ? 'bg-[#B7F36B] text-[#101114] border-[#101114]'
@@ -2787,7 +2787,7 @@ export default function App() {
                           type="button"
                           disabled={isSwitchingRole}
                           onClick={() => handleSwitchRoleInSession('chofer_moto')}
-                          title="Cambiar a Prestador de Servicio Moto Taxi (inicia abono obligatorio si no está habilitado)"
+                          title="Cambiar a Moto Taxi"
                           className={`py-2 px-1.5 rounded-lg border text-[10.5px] font-black flex flex-col items-center justify-center gap-0.5 transition-all cursor-pointer disabled:opacity-60 ${
                             isDriverUser && (currentUser.rol === 'chofer_moto' || currentUser.tipoVehiculo === 'moto')
                               ? 'bg-[#B7F36B] text-[#101114] border-[#101114]'
@@ -2820,7 +2820,7 @@ export default function App() {
                       <button
                         type="button"
                         onClick={() => setIsHabilitacionCardExpanded((prev) => !prev)}
-                        title={isHabilitacionCardExpanded ? 'Contraer información de habilitación' : 'Expandir información de habilitación del administrador'}
+                        title={isHabilitacionCardExpanded ? 'Ocultar info' : 'Ver info'}
                         className="w-full min-h-[44px] py-2 px-3 rounded-xl bg-[#202329] hover:border-[#FFF19A] border border-white/15 text-white text-xs font-bold flex items-center justify-between transition-colors cursor-pointer"
                       >
                         <span>{isHabilitacionCardExpanded ? 'Ocultar información' : 'Ver información de habilitación'}</span>
@@ -2862,7 +2862,7 @@ export default function App() {
                             )}`}
                             target="_blank"
                             rel="noopener noreferrer"
-                            title="Enviar mensaje por WhatsApp al Administrador UPPA"
+                            title="WhatsApp Admin UPPA"
                             className="w-full min-h-[44px] py-2 px-3 rounded-xl bg-[#B7F36B] hover:brightness-95 text-[#101114] border border-[#101114] font-black text-xs flex items-center justify-center gap-1.5 transition-all"
                           >
                             <MessageSquare className="w-4 h-4" />
@@ -2914,7 +2914,7 @@ export default function App() {
                             handleSetDriverDisponibilidad('desocupado');
                             setIsProfileDropdownOpen(false);
                           }}
-                          title="Finalizar viaje activo y mostrarse disponible nuevamente"
+                          title="Pasar a Disponible"
                           className="w-full min-h-[44px] py-2.5 px-3 rounded-xl bg-[#B7F36B] hover:brightness-95 text-[#101114] border-2 border-[#101114] font-black text-xs flex items-center justify-center gap-2 active:scale-95 transition-all cursor-pointer"
                         >
                           <CheckCircle2 className="w-4 h-4 text-[#101114] stroke-[2.5]" />
@@ -2927,7 +2927,7 @@ export default function App() {
                             handleSetDriverDisponibilidad('ocupado');
                             setIsProfileDropdownOpen(false);
                           }}
-                          title="Cambiar estado a ocupado durante un viaje"
+                          title="Pasar a Ocupado"
                           className="w-full min-h-[44px] py-2 px-3 rounded-xl bg-[#FFF19A] hover:brightness-95 text-[#101114] border-2 border-[#101114] font-black text-xs flex items-center justify-center gap-1.5 active:scale-95 transition-all cursor-pointer"
                         >
                           <Zap className="w-4 h-4 text-[#101114]" />
@@ -2952,7 +2952,7 @@ export default function App() {
                           setEmailVerificationFocusTick((n) => n + 1);
                           setIsAuthModalOpen(true);
                         }}
-                        title="Ir a verificar tu correo electrónico pendiente"
+                        title="Verificar correo"
                         className="w-full min-h-[42px] text-left px-3 py-2 rounded-xl text-xs font-black text-[#101114] bg-[#FFF19A] hover:brightness-95 border border-[#101114] flex items-center gap-2 transition-all cursor-pointer"
                       >
                         <Mail className="w-4 h-4 text-[#101114]" />
@@ -2967,7 +2967,7 @@ export default function App() {
                         setAuthModalDefaultMode('profile');
                         setIsAuthModalOpen(true);
                       }}
-                      title="Ver o editar mi información personal y preferencias de perfil"
+                      title="Editar mi perfil"
                       className="w-full min-h-[44px] text-left px-3 py-2 rounded-xl text-xs font-bold text-white hover:bg-[#101114] border border-white/10 flex items-center gap-2 transition-all cursor-pointer"
                     >
                       <UserIcon className="w-4 h-4 text-[#FFF19A]" />
@@ -2990,7 +2990,7 @@ export default function App() {
                         } catch {}
                         showToast('Sesión cerrada');
                       }}
-                      title="Cerrar sesión de forma segura en este dispositivo"
+                      title="Cerrar sesión"
                       className="w-full min-h-[44px] text-left px-3 py-2 rounded-xl text-xs font-bold text-rose-300 hover:text-rose-200 hover:bg-rose-500/10 border border-rose-500/20 flex items-center gap-2 transition-all cursor-pointer"
                     >
                       <LogOut className="w-4 h-4 text-rose-400" />
@@ -3004,7 +3004,7 @@ export default function App() {
             <button
               onClick={() => setIsAuthModalOpen(true)}
               className="min-h-[44px] px-3 rounded-xl bg-[#FFF19A] text-[#101114] border-2 border-[#101114] text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer active:scale-95"
-              title="Crear un perfil en Firebase y autenticar por correo"
+              title="Crear o ingresar a mi perfil"
             >
               <UserIcon className="w-4 h-4 text-[#101114]" />
               <span>Hacerse un Perfil</span>
@@ -3112,7 +3112,7 @@ export default function App() {
             <button
               type="button"
               onClick={() => setSectionInfoModal('map')}
-              title="Ver funcionalidades de la sección Mapa"
+              title="Info del mapa"
               aria-label="Información de Mapa en Vivo"
               className="absolute top-3 left-3 z-20 w-7 h-7 rounded-full bg-[#202329]/90 backdrop-blur-md border border-white/25 hover:border-[#FFF19A] text-[#FFF19A] shadow-[0_2px_8px_rgba(0,0,0,0.5)] flex items-center justify-center cursor-pointer active:scale-95 transition-all"
             >
@@ -3153,7 +3153,7 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => setActiveMapGlassRideId(myLiveActiveSolicitud.id)}
-                  title="Tocar para ver el detalle y Código de Viaje"
+                  title="Ver Código de Viaje"
                   className="absolute top-14 left-3 z-[48] px-3 py-2 rounded-2xl bg-[#101114]/95 border-2 border-[#FFF19A] text-white shadow-[0_6px_18px_rgba(0,0,0,0.65)] flex items-center gap-2 cursor-pointer active:scale-95 transition-all"
                 >
                   <KeyRound className="w-4 h-4 text-[#FFF19A] shrink-0" />
@@ -3179,7 +3179,7 @@ export default function App() {
                       setActiveTab('taxi');
                     }}
                     className="flex items-center gap-2.5 flex-1 min-w-0 text-left cursor-pointer group"
-                    title="Ir a Taxis & Motos para solicitar este vehículo disponible"
+                    title="Ir a Taxis & Motos"
                   >
                     <div className="w-10 h-10 rounded-xl bg-[#B7F36B] text-[#101114] flex items-center justify-center shrink-0 border border-[#101114]">
                       {desocupadoMapPopup.vehicleType === 'moto' ? (
@@ -3320,7 +3320,7 @@ export default function App() {
                             solicitudId: unratedCompletedPassengerRide.id,
                           });
                         }}
-                        title="Calificar ahora a este prestador para ayudar a la comunidad"
+                        title="Calificar prestador"
                         className="min-h-[38px] px-3 py-1.5 rounded-xl uppa-cta-yellow uppa-calificar-destello font-black text-xs flex items-center gap-1.5 cursor-pointer"
                       >
                         <Star className="w-3.5 h-3.5 fill-[#101114]" />
@@ -3330,7 +3330,7 @@ export default function App() {
                         type="button"
                         onClick={() => setDismissedRateBannerId(unratedCompletedPassengerRide.id)}
                         className="w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-[#9299A5] hover:text-white flex items-center justify-center cursor-pointer"
-                        title="Cerrar aviso"
+                        title="Cerrar"
                         aria-label="Cerrar aviso"
                       >
                         <X className="w-3.5 h-3.5" />
@@ -3433,7 +3433,7 @@ export default function App() {
           <div className="p-2.5 rounded-2xl bg-[#202329] border-2 border-[#FFF19A]/45 shadow-[4px_4px_0px_#101114] flex items-center justify-between gap-2.5 text-xs">
             <button
               onClick={() => setActiveTab('chat')}
-              title="Abrir el chat comunitario en tiempo real"
+              title="Abrir Chat"
               className="flex items-center gap-2.5 flex-1 min-w-0 text-left cursor-pointer group"
             >
               <div className="w-8 h-8 rounded-xl bg-[#101114] text-[#FFF19A] flex items-center justify-center shrink-0 border border-white/15">
@@ -3456,7 +3456,7 @@ export default function App() {
 
             <button
               onClick={() => setActiveTab('chat')}
-              title="Ir directamente al chat comunitario"
+              title="Ver Chat"
               className="min-h-[38px] px-3 py-1.5 rounded-xl bg-[#FFF19A] hover:brightness-95 text-[#101114] border border-[#101114] font-black text-xs shrink-0 cursor-pointer active:scale-95 transition-all flex items-center gap-1"
             >
               <span>Ver Chat</span>
@@ -3465,7 +3465,7 @@ export default function App() {
             <button
               onClick={() => setDismissedChatMsgId(latestCommunityMessage.id)}
               className="p-2 rounded-lg text-[#9299A5] hover:text-white hover:bg-[#101114] transition-colors shrink-0 cursor-pointer"
-              title="Ocultar aviso de chat flotante"
+              title="Cerrar aviso"
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -3485,23 +3485,23 @@ export default function App() {
               playMicroSound('ui_tap');
               setActiveTab('map');
             }}
-            title="Ver mapa en vivo, recorridos y colectivos"
-            className={`flex-1 min-w-0 min-h-[48px] py-1 px-0.5 sm:px-1 rounded-xl flex flex-col items-center justify-center transition-all cursor-pointer group active:scale-95 ${
+            title="Mapa en vivo"
+            aria-label="Mapa en vivo"
+            className={`flex-1 min-w-0 min-h-[48px] py-1 px-0.5 rounded-xl flex items-center justify-center transition-all cursor-pointer group active:scale-95 ${
               activeTab === 'map'
-                ? 'text-[#FFF19A] font-black'
+                ? 'text-[#FFF19A]'
                 : 'text-[#9299A5] hover:text-white'
             }`}
           >
             <div
-              className={`p-1.5 rounded-lg transition-all border ${
+              className={`p-2 rounded-xl transition-all border ${
                 activeTab === 'map'
                   ? 'bg-[#FFF19A] border-[#FFF19A] text-[#101114] shadow-[0_0_10px_rgba(255,241,154,0.35)]'
                   : 'bg-[#202329] border-white/20 text-[#9299A5] group-hover:text-[#FFF19A] group-hover:border-[#FFF19A] group-hover:shadow-[0_0_10px_rgba(255,241,154,0.45)]'
               }`}
             >
-              <Bus className="w-4 h-4" />
+              <Bus className="w-[18px] h-[18px]" />
             </div>
-            <span className="text-[10px] tracking-tight mt-0.5 font-bold">Mapa</span>
           </button>
 
           {/* Botón 2: Mi ubicación */}
@@ -3516,15 +3516,13 @@ export default function App() {
                 showToast('Centrando en tu ubicación GPS');
               }
             }}
-            className="flex-1 min-w-0 min-h-[48px] py-1 px-0.5 sm:px-1 rounded-xl flex flex-col items-center justify-center transition-all cursor-pointer text-[#9299A5] hover:text-white group active:scale-95"
-            title="Centrar el mapa en mi ubicación GPS actual"
+            className="flex-1 min-w-0 min-h-[48px] py-1 px-0.5 rounded-xl flex items-center justify-center transition-all cursor-pointer text-[#9299A5] hover:text-white group active:scale-95"
+            title="Mi ubicación GPS"
+            aria-label="Mi ubicación GPS"
           >
-            <div className="p-1.5 rounded-lg bg-[#202329] border border-white/20 group-hover:border-[#FFF19A] group-hover:shadow-[0_0_10px_rgba(255,241,154,0.45)] text-[#B7F36B] transition-all">
-              <Navigation className="w-4 h-4" />
+            <div className="p-2 rounded-xl bg-[#202329] border border-white/20 group-hover:border-[#FFF19A] group-hover:shadow-[0_0_10px_rgba(255,241,154,0.45)] text-[#B7F36B] transition-all">
+              <Navigation className="w-[18px] h-[18px]" />
             </div>
-            <span className="text-[9px] sm:text-[9.5px] tracking-tight mt-0.5 font-bold whitespace-nowrap text-[#9299A5] group-hover:text-white">
-              Mi ubicacion
-            </span>
           </button>
 
           {/* Botón 3: Enfocar */}
@@ -3535,15 +3533,13 @@ export default function App() {
               window.dispatchEvent(new CustomEvent('uppa-map-fit-route'));
               showToast('Enfocando traza completa Malvinas ↔ Zárate');
             }}
-            className="flex-1 min-w-0 min-h-[48px] py-1 px-0.5 sm:px-1 rounded-xl flex flex-col items-center justify-center transition-all cursor-pointer text-[#9299A5] hover:text-white group active:scale-95"
-            title="Enfocar el recorrido completo en el mapa"
+            className="flex-1 min-w-0 min-h-[48px] py-1 px-0.5 rounded-xl flex items-center justify-center transition-all cursor-pointer text-[#9299A5] hover:text-white group active:scale-95"
+            title="Enfocar recorrido"
+            aria-label="Enfocar recorrido"
           >
-            <div className="p-1.5 rounded-lg bg-[#202329] border border-white/20 group-hover:border-[#FFF19A] group-hover:shadow-[0_0_10px_rgba(255,241,154,0.45)] text-white group-hover:text-[#FFF19A] transition-all">
-              <Maximize2 className="w-4 h-4" />
+            <div className="p-2 rounded-xl bg-[#202329] border border-white/20 group-hover:border-[#FFF19A] group-hover:shadow-[0_0_10px_rgba(255,241,154,0.45)] text-white group-hover:text-[#FFF19A] transition-all">
+              <Maximize2 className="w-[18px] h-[18px]" />
             </div>
-            <span className="text-[9.5px] sm:text-[10px] tracking-tight mt-0.5 font-bold whitespace-nowrap text-[#9299A5] group-hover:text-white">
-              Enfocar
-            </span>
           </button>
 
           {/* Tab 4: Taxi & Motos */}
@@ -3552,26 +3548,24 @@ export default function App() {
               playMicroSound('ui_tap');
               setActiveTab('taxi');
             }}
-            title="Ir a Taxis & Motos para pedir o ver prestadores habilitados"
-            className={`flex-1 min-w-0 min-h-[48px] py-1 px-0.5 sm:px-1 rounded-xl flex flex-col items-center justify-center transition-all cursor-pointer group active:scale-95 ${
+            title="Taxis & Motos"
+            aria-label="Taxis & Motos"
+            className={`flex-1 min-w-0 min-h-[48px] py-1 px-0.5 rounded-xl flex items-center justify-center transition-all cursor-pointer group active:scale-95 ${
               activeTab === 'taxi'
-                ? 'text-[#B7F36B] font-black'
+                ? 'text-[#B7F36B]'
                 : 'text-[#9299A5] hover:text-white'
             }`}
           >
             <div
-              className={`p-1.5 rounded-lg transition-all flex items-center -space-x-1 border ${
+              className={`p-2 rounded-xl transition-all flex items-center -space-x-1 border ${
                 activeTab === 'taxi'
                   ? 'bg-[#B7F36B] border-[#B7F36B] text-[#101114] shadow-[0_0_10px_rgba(183,243,107,0.35)]'
                   : 'bg-[#202329] border-white/20 text-[#9299A5] group-hover:text-[#FFF19A] group-hover:border-[#FFF19A] group-hover:shadow-[0_0_10px_rgba(255,241,154,0.45)]'
               }`}
             >
-              <Bike className="w-3.5 h-3.5" />
-              <Car className="w-3.5 h-3.5" />
+              <Bike className="w-4 h-4" />
+              <Car className="w-4 h-4" />
             </div>
-            <span className="text-[9.5px] sm:text-[10px] tracking-tight mt-0.5 font-bold whitespace-nowrap">
-              Taxi &amp; Motos
-            </span>
           </button>
 
           {/* Tab 5: Chat Comunitario */}
@@ -3580,28 +3574,28 @@ export default function App() {
               playMicroSound('ui_tap');
               setActiveTab('chat');
             }}
-            title="Abrir el chat comunitario de pasajeros y prestadores"
-            className={`flex-1 min-w-0 min-h-[48px] py-1 px-0.5 sm:px-1 rounded-xl flex flex-col items-center justify-center transition-all cursor-pointer relative group active:scale-95 ${
+            title="Chat comunitario"
+            aria-label="Chat comunitario"
+            className={`flex-1 min-w-0 min-h-[48px] py-1 px-0.5 rounded-xl flex items-center justify-center transition-all cursor-pointer relative group active:scale-95 ${
               activeTab === 'chat'
-                ? 'text-[#FFF19A] font-black'
+                ? 'text-[#FFF19A]'
                 : 'text-[#9299A5] hover:text-white'
             }`}
           >
             <div
-              className={`p-1.5 rounded-lg transition-all relative border ${
+              className={`p-2 rounded-xl transition-all relative border ${
                 activeTab === 'chat'
                   ? 'bg-[#FFF19A] border-[#FFF19A] text-[#101114] shadow-[0_0_10px_rgba(255,241,154,0.35)]'
                   : 'bg-[#202329] border-white/20 text-[#9299A5] group-hover:text-[#FFF19A] group-hover:border-[#FFF19A] group-hover:shadow-[0_0_10px_rgba(255,241,154,0.45)]'
               }`}
             >
-              <MessageSquare className="w-4 h-4" />
+              <MessageSquare className="w-[18px] h-[18px]" />
               {communityChatList.length > 0 && (
                 <span className="absolute -top-1 -right-1 px-1 py-0.2 rounded-full bg-[#B7F36B] text-[#101114] font-black text-[8.5px] min-w-3.5 text-center border border-[#101114]">
                   {communityChatList.length}
                 </span>
               )}
             </div>
-            <span className="text-[9.5px] sm:text-[10px] tracking-tight mt-0.5 font-bold">Chat</span>
           </button>
 
           {/* Tab 6: Ticket de consulta */}
@@ -3613,22 +3607,21 @@ export default function App() {
             }}
             title="Ticket de consulta"
             aria-label="Ticket de consulta"
-            className={`flex-1 min-w-0 min-h-[48px] py-1 px-0.5 rounded-xl flex flex-col items-center justify-center transition-all cursor-pointer group active:scale-95 ${
+            className={`flex-1 min-w-0 min-h-[48px] py-1 px-0.5 rounded-xl flex items-center justify-center transition-all cursor-pointer group active:scale-95 ${
               isTicketModalOpen
-                ? 'text-[#FFF19A] font-black'
+                ? 'text-[#FFF19A]'
                 : 'text-[#9299A5] hover:text-white'
             }`}
           >
             <div
-              className={`p-1.5 rounded-lg transition-all border ${
+              className={`p-2 rounded-xl transition-all border ${
                 isTicketModalOpen
                   ? 'bg-[#FFF19A] border-[#FFF19A] text-[#101114] shadow-[0_0_10px_rgba(255,241,154,0.35)]'
                   : 'bg-[#202329] border-white/20 text-[#9299A5] group-hover:text-[#FFF19A] group-hover:border-[#FFF19A] group-hover:shadow-[0_0_10px_rgba(255,241,154,0.45)]'
               }`}
             >
-              <Ticket className="w-4 h-4" />
+              <Ticket className="w-[18px] h-[18px]" />
             </div>
-            <span className="text-[9.5px] sm:text-[10px] tracking-tight mt-0.5 font-bold whitespace-nowrap">Ticket</span>
           </button>
 
           {/* Botón Compartir QR (solo icono, sin texto, entre Ticket y Admin) */}
@@ -3638,9 +3631,9 @@ export default function App() {
               playMicroSound('ui_tap');
               setIsShareQrModalOpen(true);
             }}
-            title="Compartir App UPPA con código QR"
-            aria-label="Compartir App UPPA con código QR"
-            className="shrink-0 min-h-[48px] px-1 sm:px-1.5 rounded-xl flex items-center justify-center transition-all cursor-pointer group active:scale-95"
+            title="Compartir QR"
+            aria-label="Compartir QR"
+            className="flex-1 min-w-0 min-h-[48px] py-1 px-0.5 rounded-xl flex items-center justify-center transition-all cursor-pointer group active:scale-95"
           >
             <div
               className={`p-2 rounded-xl transition-all border ${
@@ -3649,7 +3642,7 @@ export default function App() {
                   : 'bg-[#202329] border-[#B7F36B]/45 text-[#B7F36B] group-hover:border-[#B7F36B] group-hover:shadow-[0_0_12px_rgba(183,243,107,0.45)]'
               }`}
             >
-              <QrCode className="w-5 h-5" />
+              <QrCode className="w-[18px] h-[18px]" />
             </div>
           </button>
 
@@ -3659,23 +3652,23 @@ export default function App() {
               playMicroSound('ui_tap');
               setActiveTab('admin');
             }}
-            title="Abrir el panel de Administración UPPA"
-            className={`flex-1 min-w-0 min-h-[48px] py-1 px-0.5 rounded-xl flex flex-col items-center justify-center transition-all cursor-pointer group active:scale-95 ${
+            title="Panel Admin"
+            aria-label="Panel Admin"
+            className={`flex-1 min-w-0 min-h-[48px] py-1 px-0.5 rounded-xl flex items-center justify-center transition-all cursor-pointer group active:scale-95 ${
               activeTab === 'admin'
-                ? 'text-[#FFF19A] font-black'
+                ? 'text-[#FFF19A]'
                 : 'text-[#9299A5] hover:text-white'
             }`}
           >
             <div
-              className={`p-1.5 rounded-lg transition-all border ${
+              className={`p-2 rounded-xl transition-all border ${
                 activeTab === 'admin'
                   ? 'bg-[#FFF19A] border-[#FFF19A] text-[#101114] shadow-[0_0_10px_rgba(255,241,154,0.35)]'
                   : 'bg-[#202329] border-white/20 text-[#9299A5] group-hover:text-[#FFF19A] group-hover:border-[#FFF19A] group-hover:shadow-[0_0_10px_rgba(255,241,154,0.45)]'
               }`}
             >
-              <Shield className="w-4 h-4" />
+              <Shield className="w-[18px] h-[18px]" />
             </div>
-            <span className="text-[9.5px] sm:text-[10px] tracking-tight mt-0.5 font-bold whitespace-nowrap">Admin</span>
           </button>
         </div>
       </nav>
@@ -3862,7 +3855,7 @@ export default function App() {
           <div className="w-full max-w-4xl max-h-[95vh] overflow-y-auto bg-[#101114] border-2 border-[#FFF19A]/40 rounded-3xl relative shadow-[6px_6px_0px_#202329]">
             <button
               onClick={() => setIsLoginModalOpen(false)}
-              title="Cerrar ventana de inicio de sesión"
+              title="Cerrar"
               className="absolute top-4 right-4 z-20 w-11 h-11 rounded-xl bg-[#202329] hover:border-[#FFF19A] border border-white/15 text-white flex items-center justify-center transition-colors cursor-pointer"
             >
               <X className="w-5 h-5" />

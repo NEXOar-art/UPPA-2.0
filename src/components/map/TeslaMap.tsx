@@ -239,17 +239,17 @@ export const EVENT_FILTER_CATEGORIES: {
   ring: string;
   bg: string;
 }[] = [
-  { key: 'bus_location', icon: '📍', tooltip: 'Ubicación del Colectivo (En vivo)', ring: 'ring-cyan-400/60', bg: 'bg-cyan-500/25 text-cyan-200 border-cyan-500/50 shadow-cyan-500/30' },
-  { key: 'accident', icon: '💥', tooltip: 'Accidentes en calzada', ring: 'ring-red-400/60', bg: 'bg-red-500/25 text-red-200 border-red-500/50 shadow-red-500/30' },
-  { key: 'late', icon: '⏳', tooltip: 'Demoras prolongadas', ring: 'ring-yellow-400/60', bg: 'bg-yellow-500/25 text-yellow-200 border-yellow-500/50 shadow-yellow-500/30' },
-  { key: 'traffic', icon: '🚗', tooltip: 'Congestión y tránsito lento', ring: 'ring-orange-400/60', bg: 'bg-orange-500/25 text-orange-200 border-orange-500/50 shadow-orange-500/30' },
-  { key: 'corte', icon: '🚧', tooltip: 'Cortes de calle y desvíos', ring: 'ring-purple-400/60', bg: 'bg-purple-500/25 text-purple-200 border-purple-500/50 shadow-purple-500/30' },
-  { key: 'control', icon: '👮', tooltip: 'Controles policiales o de tránsito', ring: 'ring-indigo-400/60', bg: 'bg-indigo-500/25 text-indigo-200 border-indigo-500/50 shadow-indigo-500/30' },
-  { key: 'breakdown', icon: '🔧', tooltip: 'Unidades averiadas', ring: 'ring-rose-400/60', bg: 'bg-rose-500/25 text-rose-200 border-rose-500/50 shadow-rose-500/30' },
-  { key: 'missed', icon: '❌', tooltip: 'No paró / Colectivo lleno', ring: 'ring-amber-400/60', bg: 'bg-amber-500/25 text-amber-200 border-amber-500/50 shadow-amber-500/30' },
-  { key: 'inundacion', icon: '🌧️', tooltip: 'Calles anegadas o pozos', ring: 'ring-cyan-400/60', bg: 'bg-cyan-500/25 text-cyan-200 border-cyan-500/50 shadow-cyan-500/30' },
-  { key: 'moving', icon: '⚡', tooltip: 'Servicio normal y fluido', ring: 'ring-emerald-400/60', bg: 'bg-emerald-500/25 text-emerald-200 border-emerald-500/50 shadow-emerald-500/30' },
-  { key: 'other', icon: '⚠️', tooltip: 'Alertas generales y otros', ring: 'ring-amber-400/60', bg: 'bg-amber-500/25 text-amber-200 border-amber-500/50 shadow-amber-500/30' },
+  { key: 'bus_location', icon: '📍', tooltip: 'Colectivo en vivo', ring: 'ring-cyan-400/60', bg: 'bg-cyan-500/25 text-cyan-200 border-cyan-500/50 shadow-cyan-500/30' },
+  { key: 'accident', icon: '💥', tooltip: 'Accidentes', ring: 'ring-red-400/60', bg: 'bg-red-500/25 text-red-200 border-red-500/50 shadow-red-500/30' },
+  { key: 'late', icon: '⏳', tooltip: 'Demoras', ring: 'ring-yellow-400/60', bg: 'bg-yellow-500/25 text-yellow-200 border-yellow-500/50 shadow-yellow-500/30' },
+  { key: 'traffic', icon: '🚗', tooltip: 'Tránsito lento', ring: 'ring-orange-400/60', bg: 'bg-orange-500/25 text-orange-200 border-orange-500/50 shadow-orange-500/30' },
+  { key: 'corte', icon: '🚧', tooltip: 'Cortes y desvíos', ring: 'ring-purple-400/60', bg: 'bg-purple-500/25 text-purple-200 border-purple-500/50 shadow-purple-500/30' },
+  { key: 'control', icon: '👮', tooltip: 'Controles', ring: 'ring-indigo-400/60', bg: 'bg-indigo-500/25 text-indigo-200 border-indigo-500/50 shadow-indigo-500/30' },
+  { key: 'breakdown', icon: '🔧', tooltip: 'Averías', ring: 'ring-rose-400/60', bg: 'bg-rose-500/25 text-rose-200 border-rose-500/50 shadow-rose-500/30' },
+  { key: 'missed', icon: '❌', tooltip: 'No paró / Lleno', ring: 'ring-amber-400/60', bg: 'bg-amber-500/25 text-amber-200 border-amber-500/50 shadow-amber-500/30' },
+  { key: 'inundacion', icon: '🌧️', tooltip: 'Calles anegadas', ring: 'ring-cyan-400/60', bg: 'bg-cyan-500/25 text-cyan-200 border-cyan-500/50 shadow-cyan-500/30' },
+  { key: 'moving', icon: '⚡', tooltip: 'Servicio fluido', ring: 'ring-emerald-400/60', bg: 'bg-emerald-500/25 text-emerald-200 border-emerald-500/50 shadow-emerald-500/30' },
+  { key: 'other', icon: '⚠️', tooltip: 'Otras alertas', ring: 'ring-amber-400/60', bg: 'bg-amber-500/25 text-amber-200 border-amber-500/50 shadow-amber-500/30' },
 ];
 
 interface TrajectoryResult {
@@ -839,7 +839,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
             ${station.details}
           </div>
           <div style="margin-top: 8px;">
-            <a href="https://www.google.com/maps/dir/?api=1&destination=${station.lat},${station.lng}" target="_blank" rel="noopener noreferrer" title="Abrir ruta GPS en Google Maps hacia ${station.name}" style="display: block; text-align: center; background: #FFF19A; color: #101114; font-size: 11px; font-weight: 800; padding: 6px 10px; border-radius: 8px; text-decoration: none;">
+            <a href="https://www.google.com/maps/dir/?api=1&destination=${station.lat},${station.lng}" target="_blank" rel="noopener noreferrer" title="Abrir Google Maps" style="display: block; text-align: center; background: #FFF19A; color: #101114; font-size: 11px; font-weight: 800; padding: 6px 10px; border-radius: 8px; text-decoration: none;">
               Llevarme a esta Estación ➔
             </a>
           </div>
@@ -890,7 +890,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
             ${school.details}
           </div>
           <div style="margin-top: 8px;">
-            <a href="https://www.google.com/maps/dir/?api=1&destination=${school.lat},${school.lng}" target="_blank" rel="noopener noreferrer" title="Abrir ruta GPS en Google Maps hacia ${school.name}" style="display: block; text-align: center; background: #FFF19A; color: #101114; font-size: 11px; font-weight: 800; padding: 6px 10px; border-radius: 8px; text-decoration: none;">
+            <a href="https://www.google.com/maps/dir/?api=1&destination=${school.lat},${school.lng}" target="_blank" rel="noopener noreferrer" title="Abrir Google Maps" style="display: block; text-align: center; background: #FFF19A; color: #101114; font-size: 11px; font-weight: 800; padding: 6px 10px; border-radius: 8px; text-decoration: none;">
               Llevarme a esta Escuela ➔
             </a>
           </div>
@@ -1901,7 +1901,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
             🏁 Destino: ${activeTrackingPassenger.destino}
           </div>
           <div style="margin-top: 8px;">
-            <a href="https://www.google.com/maps/dir/?api=1&destination=${passengerLat},${passengerLng}&travelmode=driving" target="_blank" rel="noopener noreferrer" title="Abrir navegación GPS en Google Maps hasta el pasajero" style="display: block; text-align: center; background: #B7F36B; color: #101114; font-size: 11px; font-weight: 800; padding: 6px 10px; border-radius: 8px; text-decoration: none;">
+            <a href="https://www.google.com/maps/dir/?api=1&destination=${passengerLat},${passengerLng}&travelmode=driving" target="_blank" rel="noopener noreferrer" title="Abrir Google Maps" style="display: block; text-align: center; background: #B7F36B; color: #101114; font-size: 11px; font-weight: 800; padding: 6px 10px; border-radius: 8px; text-decoration: none;">
               Iniciar Guía GPS en Google Maps ➔
             </a>
           </div>
@@ -2057,7 +2057,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
                 ? 'bg-[#FFF19A] text-[#101114] border-[#101114]'
                 : 'bg-[#202329]/90 text-[#9299A5] border-white/15 opacity-70 hover:opacity-100 grayscale'
             }`}
-            title={showStops ? 'Ocultar paradas de colectivo en el mapa' : 'Mostrar paradas de colectivo en el mapa'}
+            title={showStops ? 'Ocultar paradas' : 'Mostrar paradas'}
           >
             <span className="leading-none select-none">🚏</span>
           </button>
@@ -2077,7 +2077,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
                 </div>
                 <button
                   onClick={() => setIsStopsPanelOpen(false)}
-                  title="Cerrar listado de paradas"
+                  title="Cerrar"
                   className="w-8 h-8 rounded-lg bg-[#101114] border border-white/10 hover:border-[#FFF19A] text-[#9299A5] hover:text-white flex items-center justify-center cursor-pointer transition-colors"
                 >
                   <X className="w-4 h-4" />
@@ -2148,7 +2148,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
                             setIsStopsPanelOpen(false);
                           }}
                           className="flex-1 min-h-[40px] py-1.5 px-2.5 rounded-xl bg-[#B7F36B] hover:brightness-95 text-[#101114] border border-[#101114] font-black text-[11px] flex items-center justify-center gap-1.5 active:scale-95 transition-all cursor-pointer"
-                          title="Iniciar guía GPS hacia esta parada"
+                          title="Guía GPS"
                         >
                           <Navigation className="w-3.5 h-3.5 text-[#101114]" />
                           <span>Llevarme a esta ubicación</span>
@@ -2163,7 +2163,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
                             setIsStopsPanelOpen(false);
                           }}
                           className="min-h-[40px] min-w-[40px] p-2 rounded-xl bg-[#202329] border border-white/15 hover:border-[#FFF19A] text-[#FFF19A] flex items-center justify-center cursor-pointer"
-                          title="Centrar esta parada en el mapa"
+                          title="Centrar parada"
                         >
                           <MapPin className="w-4 h-4" />
                         </button>
@@ -2191,7 +2191,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
               ? 'bg-[#FFF19A] text-[#101114] border-[#101114]'
               : 'bg-[#202329]/90 text-[#9299A5] border-white/15 opacity-70 hover:opacity-100 grayscale'
           }`}
-          title={showGasStations ? 'Ocultar estaciones de servicio' : 'Mostrar estaciones de servicio en el mapa'}
+          title={showGasStations ? 'Ocultar estaciones' : 'Mostrar estaciones'}
         >
           <span className="leading-none select-none">⛽</span>
         </button>
@@ -2211,7 +2211,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
               ? 'bg-[#FFF19A] text-[#101114] border-[#101114]'
               : 'bg-[#202329]/90 text-[#9299A5] border-white/15 opacity-70 hover:opacity-100 grayscale'
           }`}
-          title={showSchools ? 'Ocultar colegios e instituciones' : 'Mostrar colegios e instituciones en el mapa'}
+          title={showSchools ? 'Ocultar escuelas' : 'Mostrar escuelas'}
         >
           <span className="leading-none select-none">🏫</span>
         </button>
@@ -2229,7 +2229,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
                 ? 'bg-[#B7F36B] text-[#101114] border-[#101114]'
                 : 'bg-[#202329]/90 text-[#9299A5] border-white/15 opacity-70 hover:opacity-100 grayscale'
             }`}
-            title={showTaxis ? 'Ocultar autos y motos en el mapa' : 'Mostrar autos y motos en el mapa'}
+            title={showTaxis ? 'Ocultar prestadores' : 'Mostrar prestadores'}
           >
             <span className="leading-none select-none">🚕</span>
           </button>
@@ -2252,7 +2252,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
                 ? 'bg-[#FFF19A] text-[#101114] border-[#101114]'
                 : 'bg-[#202329]/95 text-white border-white/15 hover:border-[#FFF19A]'
             }`}
-            title="Filtrar capas y categorías de eventos en el mapa"
+            title="Filtros del mapa"
           >
             <SlidersHorizontal className="w-4 h-4" />
           </button>
@@ -2278,7 +2278,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
                         ? 'bg-[#B7F36B] text-[#101114] border-[#101114]'
                         : 'bg-[#101114] text-[#9299A5] border-white/10'
                     }`}
-                    title={showEvents ? 'Ocultar todos los eventos del mapa' : 'Mostrar todos los eventos en el mapa'}
+                    title={showEvents ? 'Ocultar eventos' : 'Mostrar eventos'}
                   >
                     {showEvents ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
                   </button>
@@ -2306,7 +2306,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
                       });
                     }}
                     className="w-8 h-8 rounded-lg bg-[#101114] hover:border-[#FFF19A] text-[#9299A5] hover:text-white flex items-center justify-center text-xs border border-white/10 transition-all cursor-pointer"
-                    title="Restablecer todas las capas y categorías visibles"
+                    title="Restablecer filtros"
                   >
                     <RotateCcw className="w-4 h-4" />
                   </button>
@@ -2314,7 +2314,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
                   <button
                     onClick={() => setIsEventFilterPanelOpen(false)}
                     className="w-8 h-8 rounded-lg bg-[#101114] hover:border-[#FFF19A] text-[#9299A5] hover:text-white flex items-center justify-center text-xs border border-white/10 transition-colors cursor-pointer"
-                    title="Cerrar panel de filtros"
+                    title="Cerrar"
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -2348,7 +2348,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
                       ? 'bg-[#FFF19A] text-[#101114] border-[#101114]'
                       : 'bg-[#101114] text-[#9299A5] border-white/10 opacity-50 grayscale'
                   }`}
-                  title={showGasStations ? 'Ocultar estaciones de servicio' : 'Mostrar estaciones de servicio'}
+                  title={showGasStations ? 'Ocultar estaciones' : 'Mostrar estaciones'}
                 >
                   <span className="leading-none select-none">⛽</span>
                 </button>
@@ -2375,7 +2375,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
                     setIsEventFilterPanelOpen(false);
                   }}
                   className="w-11 h-11 rounded-xl flex items-center justify-center text-[#FFF19A] bg-[#101114] hover:border-[#FFF19A] border border-white/15 transition-all cursor-pointer active:scale-95"
-                  title="Buscar paradas en lista detallada"
+                  title="Buscar paradas"
                 >
                   <Search className="w-4 h-4" />
                 </button>
@@ -2420,7 +2420,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
                     setIsEventFilterPanelOpen(false);
                   }}
                   className="w-full min-h-[44px] py-2 rounded-xl bg-[#FFF19A] hover:brightness-95 border border-[#101114] text-[#101114] flex items-center justify-center gap-2 text-xs font-black transition-all cursor-pointer"
-                  title="Publicar un nuevo evento o ubicación de colectivo"
+                  title="Publicar evento"
                 >
                   <Plus className="w-4 h-4" />
                   <span>Publicar Evento</span>
@@ -2446,7 +2446,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
               ? 'bg-[#FFF19A] text-[#101114] border-[#101114]'
               : 'bg-[#202329]/95 text-[#FFF19A] border-white/15 hover:border-[#FFF19A]'
           }`}
-          title="Publicar ubicación de colectivo o inconveniente en la ruta"
+          title="Reportar evento"
         >
           <span className="leading-none select-none">⚠️</span>
         </button>
@@ -2486,7 +2486,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
               <button
                 onClick={() => setIsEventsPanelOpen(false)}
                 className="w-10 h-10 rounded-xl bg-[#101114] hover:border-[#FFF19A] border border-white/15 text-[#9299A5] hover:text-white flex items-center justify-center cursor-pointer transition-colors"
-                title="Cerrar ventana de eventos"
+                title="Cerrar"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -2561,7 +2561,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
                             type="button"
                             onClick={() => handleRegisterEventFromDropdown(evOpt, 'hacia_zarate')}
                             className="min-h-[44px] px-3 rounded-xl bg-[#FFF19A] hover:brightness-95 text-[#101114] border border-[#101114] font-black text-xs flex items-center justify-center gap-1.5 active:scale-95 transition-all cursor-pointer"
-                            title="Reportar colectivo en dirección a Zárate"
+                            title="Colectivo hacia Zárate"
                           >
                             <span className="text-sm">➡️</span>
                             <span>Hacia Zárate</span>
@@ -2571,7 +2571,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
                             type="button"
                             onClick={() => handleRegisterEventFromDropdown(evOpt, 'hacia_malvinas')}
                             className="min-h-[44px] px-3 rounded-xl bg-[#B7F36B] hover:brightness-95 text-[#101114] border border-[#101114] font-black text-xs flex items-center justify-center gap-1.5 active:scale-95 transition-all cursor-pointer"
-                            title="Reportar colectivo en dirección a Barrio Malvinas"
+                            title="Colectivo hacia Malvinas"
                           >
                             <span className="text-sm">⬅️</span>
                             <span>Hacia Malvinas</span>
@@ -2587,7 +2587,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
                     key={evOpt.id}
                     onClick={() => handleRegisterEventFromDropdown(evOpt)}
                     className="w-full min-h-[56px] p-3 rounded-xl border border-white/15 bg-[#101114] hover:border-[#FFF19A] text-left transition-all cursor-pointer group active:scale-98 flex items-center gap-3.5"
-                    title={`Publicar alerta: ${evOpt.label}`}
+                    title={evOpt.label}
                   >
                     <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl shrink-0 bg-[#202329] border border-white/10">
                       {evOpt.icon}
@@ -2710,7 +2710,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
                   )}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  title="Contactar a este prestador por WhatsApp"
+                  title="Contactar por WhatsApp"
                   className="flex-1 min-h-[44px] rounded-xl bg-[#B7F36B] hover:brightness-95 text-[#101114] border border-[#101114] font-black text-xs flex items-center justify-center gap-1.5 active:scale-95 transition-all"
                 >
                   <MessageCircle className="w-4 h-4 text-[#101114]" />
@@ -2721,7 +2721,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
                 {onClearTrackingTaxi && (
                   <button
                     onClick={onClearTrackingTaxi}
-                    title="Cerrar seguimiento de ruta en el mapa"
+                    title="Cerrar ruta"
                     className="px-3.5 min-h-[44px] rounded-xl bg-[#101114] border border-white/15 hover:border-[#FFF19A] text-xs font-bold text-white cursor-pointer"
                   >
                     Cerrar
@@ -2761,7 +2761,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
               <button
                 onClick={handleClearStopTrajectory}
                 className="w-8 h-8 rounded-lg bg-[#101114] border border-white/15 hover:border-[#FFF19A] text-[#9299A5] hover:text-white flex items-center justify-center transition-colors cursor-pointer"
-                title="Finalizar guía GPS hacia la parada"
+                title="Finalizar guía GPS"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -2823,7 +2823,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
                     }
                   }}
                   className="flex-1 min-h-[44px] rounded-xl bg-[#FFF19A] hover:brightness-95 text-[#101114] border border-[#101114] font-black text-xs flex items-center justify-center gap-1.5 active:scale-95 transition-all cursor-pointer"
-                  title="Centrar el mapa en la trayectoria hacia la parada"
+                  title="Centrar ruta"
                 >
                   <Maximize2 className="w-3.5 h-3.5" />
                   <span>Centrar</span>
@@ -2834,7 +2834,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
                   target="_blank"
                   rel="noopener noreferrer"
                   className="min-h-[44px] px-3 rounded-xl bg-[#B7F36B] hover:brightness-95 border border-[#101114] text-xs font-black text-[#101114] flex items-center justify-center gap-1.5 shrink-0"
-                  title="Abrir en Google Maps con navegación a pie paso a paso"
+                  title="Abrir Google Maps"
                 >
                   <ExternalLink className="w-3.5 h-3.5 text-[#101114]" />
                   <span>GPS Externo</span>
@@ -2843,7 +2843,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
                 <button
                   onClick={handleClearStopTrajectory}
                   className="px-3 min-h-[44px] rounded-xl bg-[#101114] border border-white/15 hover:border-[#FFF19A] text-xs font-bold text-white cursor-pointer"
-                  title="Finalizar guía hacia esta parada"
+                  title="Finalizar guía"
                 >
                   Finalizar
                 </button>
@@ -2882,7 +2882,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
                 <button
                   onClick={onClearTrackingPassenger}
                   className="w-8 h-8 rounded-lg bg-[#101114] border border-white/15 hover:border-[#FFF19A] text-[#9299A5] hover:text-white flex items-center justify-center transition-colors cursor-pointer"
-                  title="Cerrar panel de guía al pasajero"
+                  title="Cerrar"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -2976,7 +2976,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex-1 min-h-[44px] px-3 rounded-xl bg-[#B7F36B] hover:brightness-95 text-[#101114] border border-[#101114] font-black text-xs flex items-center justify-center gap-1.5 active:scale-95 transition-all cursor-pointer"
-                  title="Abrir en Google Maps con navegación GPS paso a paso hacia el pasajero"
+                  title="Abrir Google Maps"
                 >
                   <Navigation className="w-4 h-4 text-[#101114]" />
                   <span>Google Maps GPS</span>
@@ -2990,7 +2990,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
                     target="_blank"
                     rel="noopener noreferrer"
                     className="min-h-[44px] px-3 rounded-xl bg-[#FFF19A] hover:brightness-95 border border-[#101114] text-[#101114] font-black text-xs flex items-center justify-center gap-1.5 transition-all"
-                    title="Enviar mensaje por WhatsApp al pasajero"
+                    title="WhatsApp pasajero"
                   >
                     <MessageCircle className="w-4 h-4" />
                     <span>WhatsApp</span>
@@ -3001,7 +3001,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
                   <button
                     onClick={onClearTrackingPassenger}
                     className="px-3 min-h-[44px] rounded-xl bg-[#101114] border border-white/15 hover:border-[#FFF19A] text-xs font-bold text-white cursor-pointer"
-                    title="Finalizar navegación hacia el pasajero"
+                    title="Finalizar viaje"
                   >
                     Llegué / Finalizar
                   </button>
@@ -3049,7 +3049,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
               <button
                 onClick={() => setSelectedStop(null)}
                 className="w-8 h-8 rounded-lg bg-[#101114] border border-white/15 hover:border-[#FFF19A] text-[#9299A5] hover:text-white flex items-center justify-center transition-colors shrink-0 cursor-pointer"
-                title="Cerrar detalle de parada"
+                title="Cerrar"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -3092,7 +3092,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
                   setSelectedStop(null);
                 }}
                 className="w-full min-h-[44px] rounded-xl bg-[#B7F36B] hover:brightness-95 text-[#101114] border border-[#101114] font-black text-xs flex items-center justify-center gap-2 active:scale-95 transition-all cursor-pointer"
-                title="Abrir guía GPS directamente en Google Maps hacia esta parada"
+                title="Abrir Google Maps"
               >
                 <Navigation className="w-4 h-4 text-[#101114]" />
                 <span className="tracking-tight text-xs uppercase font-black">IR · Iniciar Guía GPS</span>
@@ -3106,7 +3106,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
                   onOpenPedirTransporte();
                   setSelectedStop(null);
                 }}
-                title="Solicitar un auto o moto desde esta parada"
+                title="Pedir Auto o Moto"
                 className="w-full min-h-[44px] rounded-xl bg-[#FFF19A] hover:brightness-95 border border-[#101114] text-[#101114] font-black text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer"
               >
                 <Zap className="w-4 h-4 fill-[#101114] text-[#101114]" />

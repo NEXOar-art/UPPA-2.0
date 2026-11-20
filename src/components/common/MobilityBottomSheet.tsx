@@ -171,8 +171,8 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
     const delayLabel = delayMinutes === 0 ? 'Sin demora' : `+${delayMinutes}m`;
     const delayHover =
       delayMinutes === 0
-        ? 'Demora estimada actual: Sin demoras registradas. La comunidad reporta circulación habitual en el corredor Línea 228.'
-        : `Demora estimada actual: +${delayMinutes} min sobre el horario base. Calculado por IA a partir de ${incidentCount} alerta(s) viales y ${chatDelayHits} mención(es) en el chat comunitario.`;
+        ? 'Demora: 0 min (sin atrasos)'
+        : `Demora: +${delayMinutes} min (${incidentCount} alerta/s)`;
 
     // 2. Velocidad promedio real
     const recentBusEvents = busEvents
@@ -211,7 +211,7 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
       avgSpeedKmH = Math.max(22, Math.round(avgSpeedKmH * 0.86));
     }
 
-    const speedHover = `Velocidad promedio: ${avgSpeedKmH} km/h (${speedMethodDesc}). Ajustada en tiempo real según alertas de tránsito en Ruta 6 y Colectora.`;
+    const speedHover = `Velocidad promedio: ${avgSpeedKmH} km/h`;
 
     // 3. Próximo arribo (ETA)
     let etaMinutes = 8;
@@ -243,7 +243,7 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
     }
 
     const etaLabel = `${etaPrefix}${etaMinutes}m`;
-    const etaHover = `Próximo arribo estimado: en ${etaMinutes} minuto(s) (${etaSourceNote}). Se actualiza automáticamente con cada reporte de colectivo en el mapa.`;
+    const etaHover = `Próximo arribo: ~${etaMinutes} min`;
 
     // 4. Nivel de ocupación
     const currentDate = new Date(nowTs);
@@ -286,7 +286,7 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
       occupancyTextTone = 'text-rose-300';
     }
 
-    const occupancyHover = `Nivel de ocupación estimado: ${occupancyLabel} (${occupancyScore}% de capacidad estimada). La IA combina comentarios del chat sobre asientos/pasajeros, demoras acumuladas y franja horaria.`;
+    const occupancyHover = `Ocupación: ${occupancyLabel} (${occupancyScore}%)`;
 
     // 5. Predicción de demanda
     let demandScore = isPeakHour ? (isWeekday ? 65 : 50) : 28;
@@ -326,14 +326,14 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
       demandTextTone = 'text-rose-300';
     }
 
-    const demandHover = `Predicción de demanda: ${demandLabel} (${demandScore}% de intensidad). Proyectada con ${pendingRequestsCount} pedido(s) activo(s) de transporte alternativo, reportes en paradas y ritmo horario Zárate–Campana.`;
+    const demandHover = `Demanda: ${demandLabel} (${demandScore}%)`;
 
     const communitySignalsCount = recentEvents.length + recentChat.length + pendingRequestsCount;
     const friendlySummary =
       delayMinutes >= 15
-        ? `Corredor con demoras (+${delayMinutes}m) y ocupación ${occupancyLabel.toLowerCase()}. Conviene anticipar tu salida o evaluar transporte alternativo.`
+        ? `Corredor con demoras (+${delayMinutes}m) y ocupación ${occupancyLabel.toLowerCase()}.`
         : occupancyLabel === 'Alta' || occupancyLabel === 'Muy alta'
-        ? `Unidades circulando a ${avgSpeedKmH} km/h con ocupación ${occupancyLabel.toLowerCase()} y demanda ${demandLabel.toLowerCase()}.`
+        ? `Unidades a ${avgSpeedKmH} km/h · Ocupación ${occupancyLabel.toLowerCase()} y demanda ${demandLabel.toLowerCase()}.`
         : `Corredor estable a ${avgSpeedKmH} km/h · Demanda ${demandLabel.toLowerCase()} y ocupación ${occupancyLabel.toLowerCase()}.`;
 
     return {
@@ -615,7 +615,7 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
                   window.dispatchEvent(new CustomEvent('uppa-map-show-controls'));
                 }}
                 className="relative w-7 h-7 rounded-full uppa-glass-ios border border-white/25 hover:border-[#FFF19A] hover:shadow-[0_0_10px_rgba(255,241,154,0.45)] text-[#FFF19A] flex items-center justify-center cursor-pointer transition-colors uppa-card-enter"
-                title="Modo Mapa Libre · Tocar para ver controles"
+                title="Mostrar controles"
                 aria-label="Modo Mapa Libre · Tocar para ver controles"
               >
                 <SlidersHorizontal className="w-3 h-3" />
@@ -704,11 +704,7 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
           onPointerCancel={handlePointerCancel}
           style={{ touchAction: 'none' }}
           className="w-full pt-2.5 pb-1 rounded-t-3xl flex flex-col items-center justify-center cursor-grab active:cursor-grabbing hover:bg-white/[0.03] transition-colors select-none group"
-          title={
-            isExpanded
-              ? 'Tocar para contraer · Arrastrar hacia abajo para ocultar el panel'
-              : 'Tocar para expandir panel hacia arriba · Arrastrar hacia abajo para ocultar'
-          }
+          title={isExpanded ? 'Contraer panel' : 'Expandir panel'}
         >
           <div className="w-14 h-1.5 bg-[#9299A5]/60 group-hover:bg-[#FFF19A] rounded-full transition-all group-active:w-20" />
           <div className="flex items-center gap-1.5 mt-1 text-[9.5px] font-bold text-[#9299A5] group-hover:text-[#FFF19A] transition-colors">
@@ -741,8 +737,8 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
                   window.dispatchEvent(new CustomEvent('uppa-map-show-controls'));
                 }}
                 className="relative w-7 h-7 rounded-full uppa-glass-ios border border-white/25 hover:border-[#FFF19A] hover:shadow-[0_0_10px_rgba(255,241,154,0.45)] text-[#FFF19A] flex items-center justify-center cursor-pointer transition-colors"
-                title="Modo Mapa Libre · Tocar para ver controles"
-                aria-label="Modo Mapa Libre · Tocar para ver controles"
+                title="Mostrar controles"
+                aria-label="Mostrar controles"
               >
                 <SlidersHorizontal className="w-3 h-3" />
                 <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-[#B7F36B] border border-[#101114] animate-pulse" />
@@ -759,7 +755,7 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
                 window.dispatchEvent(new CustomEvent('uppa-map-show-controls'));
               }}
               className="w-9 h-9 rounded-xl bg-[#101114] hover:border-rose-400 text-[#9299A5] hover:text-rose-300 border border-white/15 flex items-center justify-center transition-colors cursor-pointer"
-              title="Minimizar panel de opciones (x)"
+              title="Minimizar panel"
               aria-label="Minimizar panel"
             >
               <X className="w-4 h-4 stroke-[2.5]" />
@@ -780,7 +776,7 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
                 playMicroSound('ui_tap');
                 onOpenPedirTransporte();
               }}
-              title="Pedir Transporte Alternativo: emití una solicitud rápida de Moto Taxi o Auto Taxi y consultá el ranking de prestadores"
+              title="Pedir Transporte Alternativo"
               aria-label="Pedir Transporte Alternativo"
               className="min-h-[56px] p-2 rounded-2xl bg-[#101114] hover:border-[#FFF19A] border-2 border-[#FFF19A]/45 transition-colors group cursor-pointer flex items-center justify-center"
             >
@@ -799,7 +795,7 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
                 playMicroSound('ui_tap');
                 onOpenTaxis();
               }}
-              title="Taxis & Motos: ver prestadores disponibles en vivo y seguir viajes"
+              title="Taxis & Motos"
               aria-label="Taxis y Motos"
               className="min-h-[56px] p-2 rounded-2xl bg-[#101114] hover:border-[#B7F36B] border-2 border-[#B7F36B]/45 transition-colors group cursor-pointer flex items-center justify-center"
             >
@@ -825,7 +821,7 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
                   onOpenTaxis();
                 }
               }}
-              title="Choferes / Prestar Servicio: habilitá tu Auto o Moto para tomar viajes de la comunidad"
+              title="Choferes: Prestar Servicio"
               aria-label="Choferes - Prestar Servicio"
               className="min-h-[56px] p-2 rounded-2xl bg-[#101114] hover:border-[#FFF19A] border-2 border-white/20 transition-colors group cursor-pointer flex items-center justify-center"
             >
@@ -861,8 +857,8 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
               }}
               title={
                 unreadChatCount > 0
-                  ? `Chat Comunitario: abrir alertas y mensajes en vivo (${unreadChatCount} mensaje(s) reciente(s))`
-                  : 'Chat Comunitario: alertas de pasajeros y choferes en directo'
+                  ? `Chat Comunitario (${unreadChatCount})`
+                  : 'Chat Comunitario'
               }
               aria-label="Chat Comunitario"
               className="relative min-h-[56px] p-2 rounded-2xl bg-[#101114] hover:border-white/60 border-2 border-white/20 transition-colors group cursor-pointer flex items-center justify-center"
@@ -880,7 +876,7 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
             <div className="flex items-center justify-between gap-2">
               <div
                 className="flex items-center gap-2 min-w-0"
-                title={`Corredor Línea 228 en vivo: ${LINEA_228_STOPS.length} paradas geolocalizadas entre Barrio Malvinas, Campana y Zárate · ${corridorAiMetrics.communitySignalsCount} señal(es) comunitaria(s) activa(s)`}
+                title={`Línea 228 · ${LINEA_228_STOPS.length} paradas (${corridorAiMetrics.communitySignalsCount} señales)`}
               >
                 <div className="w-9 h-9 rounded-xl bg-[#202329] text-[#FFF19A] flex items-center justify-center border border-white/15 shrink-0">
                   <Bus className="w-4 h-4" />
@@ -908,13 +904,13 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
                 }}
                 aria-label={
                   isExpanded
-                    ? `Ocultar listado de ${LINEA_228_STOPS.length} paradas de Línea 228`
-                    : `Ver ${LINEA_228_STOPS.length} paradas de Línea 228`
+                    ? `Ocultar ${LINEA_228_STOPS.length} paradas`
+                    : `Ver ${LINEA_228_STOPS.length} paradas`
                 }
                 title={
                   isExpanded
-                    ? `Ocultar listado de ${LINEA_228_STOPS.length} paradas de Línea 228`
-                    : `Ver las ${LINEA_228_STOPS.length} paradas de Línea 228 con buscador predictivo y guía GPS directa a Google Maps`
+                    ? `Ocultar ${LINEA_228_STOPS.length} paradas`
+                    : `Ver ${LINEA_228_STOPS.length} paradas`
                 }
                 className={`min-h-[46px] min-w-[46px] p-1.5 rounded-2xl border-2 transition-colors group cursor-pointer flex items-center justify-center shrink-0 ${
                   isExpanded
@@ -1023,43 +1019,56 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
               </div>
             </div>
 
-            {/* Micro-Banner en movimiento con Lectura IA y métricas en tiempo real */}
+            {/* Micro-Banner en movimiento infinito con Lectura IA y métricas en tiempo real */}
             <div
               className="px-2.5 py-2 rounded-xl bg-[#181B20] border border-white/10 flex items-center gap-2 overflow-hidden cursor-help group"
-              title={`IA Comunitaria en vivo (${corridorAiMetrics.communitySignalsCount} señal(es)): ${corridorAiMetrics.friendlySummary} · Demora: ${corridorAiMetrics.delayLabel} · Velocidad: ${corridorAiMetrics.avgSpeedKmH} km/h · Próximo arribo: ${corridorAiMetrics.etaCompact} · Ocupación: ${corridorAiMetrics.occupancyLabel} · Demanda: ${corridorAiMetrics.demandLabel}`}
+              title={`Lectura IA: ${corridorAiMetrics.delayCompact} · ${corridorAiMetrics.avgSpeedKmH} km/h · Arribo ${corridorAiMetrics.etaCompact}`}
             >
               <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-[#202329] border border-[#B7F36B]/40 text-[9.5px] font-black text-[#B7F36B] shrink-0">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#B7F36B] animate-pulse" />
                 <Sparkles className="w-2.5 h-2.5 text-[#FFF19A]" />
                 <span>IA</span>
               </span>
 
-              <div className="flex-1 min-w-0 overflow-hidden">
+              <div className="flex-1 min-w-0 overflow-hidden [mask-image:linear-gradient(to_right,transparent,black_4%,black_96%,transparent)]">
                 <div className="animate-ai-micro-banner text-[10.5px] font-semibold text-white/95 whitespace-nowrap">
-                  <span className="pr-8">
-                    <strong className="text-[#B7F36B]">Lectura IA:</strong>{' '}
-                    {corridorAiMetrics.friendlySummary} ·{' '}
+                  <span className="inline-flex items-center shrink-0 pr-10">
+                    <strong className="text-[#B7F36B] mr-1">Lectura IA:</strong>
+                    <span>{corridorAiMetrics.friendlySummary}</span>
+                    <span className="mx-1.5 text-white/40">·</span>
                     <span className="text-[#FFF19A] font-bold">
                       Demora {corridorAiMetrics.delayCompact}
-                    </span>{' '}
-                    · {corridorAiMetrics.avgSpeedKmH} km/h ·{' '}
+                    </span>
+                    <span className="mx-1.5 text-white/40">·</span>
+                    <span>{corridorAiMetrics.avgSpeedKmH} km/h</span>
+                    <span className="mx-1.5 text-white/40">·</span>
                     <span className="text-[#B7F36B] font-bold">
                       Arribo {corridorAiMetrics.etaCompact}
-                    </span>{' '}
-                    · Ocupación {corridorAiMetrics.occupancyLabel} · Demanda{' '}
-                    {corridorAiMetrics.demandLabel}
+                    </span>
+                    <span className="mx-1.5 text-white/40">·</span>
+                    <span>Ocupación {corridorAiMetrics.occupancyLabel}</span>
+                    <span className="mx-1.5 text-white/40">·</span>
+                    <span>Demanda {corridorAiMetrics.demandLabel}</span>
+                    <span className="mx-2 text-[#FFF19A]/60">•</span>
                   </span>
-                  <span className="pr-8" aria-hidden="true">
-                    <strong className="text-[#B7F36B]">Lectura IA:</strong>{' '}
-                    {corridorAiMetrics.friendlySummary} ·{' '}
+                  <span className="inline-flex items-center shrink-0 pr-10" aria-hidden="true">
+                    <strong className="text-[#B7F36B] mr-1">Lectura IA:</strong>
+                    <span>{corridorAiMetrics.friendlySummary}</span>
+                    <span className="mx-1.5 text-white/40">·</span>
                     <span className="text-[#FFF19A] font-bold">
                       Demora {corridorAiMetrics.delayCompact}
-                    </span>{' '}
-                    · {corridorAiMetrics.avgSpeedKmH} km/h ·{' '}
+                    </span>
+                    <span className="mx-1.5 text-white/40">·</span>
+                    <span>{corridorAiMetrics.avgSpeedKmH} km/h</span>
+                    <span className="mx-1.5 text-white/40">·</span>
                     <span className="text-[#B7F36B] font-bold">
                       Arribo {corridorAiMetrics.etaCompact}
-                    </span>{' '}
-                    · Ocupación {corridorAiMetrics.occupancyLabel} · Demanda{' '}
-                    {corridorAiMetrics.demandLabel}
+                    </span>
+                    <span className="mx-1.5 text-white/40">·</span>
+                    <span>Ocupación {corridorAiMetrics.occupancyLabel}</span>
+                    <span className="mx-1.5 text-white/40">·</span>
+                    <span>Demanda {corridorAiMetrics.demandLabel}</span>
+                    <span className="mx-2 text-[#FFF19A]/60">•</span>
                   </span>
                 </div>
               </div>
@@ -1093,7 +1102,7 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
                   type="button"
                   onClick={() => setIsExpanded(false)}
                   className="min-h-[36px] px-3 py-1.5 rounded-xl bg-[#FFF19A] text-[#101114] font-black text-xs flex items-center gap-1.5 active:scale-95 transition-all cursor-pointer"
-                  title="Ocultar listado de paradas"
+                  title="Ocultar paradas"
                 >
                   <ChevronUp className="w-3.5 h-3.5 stroke-[3]" />
                   <span>Ocultar</span>
@@ -1106,7 +1115,7 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
                     setIsMinimized(true);
                   }}
                   className="w-9 h-9 rounded-xl bg-[#101114] hover:border-rose-400 text-[#9299A5] hover:text-rose-300 border border-white/15 flex items-center justify-center active:scale-95 transition-all cursor-pointer"
-                  title="Minimizar panel (x)"
+                  title="Minimizar"
                   aria-label="Minimizar panel"
                 >
                   <X className="w-4 h-4 stroke-[2.5]" />
@@ -1133,7 +1142,7 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
                     }
                   }}
                   placeholder="Escribí calle, frase, parada o 'entre Alberdi y Mitre'..."
-                  title="Buscador predictivo: busca por nombre de calle, frase, número de parada (#14) o cruce entre calles (ej: entre Salmini y Bertolini)"
+                  title="Buscar calle, parada o cruce"
                   className="w-full min-h-[42px] bg-[#101114] border-2 border-white/15 focus:border-[#FFF19A] rounded-xl pl-8 pr-9 py-1.5 text-xs text-white placeholder-[#9299A5] focus:outline-none transition-colors"
                 />
                 {searchQuery && (
@@ -1144,7 +1153,7 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
                       searchInputRef.current?.focus();
                     }}
                     className="absolute right-2.5 top-1/2 -translate-y-1/2 w-6 h-6 rounded-lg bg-[#202329] hover:bg-[#FFF19A] text-[#9299A5] hover:text-[#101114] flex items-center justify-center transition-colors cursor-pointer"
-                    title="Limpiar búsqueda"
+                    title="Limpiar"
                     aria-label="Limpiar búsqueda"
                   >
                     <X className="w-3.5 h-3.5" />
@@ -1209,7 +1218,7 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
                               onSelectStop(s.stop!);
                             }}
                             className="px-2 py-1 rounded-lg bg-[#FFF19A] text-[#101114] font-black text-[10px] flex items-center gap-1 shrink-0 cursor-pointer hover:brightness-95"
-                            title={`Ir directo a ${s.stop.name} en el mapa y abrir guía GPS`}
+                            title="Ver en mapa y GPS"
                           >
                             <Navigation className="w-3 h-3" />
                             <span>Ver</span>
@@ -1237,7 +1246,7 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
                         setSelectedZone('all');
                         setSearchQuery(chip.query);
                       }}
-                      title={`Buscar paradas sobre ${chip.label}`}
+                      title={`Buscar ${chip.label}`}
                       className="px-2 py-1 rounded-lg bg-[#181B20] hover:bg-[#FFF19A] text-white/90 hover:text-[#101114] border border-white/15 font-bold shrink-0 transition-colors cursor-pointer"
                     >
                       {chip.label}
@@ -1251,7 +1260,7 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
                 <button
                   type="button"
                   onClick={() => setSelectedZone('all')}
-                  title="Mostrar todas las zonas de paradas"
+                  title="Todas las zonas"
                   className={`min-h-[32px] px-2.5 py-1 rounded-lg font-black shrink-0 transition-all cursor-pointer border ${
                     selectedZone === 'all'
                       ? 'bg-[#FFF19A] border-[#FFF19A] text-[#101114]'
@@ -1265,7 +1274,7 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
                     key={zone}
                     type="button"
                     onClick={() => setSelectedZone(zone)}
-                    title={`Filtrar paradas por zona ${zone}`}
+                    title={`Zona ${zone}`}
                     className={`min-h-[32px] px-2.5 py-1 rounded-lg font-bold shrink-0 transition-all cursor-pointer border ${
                       selectedZone === zone
                         ? 'bg-[#FFF19A] border-[#FFF19A] text-[#101114]'
@@ -1332,7 +1341,7 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
                         onSelectStop(stop);
                       }}
                       className="min-h-[36px] px-2.5 py-1 rounded-lg bg-[#202329] hover:bg-[#FFF19A] hover:text-[#101114] border border-white/15 text-white font-bold text-[10.5px] flex items-center gap-1 shrink-0 cursor-pointer active:scale-95 transition-all"
-                      title={`Centrar parada ${stop.name} en el mapa y abrir guía GPS`}
+                      title="Ver en mapa y GPS"
                     >
                       <Navigation className="w-3 h-3" />
                       <span>Ver</span>
@@ -1365,7 +1374,7 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
                   type="button"
                   onClick={() => setIsExpanded(false)}
                   className="min-h-[40px] px-3.5 py-2 rounded-xl uppa-cta-yellow font-black text-xs flex items-center gap-1.5 cursor-pointer"
-                  title="Ocultar listado de paradas"
+                  title="Ocultar paradas"
                 >
                   <ChevronUp className="w-4 h-4 stroke-[3]" />
                   <span>Ocultar listado</span>
@@ -1379,7 +1388,7 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
                     window.dispatchEvent(new CustomEvent('uppa-map-show-controls'));
                   }}
                   className="min-h-[40px] px-3 py-2 rounded-xl bg-[#101114] hover:border-rose-400 text-white hover:text-rose-300 border border-white/15 font-bold text-xs flex items-center gap-1.5 cursor-pointer"
-                  title="Minimizar panel (x)"
+                  title="Minimizar"
                   aria-label="Minimizar panel"
                 >
                   <X className="w-3.5 h-3.5 stroke-[2.5]" />
