@@ -1530,6 +1530,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                           ? '⛔'
                           : rep.tipo === 'control'
                           ? '👮'
+                          : rep.tipo === 'inundacion'
+                          ? '🌧️'
                           : rep.tipo === 'congestion'
                           ? '🚗'
                           : '⚠️'}

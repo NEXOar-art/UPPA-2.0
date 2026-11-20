@@ -149,7 +149,12 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
 
     recentEvents.forEach((ev) => {
       const weight = 1 + Math.min(ev.confirmations || 0, 5) * 0.18;
-      if (ev.type === 'breakdown' || ev.type === 'accident' || ev.type === 'danger') {
+      if (
+        ev.type === 'breakdown' ||
+        ev.type === 'accident' ||
+        ev.type === 'danger' ||
+        ev.type === 'inundacion'
+      ) {
         delayMinutes += Math.round(14 * weight);
         incidentCount++;
       } else if (ev.type === 'late' || ev.type === 'missed') {

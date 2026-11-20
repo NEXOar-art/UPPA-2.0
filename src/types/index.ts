@@ -67,7 +67,8 @@ export type EventType =
   | 'moving'       // ⚡ Unidad en movimiento / Normal (Verde)
   | 'danger'       // 🚧 Calle cortada / Alerta
   | 'corte'        // ⛔ Corte de ruta
-  | 'control';     // 👮 Control policial
+  | 'control'      // 👮 Control policial / tránsito (3.5 horas)
+  | 'inundacion';  // 🌧️ Calle anegada / inundada (10 horas)
 
 export interface MapEvent {
   id: string;
@@ -97,7 +98,7 @@ export interface ReporteFirestore {
   id: string;
   usuarioId: string;
   nombreUsuario: string;
-  tipo: 'demora' | 'accidente' | 'corte' | 'control' | 'congestion' | 'alerta' | 'ubicacion_colectivo';
+  tipo: 'demora' | 'accidente' | 'corte' | 'control' | 'inundacion' | 'congestion' | 'alerta' | 'ubicacion_colectivo';
   descripcion: string;
   ubicacion: {
     lat: number;

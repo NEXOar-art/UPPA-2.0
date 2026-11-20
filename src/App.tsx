@@ -36,6 +36,7 @@ import {
   GPS_UPDATE_INTERVAL_MS,
 } from './utils/geolocation';
 import { recordGpsSample } from './utils/busSpeedEstimator';
+import { computeEventExpiresAtMs, isMapEventExpired } from './utils/eventExpiration';
 import { TeslaMap } from './components/map/TeslaMap';
 import { EventBottomSheet } from './components/map/EventBottomSheet';
 import { ReportEventModal } from './components/map/ReportEventModal';
@@ -1148,63 +1149,77 @@ export default function App() {
 
   // Subscribe to real-time Firestore reports and push notifications
   useEffect(() => {
+    // Limpieza periódica de eventos vencidos en el mapa (colectivo 1m, control policial 3.5h, calle inundada 10h)
+    const expiredEventsCleaner = setInterval(() => {
+      const now = Date.now();
+      setEvents((prev) => {
+        const filtered = prev.filter((ev) => !isMapEventExpired(ev, now));
+        return filtered.length === prev.length ? prev : filtered;
+      });
+      setSelectedEvent((prev) => (prev && isMapEventExpired(prev, now) ? null : prev));
+    }, 5000);
+
     const unsubReportes = subscribeToReportes((reps) => {
       const realReports = (reps || []).filter(isRealCommunityReport);
+      const now = Date.now();
       if (realReports && realReports.length > 0) {
-        const mapped: MapEvent[] = realReports.map((r) => {
-          let evType: MapEvent['type'] = 'late';
-          if (r.tipo === 'ubicacion_colectivo') evType = 'bus_location';
-          else if (r.tipo === 'accidente') evType = 'accident';
-          else if (r.tipo === 'demora') evType = 'late';
-          else if (r.tipo === 'congestion') evType = 'traffic';
-          else if (r.tipo === 'corte') evType = 'corte' as any;
-          else if (r.tipo === 'control') evType = 'control' as any;
-          else evType = 'danger';
+        const mapped: MapEvent[] = realReports
+          .map((r) => {
+            let evType: MapEvent['type'] = 'late';
+            if (r.tipo === 'ubicacion_colectivo') evType = 'bus_location';
+            else if (r.tipo === 'accidente') evType = 'accident';
+            else if (r.tipo === 'demora') evType = 'late';
+            else if (r.tipo === 'congestion') evType = 'traffic';
+            else if (r.tipo === 'corte') evType = 'corte' as any;
+            else if (r.tipo === 'control') evType = 'control' as any;
+            else if (r.tipo === 'inundacion') evType = 'inundacion' as any;
+            else evType = 'danger';
 
-          const createdMs =
-            typeof r.creadoEnMs === 'number'
-              ? r.creadoEnMs
-              : typeof r.creadoEn === 'number'
-              ? r.creadoEn
-              : typeof r.creadoEn?.seconds === 'number'
-              ? r.creadoEn.seconds * 1000
-              : Date.now();
+            const createdMs =
+              typeof r.creadoEnMs === 'number'
+                ? r.creadoEnMs
+                : typeof r.creadoEn === 'number'
+                ? r.creadoEn
+                : typeof r.creadoEn?.seconds === 'number'
+                ? r.creadoEn.seconds * 1000
+                : Date.now();
 
-          const direction =
-            r.sentido || (r.ruta === 'campana-zarate' ? 'hacia_zarate' : 'hacia_malvinas');
+            const direction =
+              r.sentido || (r.ruta === 'campana-zarate' ? 'hacia_zarate' : 'hacia_malvinas');
 
-          const title =
-            evType === 'bus_location'
-              ? `Ubicación de colectivo ahora · ${direction === 'hacia_zarate' ? 'Hacia Zárate' : 'Hacia Malvinas'}`
-              : `${r.tipo.toUpperCase()}: ${r.ruta || 'Zárate ↔ Campana'}`;
+            const title =
+              evType === 'bus_location'
+                ? `Ubicación de colectivo ahora · ${direction === 'hacia_zarate' ? 'Hacia Zárate' : 'Hacia Malvinas'}`
+                : `${r.tipo.toUpperCase()}: ${r.ruta || 'Zárate ↔ Campana'}`;
 
-          return {
-            id: r.id,
-            routeId: r.ruta === 'vigalondo-mcdonalds' ? 'route-vigalondo-mcdonalds' : 'route-zarate-malvinas',
-            type: evType,
-            title,
-            description: r.descripcion,
-            lat: r.ubicacion.lat,
-            lng: r.ubicacion.lng,
-            reportedBy: r.nombreUsuario,
-            reportedByUserId: r.usuarioId,
-            confirmations: r.confirmaciones || 1,
-            confirmaciones: r.confirmaciones || 1,
-            confirmedByUserIds: [],
-            reportedAt: 'En vivo',
-            direction,
-            sentido: r.sentido,
-            velocidadKmH: r.velocidadKmH,
-            createdAtMs: createdMs,
-            expiresAtMs: evType === 'bus_location' ? createdMs + 60000 : r.expiresAtMs,
-            isVerified: true,
-            estado: r.estado,
-            streetAddress:
-              (r.calle && !isFallbackZoneAddress(r.calle) ? r.calle : null) ||
-              getCachedStreetName(r.ubicacion.lat, r.ubicacion.lng) ||
-              undefined,
-          };
-        });
+            return {
+              id: r.id,
+              routeId: r.ruta === 'vigalondo-mcdonalds' ? 'route-vigalondo-mcdonalds' : 'route-zarate-malvinas',
+              type: evType,
+              title,
+              description: r.descripcion,
+              lat: r.ubicacion.lat,
+              lng: r.ubicacion.lng,
+              reportedBy: r.nombreUsuario,
+              reportedByUserId: r.usuarioId,
+              confirmations: r.confirmaciones || 1,
+              confirmaciones: r.confirmaciones || 1,
+              confirmedByUserIds: [],
+              reportedAt: 'En vivo',
+              direction,
+              sentido: r.sentido,
+              velocidadKmH: r.velocidadKmH,
+              createdAtMs: createdMs,
+              expiresAtMs: computeEventExpiresAtMs(evType, createdMs, r.expiresAtMs),
+              isVerified: true,
+              estado: r.estado,
+              streetAddress:
+                (r.calle && !isFallbackZoneAddress(r.calle) ? r.calle : null) ||
+                getCachedStreetName(r.ubicacion.lat, r.ubicacion.lng) ||
+                undefined,
+            };
+          })
+          .filter((ev) => !isMapEventExpired(ev, now));
 
         // Deduplicación de eventos en mapa: si se repiten en la misma zona/tipo, se toma 1
         const uniqueReportsMap = new Map<string, MapEvent>();
@@ -1302,6 +1317,7 @@ export default function App() {
     });
 
     return () => {
+      clearInterval(expiredEventsCleaner);
       unsubReportes();
       unsubHabs();
       unsubNotif();
@@ -1805,14 +1821,15 @@ export default function App() {
       getCachedStreetName(newEventData.lat, newEventData.lng) ||
       (isNearUserLoc ? userLocation?.address : undefined);
 
+    const createdAtMs = newEventData.createdAtMs || now;
     const created: MapEvent = {
       ...newEventData,
       id: `ev-${now}`,
       confirmations: 1,
       confirmedByUserIds: [currentUser.id],
       reportedAt: 'Recién',
-      createdAtMs: newEventData.createdAtMs || now,
-      expiresAtMs: newEventData.type === 'bus_location' ? now + 60000 : newEventData.expiresAtMs,
+      createdAtMs,
+      expiresAtMs: computeEventExpiresAtMs(newEventData.type, createdAtMs, newEventData.expiresAtMs),
       streetAddress: quickStreetCandidate,
     };
     setEvents((prev) => [created, ...prev]);
@@ -1823,6 +1840,10 @@ export default function App() {
       const dirText = newEventData.direction === 'hacia_zarate' ? 'Hacia Zárate' : 'Hacia Malvinas';
       const speedText = newEventData.velocidadKmH ? ` · ${newEventData.velocidadKmH} km/h` : '';
       showToast(`📍 Ubicación de colectivo ahora (${dirText}${speedText}) registrada`);
+    } else if (newEventData.type === 'control') {
+      showToast(`👮 ${created.title} registrado en el mapa (visible 3.5 hs)`);
+    } else if (newEventData.type === 'inundacion') {
+      showToast(`🌧️ ${created.title} registrado en el mapa (visible 10 hs)`);
     } else {
       showToast(`✅ ${created.title} registrado en el mapa`);
     }
@@ -1858,6 +1879,8 @@ export default function App() {
         ? 'congestion'
         : newEventData.type === 'control'
         ? 'control'
+        : newEventData.type === 'inundacion'
+        ? 'inundacion'
         : newEventData.type === 'corte' || newEventData.type === 'danger'
         ? 'corte'
         : 'alerta';
@@ -1872,6 +1895,7 @@ export default function App() {
       ruta: newEventData.routeId === 'route-vigalondo-mcdonalds' ? 'vigalondo-mcdonalds' : 'campana-zarate',
       sentido: newEventData.direction === 'hacia_zarate' ? 'hacia_zarate' : 'hacia_malvinas',
       velocidadKmH: newEventData.velocidadKmH,
+      expiresAtMs: created.expiresAtMs,
     }).catch((err) => console.warn('Firestore report write notice:', err));
 
     // Publicar automáticamente el evento en el chat comunitario con la dirección exacta obtenida por geocodificación inversa

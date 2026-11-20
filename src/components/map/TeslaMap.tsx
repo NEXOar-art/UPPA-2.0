@@ -57,6 +57,7 @@ import {
 import { isRealCommunityReport } from '../../services/realtimeFirebaseService';
 import { GAS_STATIONS_DATA, SCHOOLS_DATA, PointOfInterest } from '../../data/poiCorredorData';
 import { LINEA_228_STOPS, LINEA_228_COORDINATES } from '../../data/linea228Stops';
+import { computeEventExpiresAtMs, isMapEventExpired } from '../../utils/eventExpiration';
 
 export const CARTOGRAPHY_API_KEY = '0a49b2d34b5b7e8b65a6bd7da25e4bd8';
 
@@ -200,16 +201,16 @@ export const TRANSIT_EVENT_TYPES: {
     type: 'control',
     icon: '👮',
     label: 'Control Policial / Tránsito',
-    subtitle: 'Operativo de control o fiscalización en la traza',
+    subtitle: 'Operativo de control o fiscalización en la traza · Exposición 3.5 hs',
     defaultTitle: 'Control vehicular',
     colorClass: 'bg-indigo-500/10 hover:bg-indigo-500/20 border-indigo-500/30 text-indigo-200',
   },
   {
     id: 'inundacion',
-    type: 'danger',
+    type: 'inundacion',
     icon: '🌧️',
     label: 'Calle Anegada / Inundada',
-    subtitle: 'Acumulación de agua de lluvia o pozo profundo',
+    subtitle: 'Acumulación de agua de lluvia o pozo profundo · Exposición 10 hs',
     defaultTitle: 'Calle anegada',
     colorClass: 'bg-cyan-500/10 hover:bg-cyan-500/20 border-cyan-500/30 text-cyan-200',
   },
@@ -599,7 +600,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
       sentido: directionToUse,
       velocidadKmH: speedResult.speedKmH,
       createdAtMs: now,
-      expiresAtMs: evOpt.type === 'bus_location' ? now + 60000 : undefined,
+      expiresAtMs: computeEventExpiresAtMs(evOpt.type, now),
       isVerified: true,
       estado: 'activo',
     };
@@ -1272,12 +1273,9 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
       const catKey = getEventCategoryKey(ev.type);
       if (activeEventCategories[catKey] === false) return;
 
-      // UBICACIÓN DE COLECTIVO AHORA: Caduca estrictamente tras 1 minuto (60 segundos)
-      if (ev.type === 'bus_location') {
-        const created = ev.createdAtMs || (typeof ev.reportedAt === 'number' ? ev.reportedAt : nowTimestamp);
-        if (nowTimestamp - created >= 60000) {
-          return; // Desaparece del mapa pasado el minuto para evitar información desfasada
-        }
+      // Caducidad automática según tipo: Colectivo 1 min, Control Policial 3.5 hs, Calle Anegada/Inundada 10 hs
+      if (isMapEventExpired(ev, nowTimestamp)) {
+        return;
       }
 
       const isSelected = selectedEvent?.id === ev.id;

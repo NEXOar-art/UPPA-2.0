@@ -39,6 +39,10 @@ import {
   saveActiveDriverSession,
   ActiveDriverSession,
 } from './driverActivationService';
+import {
+  computeEventExpiresAtMs,
+  isReporteExpired,
+} from '../utils/eventExpiration';
 
 // Collection Constants
 export const COL_USUARIOS = 'usuarios';
@@ -561,7 +565,9 @@ export function subscribeToReportes(
               ...(d.data() as Omit<ReporteFirestore, 'id'>),
             };
             if (isRealCommunityReport(data)) {
-              realReports.push(data);
+              if (!isReporteExpired(data)) {
+                realReports.push(data);
+              }
             } else {
               // Si existe un documento simulado en Firestore, eliminarlo definitivamente
               try {
@@ -578,7 +584,9 @@ export function subscribeToReportes(
           reportFirestorePermissionIssue(err, OperationType.LIST, COL_REPORTES);
           if (onError) onError(err);
           const cached = getCached<ReporteFirestore[]>('reportes', []);
-          const realOnly = (cached || []).filter(isRealCommunityReport);
+          const realOnly = (cached || []).filter(
+            (item) => isRealCommunityReport(item) && !isReporteExpired(item)
+          );
           callback(realOnly);
         }
       ),
@@ -596,10 +604,12 @@ export async function crearReporte(data: {
   ruta?: string;
   sentido?: 'hacia_malvinas' | 'hacia_zarate';
   velocidadKmH?: number;
+  expiresAtMs?: number;
 }): Promise<ReporteFirestore> {
   const path = COL_REPORTES;
   const now = Date.now();
   const cleanCalle = data.calle?.trim() || undefined;
+  const resolvedExpiresAtMs = computeEventExpiresAtMs(data.tipo, now, data.expiresAtMs);
   try {
     await ensureFirebaseAuthSession();
     const colRef = collection(db, COL_REPORTES);
@@ -617,7 +627,7 @@ export async function crearReporte(data: {
       sentido: data.sentido || (data.ruta === 'campana-zarate' ? 'hacia_zarate' : 'hacia_malvinas'),
       velocidadKmH: data.velocidadKmH,
       creadoEnMs: now,
-      expiresAtMs: data.tipo === 'ubicacion_colectivo' ? now + 60000 : undefined,
+      ...(resolvedExpiresAtMs !== undefined ? { expiresAtMs: resolvedExpiresAtMs } : {}),
       estado: 'activo',
       confirmaciones: 1,
       creadoEn: serverTimestamp(),
@@ -635,7 +645,9 @@ export async function crearReporte(data: {
         : data.tipo === 'corte'
         ? '⛔ Corte de ruta'
         : data.tipo === 'control'
-        ? '👮 Control policial'
+        ? '👮 Control policial / tránsito'
+        : data.tipo === 'inundacion'
+        ? '🌧️ Calle anegada / inundada'
         : data.tipo === 'congestion'
         ? '🚗 Tráfico denso'
         : '⏳ Demora en el recorrido';
@@ -665,7 +677,7 @@ export async function crearReporte(data: {
       sentido: data.sentido || (data.ruta === 'campana-zarate' ? 'hacia_zarate' : 'hacia_malvinas'),
       velocidadKmH: data.velocidadKmH,
       creadoEnMs: now,
-      expiresAtMs: data.tipo === 'ubicacion_colectivo' ? now + 60000 : undefined,
+      ...(resolvedExpiresAtMs !== undefined ? { expiresAtMs: resolvedExpiresAtMs } : {}),
       estado: 'activo',
       confirmaciones: 1,
       creadoEn: now,
@@ -682,7 +694,9 @@ export async function crearReporte(data: {
         : data.tipo === 'corte'
         ? '⛔ Corte de ruta'
         : data.tipo === 'control'
-        ? '👮 Control policial'
+        ? '👮 Control policial / tránsito'
+        : data.tipo === 'inundacion'
+        ? '🌧️ Calle anegada / inundada'
         : data.tipo === 'congestion'
         ? '🚗 Tráfico denso'
         : '⏳ Demora en el recorrido';

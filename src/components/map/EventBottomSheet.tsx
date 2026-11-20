@@ -40,8 +40,13 @@ export const EventBottomSheet: React.FC<EventBottomSheetProps> = ({
         return { label: 'Tráfico', icon: '🚗', color: 'bg-yellow-400/20 text-yellow-300 border-yellow-400/30' };
       case 'moving':
         return { label: 'En Ruta', icon: '⚡', color: 'bg-sky-400/20 text-sky-300 border-sky-400/30' };
+      case 'corte':
       case 'danger':
         return { label: 'Corte', icon: '🚧', color: 'bg-purple-400/20 text-purple-300 border-purple-400/30' };
+      case 'control':
+        return { label: 'Control Policial (3.5 hs)', icon: '👮', color: 'bg-indigo-400/20 text-indigo-300 border-indigo-400/30' };
+      case 'inundacion':
+        return { label: 'Calle Anegada (10 hs)', icon: '🌧️', color: 'bg-cyan-400/20 text-cyan-300 border-cyan-400/30' };
       default:
         return { label: 'Alerta', icon: '⚠️', color: 'bg-slate-400/20 text-slate-300 border-slate-400/30' };
     }
