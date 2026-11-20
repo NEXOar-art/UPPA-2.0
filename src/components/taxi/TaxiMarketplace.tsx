@@ -61,6 +61,8 @@ interface TaxiMarketplaceProps {
   currentUserPhone?: string;
   currentUserRole?: string;
   isDriverHabilitado?: boolean;
+  isPasajeroProfile?: boolean;
+  onRequirePasajeroRole?: () => void;
   userLocation?: UserLocation | null;
   onOpenInfo?: () => void;
 }
@@ -75,6 +77,8 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
   currentUserPhone = '',
   currentUserRole = 'passenger',
   isDriverHabilitado = false,
+  isPasajeroProfile = true,
+  onRequirePasajeroRole,
   userLocation,
   onOpenInfo,
 }) => {
@@ -716,6 +720,13 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
 
   const handleCreateRideRequest = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isPasajeroProfile) {
+      showActionError(
+        'Para pedir transporte alternativo tu perfil debe estar en "Pasajero". Cambiá tu rol desde tu perfil.'
+      );
+      onRequirePasajeroRole?.();
+      return;
+    }
     if (!reqOrigin.trim() || !reqDestination.trim() || isSubmittingRide) return;
     if (!aceptaPoliticasRide) {
       showActionError('Debés aceptar la Política & Descargo para emitir el pedido.');
@@ -1148,7 +1159,16 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
               <>
                 <button
                   type="button"
-                  onClick={() => setIsRequestRideOpen(true)}
+                  onClick={() => {
+                    if (!isPasajeroProfile) {
+                      showActionError(
+                        'Para pedir transporte alternativo tu perfil debe estar en "Pasajero". Cambiá tu rol en tu perfil.'
+                      );
+                      onRequirePasajeroRole?.();
+                      return;
+                    }
+                    setIsRequestRideOpen(true);
+                  }}
                   className="min-h-[42px] px-3.5 py-2 rounded-xl uppa-cta-yellow font-black text-xs flex items-center gap-1.5 transition-all cursor-pointer"
                   title="Solicitar transporte alternativo (Auto Taxi o Moto Taxi)"
                 >

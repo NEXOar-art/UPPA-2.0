@@ -222,17 +222,32 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const handleSelectRoleInProfile = async (
     nextRol: 'pasajero' | 'chofer_moto' | 'chofer_auto'
   ) => {
+    const currentlyPasajero =
+      !isDriverUser &&
+      currentRol !== 'chofer_moto' &&
+      currentRol !== 'chofer_auto' &&
+      effectiveAppRole !== 'driver';
     const alreadyInTargetMode =
       nextRol === 'pasajero'
-        ? currentRol === 'pasajero' && !effectiveEsChofer && effectiveAppRole === 'passenger' && !isDriverUser
+        ? currentlyPasajero
         : currentRol === nextRol && effectiveEsChofer && effectiveAppRole === 'driver';
     if (alreadyInTargetMode || isSwitchingRole) return;
+
+    const isChofer = nextRol === 'chofer_moto' || nextRol === 'chofer_auto';
+
+    // Si está en rol Pasajero y quiere pasar a Auto Taxi o Moto Taxi,
+    // enviarlo directamente a la sección "Habilitación de Chofer" para completar el formulario.
+    if (isChofer && currentlyPasajero && onOpenPublishTaxi) {
+      onClose();
+      onOpenPublishTaxi(nextRol === 'chofer_moto' ? 'moto' : 'auto');
+      return;
+    }
+
     setIsSwitchingRole(true);
     setAuthError(null);
     setSuccessMessage(null);
     try {
       const updated = await switchUserRole(nextRol);
-      const isChofer = nextRol === 'chofer_moto' || nextRol === 'chofer_auto';
       const tipoVehiculo: 'moto' | 'auto' | null =
         nextRol === 'chofer_moto' ? 'moto' : nextRol === 'chofer_auto' ? 'auto' : null;
       const mergedFallback: User = updated || {
@@ -1138,7 +1153,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   </div>
 
                   <p className="text-[11px] text-[#9299A5] leading-snug">
-                    Elegí cómo querés operar en UPPA sin salir de tu cuenta. Al pasar de <strong className="text-white">Pasajero</strong> a <strong className="text-[#B7F36B]">Auto Taxi</strong> o <strong className="text-[#B7F36B]">Moto Taxi</strong> se inicia el proceso obligatorio de abono y habilitación para prestar servicio.
+                    Tanto <strong className="text-[#FFF19A]">Auto Taxi</strong> como <strong className="text-[#FFF19A]">Moto Taxi</strong> pueden cambiar a <strong className="text-white">Pasajero</strong>. Si estás en <strong className="text-white">Pasajero</strong>, al tocar <strong className="text-[#B7F36B]">Auto Taxi</strong> o <strong className="text-[#B7F36B]">Moto Taxi</strong> ingresarás directo a <strong className="text-[#B7F36B]">Habilitación de Chofer</strong>.
                   </p>
 
                   <div className="grid grid-cols-3 gap-2 pt-0.5">
@@ -1168,8 +1183,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       }`}
                     >
                       <Car className="w-4 h-4" />
-                      <span className="text-[11px] font-black leading-tight">Prestador Auto</span>
-                      <span className="text-[9px] opacity-80 leading-tight">Auto Taxi</span>
+                      <span className="text-[11px] font-black leading-tight">Auto Taxi</span>
+                      <span className="text-[9px] opacity-80 leading-tight">
+                        {currentRol === 'chofer_auto' ? 'Activo' : 'Habilitación'}
+                      </span>
                     </button>
 
                     <button
@@ -1183,8 +1200,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       }`}
                     >
                       <Bike className="w-4 h-4" />
-                      <span className="text-[11px] font-black leading-tight">Prestador Moto</span>
-                      <span className="text-[9px] opacity-80 leading-tight">Moto Taxi</span>
+                      <span className="text-[11px] font-black leading-tight">Moto Taxi</span>
+                      <span className="text-[9px] opacity-80 leading-tight">
+                        {currentRol === 'chofer_moto' ? 'Activo' : 'Habilitación'}
+                      </span>
                     </button>
                   </div>
                 </div>

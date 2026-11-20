@@ -534,6 +534,58 @@ export default function App() {
     return false;
   }, [currentUser.role, currentUser.rol, userHabilitacionRecord, driverSession, habilitacionesList]);
 
+  const isPasajeroProfile =
+    !isDriverUser &&
+    currentUser.rol !== 'chofer_auto' &&
+    currentUser.rol !== 'chofer_moto' &&
+    currentUser.role !== 'driver';
+
+  const isDriverRoleProfile =
+    isDriverUser ||
+    currentUser.rol === 'chofer_auto' ||
+    currentUser.rol === 'chofer_moto' ||
+    currentUser.role === 'driver';
+
+  const handleRequestPedirTransporte = () => {
+    if (!isPasajeroProfile) {
+      showToast(
+        'Para pedir transporte alternativo tu perfil debe estar en "Pasajero". Cambiá tu rol a Pasajero en tu perfil.'
+      );
+      if (isLoggedIn) {
+        setIsProfileDropdownOpen(true);
+      } else {
+        setIsAuthModalOpen(true);
+      }
+      return;
+    }
+    setIsPedirTransporteOpen(true);
+  };
+
+  const handleRequestPrestarServicio = (
+    tab: 'transfer' | 'enter-code' = 'transfer',
+    preferredVehicle?: 'auto' | 'moto'
+  ) => {
+    if (!isDriverRoleProfile) {
+      showToast(
+        'Para prestar servicio de transporte tu perfil debe estar en "Auto Taxi" o "Moto Taxi". Elegí un rol en tu perfil para ir a Habilitación de Chofer.'
+      );
+      if (isLoggedIn) {
+        setIsProfileDropdownOpen(true);
+      } else {
+        setIsAuthModalOpen(true);
+      }
+      return;
+    }
+    setPublishTaxiInitialTab(tab);
+    const vehicle: 'auto' | 'moto' =
+      preferredVehicle ||
+      (currentUser.rol === 'chofer_moto' || currentUser.tipoVehiculo === 'moto'
+        ? 'moto'
+        : 'auto');
+    setPublishTaxiInitialVehicle(vehicle);
+    setIsPublishTaxiOpen(true);
+  };
+
   const handleSwitchRoleInSession = async (
     nextRol: 'pasajero' | 'chofer_moto' | 'chofer_auto'
   ) => {
@@ -543,6 +595,20 @@ export default function App() {
     const isChofer = nextRol === 'chofer_moto' || nextRol === 'chofer_auto';
     const tipoVehiculo: 'moto' | 'auto' | null =
       nextRol === 'chofer_moto' ? 'moto' : nextRol === 'chofer_auto' ? 'auto' : null;
+
+    // Si el perfil está en Pasajero y quiere pasar a Auto Taxi o Moto Taxi,
+    // debe ir directamente a Habilitación de Chofer para llenar el formulario correspondiente.
+    if (isChofer && isPasajeroProfile) {
+      const label = nextRol === 'chofer_moto' ? 'Moto Taxi' : 'Auto Taxi';
+      setPublishTaxiInitialTab('transfer');
+      setPublishTaxiInitialVehicle(nextRol === 'chofer_moto' ? 'moto' : 'auto');
+      setIsProfileDropdownOpen(false);
+      setIsPublishTaxiOpen(true);
+      showToast(
+        `Completá el formulario de Habilitación de Chofer para pasar a ${label}.`
+      );
+      return;
+    }
 
     setIsSwitchingRole(true);
     try {
@@ -573,13 +639,12 @@ export default function App() {
         const label = nextRol === 'chofer_moto' ? 'Moto Taxi' : 'Auto Taxi';
         setIsHabilitacionCardExpanded(true);
         if (!hasActivePaidDriverHabilitacion) {
-          // Obliga a iniciar el proceso de abono y habilitación para prestar servicio sin evadir el pago
           setPublishTaxiInitialTab('transfer');
           setPublishTaxiInitialVehicle(nextRol === 'chofer_moto' ? 'moto' : 'auto');
           setIsProfileDropdownOpen(false);
           setIsPublishTaxiOpen(true);
           showToast(
-            `Para prestar servicio como ${label}, iniciá y completá el abono de turno obligatorio.`
+            `Completá el formulario de Habilitación de Chofer para ${label}.`
           );
         } else {
           showToast(`Rol cambiado a Prestador Habilitado (${label}) sin cerrar sesión`);
@@ -2186,6 +2251,29 @@ export default function App() {
       createdAt: 'Recién',
     };
 
+    const nextRol: 'chofer_moto' | 'chofer_auto' =
+      listingData.vehicleType === 'moto' ? 'chofer_moto' : 'chofer_auto';
+    setManualPasajeroOverride(false);
+    try {
+      localStorage.removeItem('uppa_manual_pasajero_override');
+    } catch {}
+    setIsPedirTransporteOpen(false);
+    switchUserRole(nextRol)
+      .then((updated) => {
+        const nextUser: User = updated || {
+          ...currentUser,
+          rol: nextRol,
+          role: 'driver',
+          esChofer: true,
+          tipoVehiculo: listingData.vehicleType,
+        };
+        setCurrentUser(nextUser);
+        try {
+          localStorage.setItem('uppa_session_user', JSON.stringify(nextUser));
+        } catch {}
+      })
+      .catch(() => {});
+
     setPayments((prev) => [newPayment, ...prev]);
     setActiveTab('taxi');
     showToast(`Solicitud de ${listingData.driverName} enviada a Administración UPPA (Pendiente de Habilitación)`);
@@ -2581,11 +2669,10 @@ export default function App() {
               <div className="absolute right-0 top-full mt-2 w-68 rounded-2xl bg-[#202329] border-2 border-white/15 shadow-[4px_4px_0px_#101114] p-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150 space-y-1">
                 <button
                   onClick={() => {
-                    setPublishTaxiInitialTab('transfer');
-                    setIsPublishTaxiOpen(true);
                     setIsHeaderMenuOpen(false);
+                    handleRequestPrestarServicio('transfer');
                   }}
-                  title="Registrarme como chofer"
+                  title="Prestar Servicio (Auto Taxi o Moto Taxi)"
                   className="w-full min-h-[44px] text-left px-3 py-2.5 rounded-xl text-xs font-black text-[#101114] bg-[#B7F36B] hover:brightness-95 border border-[#101114] flex items-center gap-2.5 transition-all cursor-pointer"
                 >
                   <div className="flex items-center gap-0.5">
@@ -2597,10 +2684,10 @@ export default function App() {
 
                 <button
                   onClick={() => {
-                    setIsPedirTransporteOpen(true);
                     setIsHeaderMenuOpen(false);
+                    handleRequestPedirTransporte();
                   }}
-                  title="Pedir Auto o Moto"
+                  title="Pedir Auto o Moto (Modo Pasajero)"
                   className="w-full min-h-[44px] text-left px-3 py-2.5 rounded-xl text-xs font-black text-[#101114] bg-[#FFF19A] hover:brightness-95 border border-[#101114] flex items-center gap-2.5 transition-all cursor-pointer"
                 >
                   <Zap className="w-4 h-4 fill-[#101114] text-[#101114]" />
@@ -2799,7 +2886,15 @@ export default function App() {
                         </button>
                       </div>
                       <p className="text-[9.5px] text-[#9299A5] leading-tight">
-                        Pasar a <strong className="text-white">Auto/Moto Taxi</strong> inicia el abono para prestar servicio.
+                        {isPasajeroProfile ? (
+                          <>
+                            Al tocar <strong className="text-white">Auto Taxi</strong> o <strong className="text-white">Moto Taxi</strong> vas directo a <strong className="text-[#B7F36B]">Habilitación de Chofer</strong>.
+                          </>
+                        ) : (
+                          <>
+                            Podés volver a <strong className="text-[#FFF19A]">Pasajero</strong> cuando quieras para pedir viajes.
+                          </>
+                        )}
                       </p>
                     </div>
                   )}
@@ -3098,7 +3193,7 @@ export default function App() {
                 isDriverOnline={isDriverOnline}
                 activeTrackingTaxi={liveActiveTrackingTaxi}
                 onClearTrackingTaxi={() => setActiveTrackingTaxi(null)}
-                onOpenPedirTransporte={() => setIsPedirTransporteOpen(true)}
+                onOpenPedirTransporte={handleRequestPedirTransporte}
                 onAddEvent={handleCreateEvent}
                 currentUserName={currentUser.name}
                 currentUserId={currentUser.id}
@@ -3344,12 +3439,9 @@ export default function App() {
             <div className="absolute bottom-2 left-0 right-0 z-30 pointer-events-none">
               <MobilityBottomSheet
                 userName={currentUser.name || 'Pasajero'}
-                onOpenPedirTransporte={() => setIsPedirTransporteOpen(true)}
+                onOpenPedirTransporte={handleRequestPedirTransporte}
                 onOpenTaxis={() => setActiveTab('taxi')}
-                onOpenPrestarServicio={() => {
-                  setPublishTaxiInitialTab('transfer');
-                  setIsPublishTaxiOpen(true);
-                }}
+                onOpenPrestarServicio={() => handleRequestPrestarServicio('transfer')}
                 onOpenChat={() => setActiveTab('chat')}
                 onSelectStop={(stop) => {
                   setFocusedStopOnMap(stop);
@@ -3385,14 +3477,22 @@ export default function App() {
             currentUserId={currentUser.id}
             currentUserName={currentUser.name}
             currentUserPhone={currentUser.phone}
-            currentUserRole={isDriverHabilitado ? 'driver' : currentUser.role}
+            currentUserRole={isDriverUser ? (currentUser.rol || 'driver') : currentUser.role}
             isDriverHabilitado={isDriverHabilitado}
+            isPasajeroProfile={isPasajeroProfile}
+            onRequirePasajeroRole={() => {
+              showToast(
+                'Para pedir transporte alternativo tu perfil debe estar en "Pasajero". Cambiá tu rol a Pasajero en tu perfil.'
+              );
+              if (isLoggedIn) {
+                setIsProfileDropdownOpen(true);
+              } else {
+                setIsAuthModalOpen(true);
+              }
+            }}
             userLocation={userLocation}
             onOpenInfo={() => setSectionInfoModal('taxi')}
-            onOpenPublishModal={(tab) => {
-              setPublishTaxiInitialTab(tab || 'transfer');
-              setIsPublishTaxiOpen(true);
-            }}
+            onOpenPublishModal={(tab) => handleRequestPrestarServicio(tab || 'transfer')}
             onSelectTaxiOnMap={(taxi) => {
               setActiveTrackingTaxi(taxi);
               setActiveTab('map');
