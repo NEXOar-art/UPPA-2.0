@@ -677,6 +677,18 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
     const nextDisp: 'desocupado' | 'ocupado' =
       forceNext || (isLoggedDriverOcupado ? 'desocupado' : 'ocupado');
 
+    if (
+      nextDisp === 'desocupado' &&
+      !forceNext &&
+      myAcceptedSolicitud &&
+      !myAcceptedSolicitud.codigoValidado
+    ) {
+      showActionError(
+        'Primero ingresá y validá el código del pasajero antes de finalizar y pasar a disponible (o anulá el viaje si no coincide).'
+      );
+      return;
+    }
+
     const driverVehicleType: 'auto' | 'moto' =
       myActiveDriverCards[0]?.vehicleType === 'moto' || currentUserRole === 'chofer_moto'
         ? 'moto'
@@ -812,7 +824,7 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
 
       playMicroSound('ride_accepted');
       setRideSuccessNotice(
-        '¡Viaje aceptado! Ya tenés la ficha con el WhatsApp del pasajero y el botón de GPS para ir a buscarlo.'
+        '¡Viaje aceptado! Pedile el código de viaje al pasajero e ingresalo para habilitar "Ir a buscar al pasajero" y finalizar el viaje.'
       );
       setTimeout(() => setRideSuccessNotice(null), 6000);
     } catch (e: any) {
@@ -1092,7 +1104,7 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
             </a>
           )}
 
-          {allowPassengerGps && myAcceptedSolicitud && (
+          {allowPassengerGps && myAcceptedSolicitud && Boolean(myAcceptedSolicitud.codigoValidado) && (
             <button
               type="button"
               onClick={() => {
@@ -1103,7 +1115,7 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
               title={`Ir con GPS directamente hasta la ubicación del pasajero ${myAcceptedSolicitud.nombrePasajero} (${myAcceptedSolicitud.origen})`}
             >
               <Navigation className="w-3.5 h-3.5 text-[#101114]" />
-              <span>GPS Pasajero</span>
+              <span>Ir a buscar al pasajero</span>
             </button>
           )}
         </div>
@@ -1142,16 +1154,29 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
             {isPrestadorLogueado && (
               <button
                 type="button"
+                disabled={Boolean(myAcceptedSolicitud && !myAcceptedSolicitud.codigoValidado)}
                 onClick={() => handleToggleMyDisponibilidad()}
-                className={`min-h-[42px] px-4 py-2 rounded-xl font-black text-xs flex items-center gap-2 transition-all cursor-pointer border-2 ${
-                  isLoggedDriverOcupado
-                    ? 'bg-[#FFF19A] text-[#101114] border-[#FFF19A]'
-                    : 'bg-[#B7F36B] text-[#101114] border-[#B7F36B]'
+                className={`min-h-[42px] px-4 py-2 rounded-xl font-black text-xs flex items-center gap-2 transition-all border-2 ${
+                  myAcceptedSolicitud && !myAcceptedSolicitud.codigoValidado
+                    ? 'bg-[#FFF19A]/70 text-[#101114] border-[#FFF19A]/70 cursor-not-allowed opacity-85'
+                    : isLoggedDriverOcupado
+                    ? 'bg-[#FFF19A] text-[#101114] border-[#FFF19A] cursor-pointer'
+                    : 'bg-[#B7F36B] text-[#101114] border-[#B7F36B] cursor-pointer'
                 }`}
-                title="Alternar tu disponibilidad como chofer (Ocupado / Disponible)"
+                title={
+                  myAcceptedSolicitud && !myAcceptedSolicitud.codigoValidado
+                    ? 'Validá el código del pasajero antes de pasar a disponible'
+                    : 'Alternar tu disponibilidad como chofer (Ocupado / Disponible)'
+                }
               >
                 <span className="w-2.5 h-2.5 rounded-full bg-[#101114]" />
-                <span>{isLoggedDriverOcupado ? 'Estado: OCUPADO' : 'Estado: DISPONIBLE'}</span>
+                <span>
+                  {myAcceptedSolicitud && !myAcceptedSolicitud.codigoValidado
+                    ? 'Estado: OCUPADO (Validar código)'
+                    : isLoggedDriverOcupado
+                    ? 'Estado: OCUPADO'
+                    : 'Estado: DISPONIBLE'}
+                </span>
               </button>
             )}
 
@@ -1379,10 +1404,14 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                       userLocation={userLocation}
                       isDriverViewer={true}
                       nowTimestamp={nowTimestamp}
-                      onLocateOnMap={() => {
-                        activarGpsHaciaPasajero(sol.id);
-                        onLocatePassengerOnMap?.({ ...sol, gpsActivadoChofer: true });
-                      }}
+                      onLocateOnMap={
+                        sol.codigoValidado
+                          ? () => {
+                              activarGpsHaciaPasajero(sol.id);
+                              onLocatePassengerOnMap?.({ ...sol, gpsActivadoChofer: true });
+                            }
+                          : undefined
+                      }
                     />
 
                     {/* Origen y Destino */}
@@ -1437,34 +1466,6 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                       )}
                     </div>
 
-                    {/* Botón GPS hacia el Pasajero */}
-                    <div className="space-y-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          activarGpsHaciaPasajero(sol.id);
-                          onLocatePassengerOnMap?.({ ...sol, gpsActivadoChofer: true });
-                        }}
-                        className="w-full min-h-[46px] py-2.5 px-4 rounded-2xl uppa-cta-yellow font-black text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer"
-                        title="Activar GPS y enviar al mapa directo hacia la ubicación del pasajero"
-                      >
-                        <Navigation className="w-4 h-4" />
-                        <span>📍 Ir al Pasajero (GPS en Mapa)</span>
-                      </button>
-
-                      <a
-                        href={`https://www.google.com/maps/dir/?api=1&destination=${gpsTargetParam}&travelmode=driving`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={() => activarGpsHaciaPasajero(sol.id)}
-                        title="Abrir navegación giro a giro en Google Maps hasta el pasajero"
-                        className="w-full min-h-[40px] py-2 px-3 rounded-xl bg-[#101114] hover:border-[#FFF19A] border border-white/20 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-                      >
-                        <ExternalLink className="w-3.5 h-3.5 text-[#FFF19A]" />
-                        <span>Abrir Google Maps GPS</span>
-                      </a>
-                    </div>
-
                     {/* Validación del Código de Viaje del Pasajero */}
                     {!sol.codigoValidado ? (
                       <div className="p-3 rounded-2xl bg-[#101114] border border-[#FFF19A]/45 space-y-2.5">
@@ -1480,6 +1481,12 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                               </span>
                             )}
                         </div>
+
+                        <p className="text-[11px] text-[#9299A5] leading-snug">
+                          Ingresá y validá el código que te envió el pasajero para habilitar{' '}
+                          <strong className="text-[#FFF19A]">Ir a buscar al pasajero</strong> y{' '}
+                          <strong className="text-[#B7F36B]">Finalizar y pasar a disponible</strong>.
+                        </p>
 
                         <div className="flex items-center gap-2">
                           <input
@@ -1551,27 +1558,57 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                         )}
                       </div>
                     ) : (
-                      <div className="p-3 rounded-2xl bg-[#B7F36B]/15 border border-[#B7F36B] text-[#B7F36B] text-xs flex items-center gap-2 font-black">
-                        <CheckCircle2 className="w-4 h-4 shrink-0" />
-                        <span>Código verificado · Viaje en transcurso hacia destino</span>
-                      </div>
-                    )}
+                      <>
+                        <div className="p-3 rounded-2xl bg-[#B7F36B]/15 border border-[#B7F36B] text-[#B7F36B] text-xs flex items-center gap-2 font-black">
+                          <CheckCircle2 className="w-4 h-4 shrink-0" />
+                          <span>Código verificado · Viaje habilitado en curso</span>
+                        </div>
 
-                    {/* Botón maestro de cierre de viaje (la animación y estado persisten hasta presionarlo) */}
-                    <div className="pt-1 border-t border-white/10 space-y-1.5">
-                      <button
-                        type="button"
-                        onClick={() => handleToggleMyDisponibilidad('desocupado', sol.id)}
-                        className="w-full min-h-[48px] py-2.5 px-4 rounded-2xl uppa-cta-green font-black text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer"
-                        title="Finalizar este viaje y volver a estar disponible para recibir nuevas solicitudes"
-                      >
-                        <Flag className="w-4 h-4 shrink-0" />
-                        <span>FINALIZAR Y PASAR A DISPONIBLE</span>
-                      </button>
-                      <p className="text-[10.5px] text-center text-[#9299A5] leading-snug">
-                        El seguimiento animado permanece activo para vos y el pasajero hasta que presiones este botón.
-                      </p>
-                    </div>
+                        {/* Botón GPS: Ir a buscar al pasajero (solo visible tras validar código) */}
+                        <div className="space-y-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              activarGpsHaciaPasajero(sol.id);
+                              onLocatePassengerOnMap?.({ ...sol, gpsActivadoChofer: true });
+                            }}
+                            className="w-full min-h-[46px] py-2.5 px-4 rounded-2xl uppa-cta-yellow font-black text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer"
+                            title="Activar GPS y enviar al mapa directo hacia la ubicación del pasajero"
+                          >
+                            <Navigation className="w-4 h-4" />
+                            <span>📍 Ir a buscar al pasajero</span>
+                          </button>
+
+                          <a
+                            href={`https://www.google.com/maps/dir/?api=1&destination=${gpsTargetParam}&travelmode=driving`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={() => activarGpsHaciaPasajero(sol.id)}
+                            title="Abrir navegación giro a giro en Google Maps hasta el pasajero"
+                            className="w-full min-h-[40px] py-2 px-3 rounded-xl bg-[#101114] hover:border-[#FFF19A] border border-white/20 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                          >
+                            <ExternalLink className="w-3.5 h-3.5 text-[#FFF19A]" />
+                            <span>Abrir Google Maps GPS</span>
+                          </a>
+                        </div>
+
+                        {/* Botón maestro de cierre de viaje (solo visible tras validar código) */}
+                        <div className="pt-1 border-t border-white/10 space-y-1.5">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleMyDisponibilidad('desocupado', sol.id)}
+                            className="w-full min-h-[48px] py-2.5 px-4 rounded-2xl uppa-cta-green font-black text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer"
+                            title="Finalizar este viaje y volver a estar disponible para recibir nuevas solicitudes"
+                          >
+                            <Flag className="w-4 h-4 shrink-0" />
+                            <span>FINALIZAR Y PASAR A DISPONIBLE</span>
+                          </button>
+                          <p className="text-[10.5px] text-center text-[#9299A5] leading-snug">
+                            El seguimiento animado permanece activo para vos y el pasajero hasta que presiones este botón.
+                          </p>
+                        </div>
+                      </>
+                    )}
                   </div>
                 );
               })()}

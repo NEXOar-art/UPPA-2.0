@@ -723,7 +723,10 @@ export default function App() {
     return () => unsub();
   }, [currentUser, driverSession, userHabilitacionRecord]);
 
-  const handleSetDriverDisponibilidad = async (nextState: 'desocupado' | 'ocupado') => {
+  const handleSetDriverDisponibilidad = async (
+    nextState: 'desocupado' | 'ocupado',
+    targetSolicitudId?: string
+  ) => {
     const driverId =
       userHabilitacionRecord?.driverId ||
       currentUser?.uid ||
@@ -736,6 +739,29 @@ export default function App() {
       currentUser?.nombre ||
       currentUser?.name ||
       '';
+
+    if (nextState === 'desocupado' && !targetSolicitudId) {
+      const myIds = new Set(
+        [currentUser?.id, currentUser?.uid, driverSession?.driverId].filter(Boolean) as string[]
+      );
+      const myNames = new Set(
+        [currentUser?.name, currentUser?.nombre, driverSession?.driverName, userHabilitacionRecord?.driverName]
+          .filter(Boolean)
+          .map((n) => String(n).trim().toLowerCase())
+      );
+      const unvalidatedAcceptedRide = solicitudesList.find((s) => {
+        if (s.estado !== 'aceptado' && s.estado !== 'en_camino') return false;
+        const matchDriver =
+          (s.choferId && myIds.has(s.choferId)) ||
+          (s.choferNombre && myNames.has(s.choferNombre.trim().toLowerCase()));
+        return matchDriver && !s.codigoValidado;
+      });
+      if (unvalidatedAcceptedRide) {
+        showToast('Ingresá y validá el código del pasajero en Taxis & Motos antes de finalizar el viaje.');
+        setActiveTab('taxi');
+        return;
+      }
+    }
 
     const keys = [
       currentUser?.uid,
@@ -752,7 +778,7 @@ export default function App() {
     // Si el prestador aprieta "desocupado", finaliza automáticamente cualquier viaje en curso
     if (nextState === 'desocupado') {
       try {
-        await finalizarViajeDeChofer(driverId, driverName);
+        await finalizarViajeDeChofer(driverId, driverName, targetSolicitudId);
       } catch (err) {
         console.warn('Error al finalizar viaje automático:', err);
       }
@@ -2530,30 +2556,14 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => {
-                  activarGpsHaciaPasajero(driverCodePopup.solicitudId);
-                  setActiveTrackingPassenger({ ...driverCodePopup.solicitud, gpsActivadoChofer: true });
-                  setActiveTab('map');
-                  setDriverCodePopup(null);
-                  showToast(`📍 GPS activado hacia ${driverCodePopup.pasajeroNombre} · Viaje iniciado`);
-                }}
-                className="flex-1 min-h-[38px] px-3 py-1.5 rounded-xl uppa-cta-yellow text-[11px] font-black flex items-center justify-center gap-1.5 cursor-pointer"
-                title="Activar GPS hacia pasajero"
-              >
-                <Navigation className="w-3.5 h-3.5 text-[#101114]" />
-                <span>GPS Pasajero</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
                   setActiveTab('taxi');
                   setDriverCodePopup(null);
                 }}
                 className="flex-1 min-h-[38px] px-3 py-1.5 rounded-xl bg-[#B7F36B] hover:brightness-95 text-[#101114] border border-[#101114] text-[11px] font-black flex items-center justify-center gap-1.5 cursor-pointer"
-                title="Ir a Taxis & Motos"
+                title="Ir a Taxis & Motos para ingresar y validar el código"
               >
                 <KeyRound className="w-3.5 h-3.5" />
-                <span>Ir a Taxis &amp; Motos</span>
+                <span>Ingresar y Validar Código en Taxis &amp; Motos</span>
               </button>
             </div>
           </div>
@@ -3282,6 +3292,9 @@ export default function App() {
                 focusedStop={focusedStopOnMap}
                 activeTrackingPassenger={liveActiveTrackingPassenger}
                 onClearTrackingPassenger={() => setActiveTrackingPassenger(null)}
+                onFinalizePassengerRide={async (solicitudId) => {
+                  await handleSetDriverDisponibilidad('desocupado', solicitudId);
+                }}
               />
             </div>
 

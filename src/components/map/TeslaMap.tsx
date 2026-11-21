@@ -115,6 +115,7 @@ interface TeslaMapProps {
   onClearTrackingTaxi?: () => void;
   activeTrackingPassenger?: SolicitudTransporteFirestore | null;
   onClearTrackingPassenger?: () => void;
+  onFinalizePassengerRide?: (solicitudId: string) => void | Promise<void>;
   onOpenPedirTransporte?: () => void;
   onAddEvent?: (event: Omit<MapEvent, 'id' | 'confirmations' | 'confirmedByUserIds' | 'reportedAt'>) => void;
   currentUserName?: string;
@@ -281,6 +282,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
   onClearTrackingTaxi,
   activeTrackingPassenger,
   onClearTrackingPassenger,
+  onFinalizePassengerRide,
   onOpenPedirTransporte,
   onAddEvent,
   currentUserName,
@@ -3144,16 +3146,24 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
                     </a>
                   )}
 
-                  {onClearTrackingPassenger && (
-                    <button
-                      type="button"
-                      onClick={onClearTrackingPassenger}
-                      className="px-2.5 sm:px-3 min-h-[38px] sm:min-h-[42px] rounded-xl bg-[#101114] border border-white/15 hover:border-[#FFF19A] text-[11px] sm:text-xs font-bold text-white cursor-pointer"
-                      title="Finalizar viaje"
-                    >
-                      Llegué / Finalizar
-                    </button>
-                  )}
+                  {Boolean(passengerTrajectoryInfo.solicitud.codigoValidado) &&
+                    (onFinalizePassengerRide || onClearTrackingPassenger) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (onFinalizePassengerRide) {
+                            onFinalizePassengerRide(passengerTrajectoryInfo.solicitud.id);
+                          } else {
+                            onClearTrackingPassenger?.();
+                          }
+                        }}
+                        className="px-3 sm:px-3.5 min-h-[38px] sm:min-h-[42px] rounded-xl uppa-cta-green text-[11px] sm:text-xs font-black flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 transition-all"
+                        title="Finalizar viaje y pasar a disponible"
+                      >
+                        <CheckCircle className="w-3.5 h-3.5 shrink-0" />
+                        <span>Finalizar</span>
+                      </button>
+                    )}
                 </div>
               </div>
             )}
