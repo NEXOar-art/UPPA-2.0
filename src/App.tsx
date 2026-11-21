@@ -56,6 +56,7 @@ import { PedirTransporteModal } from './components/common/PedirTransporteModal';
 import { MobilityBottomSheet } from './components/common/MobilityBottomSheet';
 import { TicketConsultaModal } from './components/common/TicketConsultaModal';
 import { ActiveRideGlassWidget } from './components/common/ActiveRideGlassWidget';
+import { PassengerCodeAlertPopup } from './components/common/PassengerCodeAlertPopup';
 import { SectionInfoSheetModal, AppSectionId } from './components/common/SectionInfoSheetModal';
 import { ShareQrModal } from './components/common/ShareQrModal';
 import { CalificarChoferModal } from './components/taxi/CalificarChoferModal';
@@ -1045,6 +1046,29 @@ export default function App() {
     expiresAt: number;
   } | null>(null);
   const shownDriverCodePopupIdsRef = useRef<Set<string>>(new Set());
+
+  // Pop-up inteligente global para el pasajero cuando el prestador acepta y necesita el código de viaje (titila hasta tocarlo para desactivar)
+  const [silencedPassengerCodeBlinkIds, setSilencedPassengerCodeBlinkIds] = useState<string[]>(() => {
+    try {
+      const raw = sessionStorage.getItem('uppa_silenced_passenger_code_blink_ids');
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [dismissedPassengerCodePopupIds, setDismissedPassengerCodePopupIds] = useState<string[]>([]);
+  const announcedPassengerCodeIdsRef = useRef<Set<string>>(new Set());
+
+  const handleDeactivatePassengerCodeBlink = useCallback((solId: string) => {
+    setSilencedPassengerCodeBlinkIds((prev) => {
+      if (prev.includes(solId)) return prev;
+      const next = [...prev, solId];
+      try {
+        sessionStorage.setItem('uppa_silenced_passenger_code_blink_ids', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  }, []);
 
   // Pop-up global de 5 segundos en la sección principal del mapa al quedar un vehículo DESOCUPADO
   const [desocupadoMapPopup, setDesocupadoMapPopup] = useState<{
@@ -2236,6 +2260,35 @@ export default function App() {
     );
   }, [myLiveActiveSolicitud, marketplaceTaxis]);
 
+  // Solicitud del pasajero que ya fue aceptada y requiere envío del código asignado al prestador
+  const passengerPendingCodeSolicitud = useMemo(() => {
+    if (!myLiveActiveSolicitud) return null;
+    if (
+      myLiveActiveSolicitud.estado !== 'aceptado' &&
+      myLiveActiveSolicitud.estado !== 'en_camino'
+    ) {
+      return null;
+    }
+    if (!myLiveActiveSolicitud.codigoSeguridad || myLiveActiveSolicitud.codigoValidado) {
+      return null;
+    }
+    const myIds = new Set(
+      [currentUser.id, currentUser.uid, driverSession?.driverId].filter(Boolean) as string[]
+    );
+    if (myLiveActiveSolicitud.choferId && myIds.has(myLiveActiveSolicitud.choferId)) {
+      return null;
+    }
+    return myLiveActiveSolicitud;
+  }, [myLiveActiveSolicitud, currentUser.id, currentUser.uid, driverSession?.driverId]);
+
+  useEffect(() => {
+    if (!passengerPendingCodeSolicitud) return;
+    const solId = passengerPendingCodeSolicitud.id;
+    if (announcedPassengerCodeIdsRef.current.has(solId)) return;
+    announcedPassengerCodeIdsRef.current.add(solId);
+    playMicroSound('ride_accepted');
+  }, [passengerPendingCodeSolicitud?.id]);
+
   // Mantener coordenadas de rastreo sincronizadas en vivo cada 3s para mapa de conductor y pasajero
   const liveActiveTrackingTaxi = useMemo(() => {
     if (!activeTrackingTaxi) return null;
@@ -2570,6 +2623,33 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* Pop-up inteligente global para el pasajero cuando el prestador aceptó y necesita el código de viaje (visible en cualquier sección) */}
+      {passengerPendingCodeSolicitud &&
+        !dismissedPassengerCodePopupIds.includes(passengerPendingCodeSolicitud.id) && (
+          <PassengerCodeAlertPopup
+            solicitud={passengerPendingCodeSolicitud}
+            matchedDriver={matchedLiveDriver}
+            isBlinking={
+              !silencedPassengerCodeBlinkIds.includes(passengerPendingCodeSolicitud.id)
+            }
+            onDeactivateBlink={() =>
+              handleDeactivatePassengerCodeBlink(passengerPendingCodeSolicitud.id)
+            }
+            onDismiss={() => {
+              handleDeactivatePassengerCodeBlink(passengerPendingCodeSolicitud.id);
+              setDismissedPassengerCodePopupIds((prev) =>
+                prev.includes(passengerPendingCodeSolicitud.id)
+                  ? prev
+                  : [...prev, passengerPendingCodeSolicitud.id]
+              );
+            }}
+            onGoToTaxiTab={() => {
+              handleDeactivatePassengerCodeBlink(passengerPendingCodeSolicitud.id);
+              setActiveTab('taxi');
+            }}
+          />
+        )}
 
       {/* Toast Notification */}
       {toastMessage && (
