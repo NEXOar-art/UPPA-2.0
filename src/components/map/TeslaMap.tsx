@@ -121,6 +121,7 @@ interface TeslaMapProps {
   currentUserName?: string;
   currentUserId?: string;
   focusedStop?: BusStop | null;
+  hideTopBarButtons?: boolean;
 }
 
 export const TRANSIT_EVENT_TYPES: {
@@ -288,6 +289,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
   currentUserName,
   currentUserId,
   focusedStop,
+  hideTopBarButtons = false,
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
@@ -1350,21 +1352,32 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
       if (ev.type === 'bus_location') {
         const created = ev.createdAtMs || (typeof ev.reportedAt === 'number' ? ev.reportedAt : nowTimestamp);
         const remainingSec = Math.max(0, 60 - Math.floor((nowTimestamp - created) / 1000));
-        const dirLabel = ev.direction === 'hacia_zarate' ? '➡️ A Zárate' : '⬅️ A Malvinas';
+        const isZarateDir = ev.direction === 'hacia_zarate' || ev.sentido === 'hacia_zarate';
+        const dirLabel = isZarateDir ? '➡️ A Zárate' : '⬅️ A Malvinas';
         const speedText = ev.velocidadKmH ? `${ev.velocidadKmH} km/h` : '';
+
+        const pinBg = isZarateDir ? 'bg-red-600' : 'bg-blue-600';
+        const pinShadow = isZarateDir
+          ? 'shadow-[0_0_20px_rgba(220,38,38,0.85)]'
+          : 'shadow-[0_0_20px_rgba(37,99,235,0.85)]';
+        const pinRing = isZarateDir ? 'ring-red-300' : 'ring-blue-300';
+        const pingBg = isZarateDir ? 'bg-red-400' : 'bg-blue-400';
+        const dotBg = isZarateDir ? 'bg-red-300' : 'bg-blue-300';
+        const badgeBorder = isZarateDir ? 'border-red-400/80' : 'border-blue-400/80';
+        const badgeText = isZarateDir ? 'text-red-200' : 'text-blue-200';
 
         eventIcon = L.divIcon({
           className: 'custom-bus-location-marker',
           html: `
             <div class="relative flex flex-col items-center justify-center cursor-pointer group" style="transform: translate(-50%, -50%);">
-              <div class="relative w-9 h-9 rounded-2xl bg-cyan-500 text-white shadow-[0_0_20px_rgba(6,182,212,0.85)] flex items-center justify-center text-lg font-black ring-2 ring-cyan-300 hover:scale-115 transition-transform">
+              <div class="relative w-9 h-9 rounded-2xl ${pinBg} text-white ${pinShadow} flex items-center justify-center text-lg font-black ring-2 ${pinRing} hover:scale-115 transition-transform">
                 📍
                 <span class="absolute -bottom-1 -right-1 flex h-3 w-3">
-                  <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-80"></span>
-                  <span class="relative inline-flex rounded-full h-3 w-3 bg-cyan-300 ring-2 ring-black"></span>
+                  <span class="animate-ping absolute inline-flex h-full w-full rounded-full ${pingBg} opacity-80"></span>
+                  <span class="relative inline-flex rounded-full h-3 w-3 ${dotBg} ring-2 ring-black"></span>
                 </span>
               </div>
-              <div class="mt-1 px-2 py-0.5 rounded-lg bg-black/90 border border-cyan-400/70 text-[9.5px] font-mono font-black text-cyan-200 whitespace-nowrap shadow-xl flex items-center gap-1.5 pointer-events-none">
+              <div class="mt-1 px-2 py-0.5 rounded-lg bg-black/90 border ${badgeBorder} text-[9.5px] font-mono font-black ${badgeText} whitespace-nowrap shadow-xl flex items-center gap-1.5 pointer-events-none">
                 <span>${dirLabel}</span>
                 <span class="text-white/40">·</span>
                 <span class="text-amber-300 font-bold">${remainingSec}s</span>
@@ -1410,10 +1423,13 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
         ev.description && ev.description.trim() !== ev.title.trim()
           ? escapeHtml(ev.description.trim())
           : '';
+      const isZarateDirMeta = ev.direction === 'hacia_zarate' || ev.sentido === 'hacia_zarate';
       const busMetaHtml =
         ev.type === 'bus_location'
-          ? `<div style="display:flex;align-items:center;gap:6px;margin-top:4px;font-size:10.5px;font-weight:800;color:#67e8f9;">
-              <span>${ev.direction === 'hacia_zarate' ? '➡️ Hacia Zárate' : '⬅️ Hacia Malvinas'}</span>
+          ? `<div style="display:flex;align-items:center;gap:6px;margin-top:4px;font-size:10.5px;font-weight:800;color:${
+              isZarateDirMeta ? '#fca5a5' : '#93c5fd'
+            };">
+              <span>${isZarateDirMeta ? '🔴 ➡️ Hacia Zárate' : '🔵 ⬅️ Hacia Malvinas'}</span>
               ${ev.velocidadKmH ? `<span style="color:#B7F36B;">· ${ev.velocidadKmH} km/h</span>` : ''}
             </div>`
           : '';
@@ -2107,8 +2123,8 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
         onMouseLeave={handleCardMouseLeave}
         className={`absolute top-3 left-11 right-2.5 sm:left-auto sm:right-4 z-[42] ${
           passengerTrajectoryInfo && !isPassengerHudMinimized ? 'hidden sm:flex' : 'flex'
-        } flex-row items-center justify-end gap-1 sm:gap-2 transition-all duration-500 ease-in-out ${
-          areCardsVisible
+        } flex-row items-center justify-end gap-1 sm:gap-2 transition-all duration-300 ease-in-out ${
+          areCardsVisible && !hideTopBarButtons
             ? 'opacity-100 translate-y-0 pointer-events-auto'
             : 'opacity-0 -translate-y-3 pointer-events-none'
         }`}
@@ -2665,8 +2681,8 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
                           <button
                             type="button"
                             onClick={() => handleRegisterEventFromDropdown(evOpt, 'hacia_zarate')}
-                            className="min-h-[44px] px-3 rounded-xl bg-[#FFF19A] hover:brightness-95 text-[#101114] border border-[#101114] font-black text-xs flex items-center justify-center gap-1.5 active:scale-95 transition-all cursor-pointer"
-                            title="Colectivo hacia Zárate"
+                            className="min-h-[44px] px-3 rounded-xl bg-red-600 hover:bg-red-500 text-white border border-red-300/70 font-black text-xs flex items-center justify-center gap-1.5 active:scale-95 transition-all cursor-pointer"
+                            title="Reportar hacia Zárate"
                           >
                             <span className="text-sm">➡️</span>
                             <span>Hacia Zárate</span>
@@ -2675,8 +2691,8 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
                           <button
                             type="button"
                             onClick={() => handleRegisterEventFromDropdown(evOpt, 'hacia_malvinas')}
-                            className="min-h-[44px] px-3 rounded-xl bg-[#B7F36B] hover:brightness-95 text-[#101114] border border-[#101114] font-black text-xs flex items-center justify-center gap-1.5 active:scale-95 transition-all cursor-pointer"
-                            title="Colectivo hacia Malvinas"
+                            className="min-h-[44px] px-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white border border-blue-300/70 font-black text-xs flex items-center justify-center gap-1.5 active:scale-95 transition-all cursor-pointer"
+                            title="Reportar hacia Malvinas"
                           >
                             <span className="text-sm">⬅️</span>
                             <span>Hacia Malvinas</span>

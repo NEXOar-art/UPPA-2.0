@@ -839,6 +839,7 @@ export default function App() {
   const [activeTrackingTaxi, setActiveTrackingTaxi] = useState<TaxiListing | null>(null);
   const [focusedStopOnMap, setFocusedStopOnMap] = useState<Linea228Stop | null>(null);
   const [isHeaderMenuOpen, setIsHeaderMenuOpen] = useState(false);
+  const [isHeaderMenuHovered, setIsHeaderMenuHovered] = useState(false);
   const headerMenuRef = useRef<HTMLDivElement>(null);
 
   // Menú Desplegable del Perfil (con control directo de Ocupado/Desocupado para el prestador)
@@ -2748,9 +2749,16 @@ export default function App() {
         {/* Right Actions */}
         <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
           {/* Menú de 3 puntos: Prestar Servicio / Pedir Transporte Alternativo */}
-          <div className="relative" ref={headerMenuRef}>
+          <div
+            className="relative"
+            ref={headerMenuRef}
+            onMouseEnter={() => setIsHeaderMenuHovered(true)}
+            onMouseLeave={() => setIsHeaderMenuHovered(false)}
+          >
             <button
               onClick={() => setIsHeaderMenuOpen((prev) => !prev)}
+              onFocus={() => setIsHeaderMenuHovered(true)}
+              onBlur={() => setIsHeaderMenuHovered(false)}
               className="h-10 w-10 sm:h-11 sm:w-11 rounded-xl bg-[#202329] border border-white/15 hover:border-[#FFF19A]/60 flex items-center justify-center text-white active:scale-95 transition-all cursor-pointer"
               title="Más opciones"
             >
@@ -2762,6 +2770,7 @@ export default function App() {
                 <button
                   onClick={() => {
                     setIsHeaderMenuOpen(false);
+                    setIsHeaderMenuHovered(false);
                     handleRequestPrestarServicio('transfer');
                   }}
                   title="Prestar Servicio (Auto Taxi o Moto Taxi)"
@@ -2777,6 +2786,7 @@ export default function App() {
                 <button
                   onClick={() => {
                     setIsHeaderMenuOpen(false);
+                    setIsHeaderMenuHovered(false);
                     handleRequestPedirTransporte();
                   }}
                   title="Pedir Auto o Moto (Modo Pasajero)"
@@ -3290,6 +3300,7 @@ export default function App() {
                 currentUserName={currentUser.name}
                 currentUserId={currentUser.id}
                 focusedStop={focusedStopOnMap}
+                hideTopBarButtons={isHeaderMenuOpen || isHeaderMenuHovered}
                 activeTrackingPassenger={liveActiveTrackingPassenger}
                 onClearTrackingPassenger={() => setActiveTrackingPassenger(null)}
                 onFinalizePassengerRide={async (solicitudId) => {

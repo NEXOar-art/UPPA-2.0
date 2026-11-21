@@ -143,10 +143,10 @@ export const ReportEventModal: React.FC<ReportEventModalProps> = ({
                 <button
                   type="button"
                   onClick={() => setBusDirection('hacia_zarate')}
-                  title="Indicar que el colectivo va hacia Zárate"
+                  title="Reportar hacia Zárate"
                   className={`min-h-[44px] py-2 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 border cursor-pointer ${
                     busDirection === 'hacia_zarate'
-                      ? 'bg-[#FFF19A] text-[#101114] border-[#101114]'
+                      ? 'bg-red-600 text-white border-red-300'
                       : 'bg-[#202329] border-white/15 text-[#9299A5] hover:text-white'
                   }`}
                 >
@@ -156,10 +156,10 @@ export const ReportEventModal: React.FC<ReportEventModalProps> = ({
                 <button
                   type="button"
                   onClick={() => setBusDirection('hacia_malvinas')}
-                  title="Indicar que el colectivo va hacia Barrio Malvinas"
+                  title="Reportar hacia Malvinas"
                   className={`min-h-[44px] py-2 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 border cursor-pointer ${
                     busDirection === 'hacia_malvinas'
-                      ? 'bg-[#B7F36B] text-[#101114] border-[#101114]'
+                      ? 'bg-blue-600 text-white border-blue-300'
                       : 'bg-[#202329] border-white/15 text-[#9299A5] hover:text-white'
                   }`}
                 >

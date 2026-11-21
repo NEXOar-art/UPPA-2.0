@@ -503,35 +503,40 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 6, scale: 0.95 }}
               transition={{ duration: 0.18 }}
-              className={`pointer-events-none mb-2.5 w-full max-w-xs px-3.5 py-2.5 rounded-2xl bg-[#101114]/95 backdrop-blur-md border-2 shadow-[0_10px_28px_rgba(0,0,0,0.82)] text-left ${
-                hoveredJoystickBtn === 'zarate' ? 'border-[#FFF19A]/85' : 'border-[#B7F36B]/85'
+              className={`pointer-events-none mb-2.5 w-full max-w-[270px] px-3 py-2 rounded-2xl bg-[#101114]/95 backdrop-blur-md border-2 shadow-[0_10px_28px_rgba(0,0,0,0.82)] text-left ${
+                hoveredJoystickBtn === 'zarate' ? 'border-red-400/85' : 'border-blue-400/85'
               }`}
             >
               <div className="flex items-center justify-between gap-2 text-xs font-black">
                 <div className="flex items-center gap-1.5">
-                  <span>{hoveredJoystickBtn === 'zarate' ? '📍 ➡️' : '📍 ⬅️'}</span>
+                  <span>{hoveredJoystickBtn === 'zarate' ? '🔴 ➡️' : '🔵 ⬅️'}</span>
                   <span
                     className={
-                      hoveredJoystickBtn === 'zarate' ? 'text-[#FFF19A]' : 'text-[#B7F36B]'
+                      hoveredJoystickBtn === 'zarate' ? 'text-red-300' : 'text-blue-300'
                     }
                   >
                     {hoveredJoystickBtn === 'zarate'
-                      ? 'Reportar colectivo hacia Zárate'
-                      : 'Reportar colectivo hacia Malvinas'}
+                      ? 'Colectivo hacia Zárate'
+                      : 'Colectivo hacia Malvinas'}
                   </span>
                 </div>
                 {(hoveredJoystickBtn === 'zarate' ? activeZarateCount : activeMalvinasCount) >
                   0 && (
-                  <span className="px-1.5 py-0.5 rounded-full bg-cyan-500/20 text-cyan-200 border border-cyan-400/40 font-mono text-[9px]">
-                    {hoveredJoystickBtn === 'zarate' ? activeZarateCount : activeMalvinasCount}{' '}
-                    activo(s)
+                  <span
+                    className={`px-1.5 py-0.5 rounded-full font-mono text-[9px] border ${
+                      hoveredJoystickBtn === 'zarate'
+                        ? 'bg-red-500/20 text-red-200 border-red-400/40'
+                        : 'bg-blue-500/20 text-blue-200 border-blue-400/40'
+                    }`}
+                  >
+                    {hoveredJoystickBtn === 'zarate' ? activeZarateCount : activeMalvinasCount}
                   </span>
                 )}
               </div>
-              <p className="text-[11px] text-white/90 leading-snug mt-1">
+              <p className="text-[10.5px] text-white/90 leading-snug mt-0.5">
                 {hoveredJoystickBtn === 'zarate'
-                  ? 'Marca en vivo tu ubicación GPS como colectivo rumbo a Zárate Centro / Terminal durante 1 minuto, detecta la calle exacta y avisa al Chat Comunitario.'
-                  : 'Marca en vivo tu ubicación GPS como colectivo rumbo a Barrio Malvinas (Campana) durante 1 minuto, detecta la calle exacta y avisa al Chat Comunitario.'}
+                  ? 'Marca tu GPS rumbo a Zárate (1 min) y avisa en el chat.'
+                  : 'Marca tu GPS rumbo a Malvinas (1 min) y avisa en el chat.'}
               </p>
             </motion.div>
           )}
@@ -595,7 +600,7 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
                   </svg>
                 </span>
                 {activeZarateCount > 0 && (
-                  <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-cyan-400 border-2 border-[#101114] animate-pulse" />
+                  <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-red-500 border-2 border-[#101114] animate-pulse" />
                 )}
               </motion.button>
             )}
@@ -699,7 +704,7 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
                   </svg>
                 </span>
                 {activeMalvinasCount > 0 && (
-                  <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-cyan-400 border-2 border-[#101114] animate-pulse" />
+                  <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-blue-500 border-2 border-[#101114] animate-pulse" />
                 )}
               </motion.button>
             )}
