@@ -87,6 +87,7 @@ import {
   enviarMensajeChat,
   getMessageTimestampMs,
   subscribeToRankingChoferes,
+  subscribeToConnectedUsersPresence,
 } from './services/realtimeFirebaseService';
 import { ensureFirebaseAuthSession } from './config/firebase';
 
@@ -121,6 +122,7 @@ import {
   AlertTriangle,
   QrCode,
   Star,
+  Users,
 } from 'lucide-react';
 
 function GlobalHoverTooltip() {
@@ -871,6 +873,45 @@ export default function App() {
     });
     return () => unsub();
   }, []);
+
+  const [connectedUsersCount, setConnectedUsersCount] = useState<number>(1);
+  const devicePresenceIdRef = useRef<string | null>(null);
+  if (!devicePresenceIdRef.current) {
+    try {
+      const existing = typeof window !== 'undefined' ? localStorage.getItem('uppa_device_presence_id') : null;
+      if (existing) {
+        devicePresenceIdRef.current = existing;
+      } else {
+        const created = `dev_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('uppa_device_presence_id', created);
+        }
+        devicePresenceIdRef.current = created;
+      }
+    } catch {
+      devicePresenceIdRef.current = `dev_${Math.random().toString(36).slice(2, 8)}`;
+    }
+  }
+
+  const activePresenceKey = useMemo(() => {
+    const candidateId = currentUser.uid || currentUser.id;
+    if (
+      isLoggedIn &&
+      candidateId &&
+      candidateId !== 'usr-anon' &&
+      candidateId !== 'usr-comunidad'
+    ) {
+      return `usr_${candidateId}`;
+    }
+    return devicePresenceIdRef.current || 'dev_visitante';
+  }, [isLoggedIn, currentUser.uid, currentUser.id]);
+
+  useEffect(() => {
+    const unsub = subscribeToConnectedUsersPresence(activePresenceKey, (count) => {
+      setConnectedUsersCount(count);
+    });
+    return () => unsub();
+  }, [activePresenceKey]);
 
   useEffect(() => {
     try {
@@ -2640,15 +2681,15 @@ export default function App() {
       )}
 
       {/* Top Navigation Header — Luxury Dark Minimalist Automotive */}
-      <header className="h-14 px-3 sm:px-4 bg-[#101114] border-b border-white/15 flex items-center justify-between shrink-0 z-30">
+      <header className="h-14 px-2.5 sm:px-4 bg-[#101114] border-b border-white/15 flex items-center justify-between gap-1.5 sm:gap-3 shrink-0 z-30">
         {/* Brand: Solo el texto UPPA sin icono + Indicador luminoso rojo de solicitud de transporte */}
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
           <button
             onClick={() => setActiveTab('map')}
             title="Ir al Mapa"
             className="flex items-center min-h-[44px] px-1 cursor-pointer active:scale-95 transition-transform"
           >
-            <span className="text-xl font-black tracking-widest text-white font-display">
+            <span className="text-lg sm:text-xl font-black tracking-widest text-white font-display">
               UPPA
             </span>
           </button>
@@ -2670,20 +2711,37 @@ export default function App() {
           )}
         </div>
 
-        {/* Route status indicator */}
-        <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#202329] border border-white/15 text-xs">
-          <span className="w-2 h-2 rounded-full bg-[#B7F36B]" />
-          <span className="font-extrabold text-white">Línea 228</span>
-          <span className="text-[10px] text-[#9299A5] font-semibold font-mono">En Vivo</span>
+        {/* Route status indicator + Personas conectadas en vivo */}
+        <div
+          className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 rounded-xl bg-[#202329] border border-white/15 text-xs min-w-0"
+          title={`${connectedUsersCount} ${connectedUsersCount === 1 ? 'persona conectada' : 'personas conectadas'} en vivo`}
+        >
+          <span className="w-2 h-2 rounded-full bg-[#B7F36B] shrink-0" />
+          <div className="flex flex-col sm:flex-row sm:items-center sm:gap-1.5 leading-none min-w-0">
+            <span className="font-extrabold text-white text-[11px] sm:text-xs truncate">
+              Línea 228
+            </span>
+            <span className="text-[9px] sm:text-[10px] text-[#9299A5] font-semibold font-mono mt-0.5 sm:mt-0">
+              En Vivo
+            </span>
+          </div>
+          <span className="h-4 w-px bg-white/15 shrink-0" />
+          <div
+            className="flex items-center gap-1 text-[#B7F36B] font-mono font-black text-[11px] sm:text-xs shrink-0"
+            aria-label={`${connectedUsersCount} personas conectadas`}
+          >
+            <Users className="w-3.5 h-3.5 text-[#B7F36B] shrink-0" />
+            <span>{connectedUsersCount}</span>
+          </div>
         </div>
 
         {/* Right Actions */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
           {/* Menú de 3 puntos: Prestar Servicio / Pedir Transporte Alternativo */}
           <div className="relative" ref={headerMenuRef}>
             <button
               onClick={() => setIsHeaderMenuOpen((prev) => !prev)}
-              className="h-11 w-11 rounded-xl bg-[#202329] border border-white/15 hover:border-[#FFF19A]/60 flex items-center justify-center text-white active:scale-95 transition-all cursor-pointer"
+              className="h-10 w-10 sm:h-11 sm:w-11 rounded-xl bg-[#202329] border border-white/15 hover:border-[#FFF19A]/60 flex items-center justify-center text-white active:scale-95 transition-all cursor-pointer"
               title="Más opciones"
             >
               <MoreVertical className="w-4 h-4" />

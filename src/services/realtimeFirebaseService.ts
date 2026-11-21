@@ -14,6 +14,7 @@ import {
   serverTimestamp,
   Timestamp,
   increment,
+  deleteField,
 } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import {
@@ -3324,4 +3325,233 @@ export function subscribeToRankingChoferes(
     unsub();
   };
 }
+
+// ---------------------------------------------------------------------------
+// 9. PRESENCIA EN TIEMPO REAL DE PERSONAS CONECTADAS (Línea 228 En Vivo)
+// ---------------------------------------------------------------------------
+const PRESENCE_DOC_ID = 'presencia_en_vivo';
+const PRESENCE_TTL_MS = 90 * 1000; // 90s de ventana activa por sesión conectada
+const PRESENCE_HEARTBEAT_MS = 25 * 1000; // Latido cada 25s
+
+const presenceBroadcastChannel =
+  typeof window !== 'undefined' && 'BroadcastChannel' in window
+    ? new BroadcastChannel('uppa_live_presence')
+    : null;
+
+export function subscribeToConnectedUsersPresence(
+  presenceKey: string,
+  callback: (connectedCount: number) => void
+): () => void {
+  const safeKey =
+    String(presenceKey || 'visitante')
+      .replace(/[^a-zA-Z0-9_-]/g, '_')
+      .slice(0, 64) || 'visitante';
+
+  let disposed = false;
+  let remoteSessions: Record<string, number> = {};
+  let localSessions: Record<string, number> = getCached<Record<string, number>>('live_presence', {});
+  let lastEmittedCount = -1;
+
+  const emitCount = () => {
+    if (disposed) return;
+    const now = Date.now();
+    const activeKeys = new Set<string>([safeKey]);
+
+    const addValid = (map: Record<string, any>) => {
+      if (!map || typeof map !== 'object') return;
+      for (const [k, rawTs] of Object.entries(map)) {
+        const ts = typeof rawTs === 'number' ? rawTs : Number(rawTs);
+        if (Number.isFinite(ts) && ts > 0 && now - ts < PRESENCE_TTL_MS) {
+          activeKeys.add(k);
+        }
+      }
+    };
+
+    addValid(localSessions);
+    addValid(remoteSessions);
+
+    const nextCount = Math.max(1, activeKeys.size);
+    if (nextCount !== lastEmittedCount) {
+      lastEmittedCount = nextCount;
+      callback(nextCount);
+    }
+  };
+
+  const pruneLocal = () => {
+    const now = Date.now();
+    const cleaned: Record<string, number> = {};
+    for (const [k, ts] of Object.entries(localSessions)) {
+      if (typeof ts === 'number' && ts > 0 && now - ts < PRESENCE_TTL_MS) {
+        cleaned[k] = ts;
+      }
+    }
+    localSessions = cleaned;
+    setCached('live_presence', cleaned);
+  };
+
+  const sendHeartbeat = async () => {
+    if (disposed) return;
+    const now = Date.now();
+    localSessions = { ...localSessions, [safeKey]: now };
+    pruneLocal();
+    emitCount();
+
+    try {
+      presenceBroadcastChannel?.postMessage({
+        type: 'PRESENCE_HEARTBEAT',
+        key: safeKey,
+        ts: now,
+      });
+    } catch {}
+
+    try {
+      const uid = await ensureFirebaseAuthSession();
+      if (!uid || disposed) return;
+      const docRef = doc(db, COL_SALAS_CHAT, PRESENCE_DOC_ID);
+      await setDoc(
+        docRef,
+        {
+          salaId: PRESENCE_DOC_ID,
+          activa: true,
+          sessions: {
+            [safeKey]: now,
+          },
+        },
+        { merge: true }
+      );
+    } catch {
+      // Silencioso: no disparar banner si auth anónima u offline está pendiente
+    }
+  };
+
+  const handleLeave = () => {
+    const updated = { ...localSessions };
+    delete updated[safeKey];
+    localSessions = updated;
+    setCached('live_presence', updated);
+
+    try {
+      presenceBroadcastChannel?.postMessage({
+        type: 'PRESENCE_LEAVE',
+        key: safeKey,
+      });
+    } catch {}
+
+    if (auth.currentUser) {
+      try {
+        const docRef = doc(db, COL_SALAS_CHAT, PRESENCE_DOC_ID);
+        updateDoc(docRef, {
+          [`sessions.${safeKey}`]: deleteField(),
+        }).catch(() => {});
+      } catch {}
+    }
+  };
+
+  const handleBroadcast = (event: MessageEvent) => {
+    if (event.data?.type === 'PRESENCE_HEARTBEAT' && event.data?.key) {
+      localSessions = {
+        ...localSessions,
+        [String(event.data.key)]: Number(event.data.ts) || Date.now(),
+      };
+      emitCount();
+    } else if (event.data?.type === 'PRESENCE_LEAVE' && event.data?.key) {
+      const updated = { ...localSessions };
+      delete updated[String(event.data.key)];
+      localSessions = updated;
+      emitCount();
+    }
+  };
+
+  if (presenceBroadcastChannel) {
+    presenceBroadcastChannel.addEventListener('message', handleBroadcast);
+  }
+
+  const handleVisibilityChange = () => {
+    if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+      sendHeartbeat();
+    }
+  };
+
+  if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+  }
+  if (typeof window !== 'undefined') {
+    window.addEventListener('pagehide', handleLeave);
+  }
+
+  emitCount();
+  sendHeartbeat();
+
+  const heartbeatInterval = setInterval(sendHeartbeat, PRESENCE_HEARTBEAT_MS);
+  const cleanupTickInterval = setInterval(() => {
+    pruneLocal();
+    emitCount();
+  }, 10000);
+
+  let activeSnapshotUnsub: (() => void) | null = null;
+  const attachSnapshot = () => {
+    if (disposed || !auth.currentUser) return;
+    if (activeSnapshotUnsub) {
+      try {
+        activeSnapshotUnsub();
+      } catch {}
+      activeSnapshotUnsub = null;
+    }
+    const docRef = doc(db, COL_SALAS_CHAT, PRESENCE_DOC_ID);
+    activeSnapshotUnsub = onSnapshot(
+      docRef,
+      (snap) => {
+        if (snap.exists()) {
+          const data = snap.data();
+          if (data?.sessions && typeof data.sessions === 'object') {
+            remoteSessions = data.sessions as Record<string, number>;
+          }
+        }
+        emitCount();
+      },
+      () => {
+        // Fallback silencioso a presencia local
+        emitCount();
+      }
+    );
+  };
+
+  ensureFirebaseAuthSession()
+    .then((uid) => {
+      if (!disposed && uid) {
+        attachSnapshot();
+      }
+    })
+    .catch(() => {});
+
+  const unsubAuth = onAuthStateChanged(auth, (fbUser) => {
+    if (!disposed && fbUser) {
+      attachSnapshot();
+      sendHeartbeat();
+    }
+  });
+
+  return () => {
+    disposed = true;
+    clearInterval(heartbeatInterval);
+    clearInterval(cleanupTickInterval);
+    unsubAuth();
+    if (activeSnapshotUnsub) {
+      try {
+        activeSnapshotUnsub();
+      } catch {}
+    }
+    if (presenceBroadcastChannel) {
+      presenceBroadcastChannel.removeEventListener('message', handleBroadcast);
+    }
+    if (typeof document !== 'undefined') {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    }
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('pagehide', handleLeave);
+    }
+    handleLeave();
+  };
+}
+
 
