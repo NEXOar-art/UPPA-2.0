@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { X, Star, Check, Award } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, Star, Check, Award, MapPin } from 'lucide-react';
 import { calificarChofer, getCalificacionInfo } from '../../services/realtimeFirebaseService';
 import { CalificacionChoferFirestore } from '../../types';
 
@@ -10,6 +10,9 @@ interface CalificarChoferModalProps {
   driverName: string;
   pasajeroId: string;
   pasajeroNombre: string;
+  solicitudId?: string;
+  origen?: string;
+  destino?: string;
   onSuccess?: (calificacion: CalificacionChoferFirestore) => void;
 }
 
@@ -20,6 +23,9 @@ export const CalificarChoferModal: React.FC<CalificarChoferModalProps> = ({
   driverName,
   pasajeroId,
   pasajeroNombre,
+  solicitudId,
+  origen,
+  destino,
   onSuccess,
 }) => {
   const [selectedRating, setSelectedRating] = useState<1 | 2 | 3 | 4 | 5>(5);
@@ -27,6 +33,16 @@ export const CalificarChoferModal: React.FC<CalificarChoferModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successNotice, setSuccessNotice] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      setSelectedRating(5);
+      setComentario('');
+      setSuccessNotice(null);
+      setErrorMsg(null);
+      setIsSubmitting(false);
+    }
+  }, [isOpen, driverId, solicitudId]);
 
   if (!isOpen) return null;
 
@@ -50,7 +66,7 @@ export const CalificarChoferModal: React.FC<CalificarChoferModalProps> = ({
       setTimeout(() => {
         setSuccessNotice(null);
         onClose();
-      }, 1800);
+      }, 1400);
     } catch (err: any) {
       setErrorMsg('Error al calificar: ' + (err.message || ''));
     } finally {
@@ -67,8 +83,8 @@ export const CalificarChoferModal: React.FC<CalificarChoferModalProps> = ({
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="w-full max-w-md bg-[#202329] border-2 border-white/20 rounded-3xl p-5 sm:p-6 text-white shadow-[0_8px_0_rgba(0,0,0,0.65)] relative space-y-4">
+    <div className="fixed inset-0 z-[80] flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-sm animate-in fade-in duration-200 overflow-y-auto">
+      <div className="w-full max-w-md bg-[#202329] border-2 border-[#FFF19A]/70 rounded-3xl p-5 sm:p-6 text-white shadow-[0_12px_36px_rgba(0,0,0,0.85)] relative space-y-4 my-auto">
         <div className="h-1.5 w-full rounded-full bg-[#FFF19A]" />
 
         {/* Header */}
@@ -78,7 +94,12 @@ export const CalificarChoferModal: React.FC<CalificarChoferModalProps> = ({
               <Star className="w-5 h-5 fill-[#FFF19A]" />
             </div>
             <div>
-              <h3 className="text-sm sm:text-base font-extrabold text-white font-display">Calificar al Prestador</h3>
+              <span className="inline-block text-[10px] font-black uppercase tracking-wider text-[#B7F36B] mb-0.5">
+                ¡Viaje Finalizado!
+              </span>
+              <h3 className="text-sm sm:text-base font-extrabold text-white font-display leading-tight">
+                Calificar al Prestador
+              </h3>
               <p className="text-xs text-[#FFF19A] font-semibold">{driverName}</p>
             </div>
           </div>
@@ -91,6 +112,16 @@ export const CalificarChoferModal: React.FC<CalificarChoferModalProps> = ({
             <X className="w-4 h-4" />
           </button>
         </div>
+
+        {(origen || destino) && (
+          <div className="px-3 py-2 rounded-2xl bg-[#101114] border border-[#B7F36B]/30 text-[11px] text-white/90 flex items-center gap-2">
+            <MapPin className="w-3.5 h-3.5 text-[#B7F36B] shrink-0" />
+            <span className="truncate">
+              {origen ? `${origen} ➔ ` : 'Destino: '}
+              <strong className="text-[#FFF19A]">{destino || 'Viaje completado'}</strong>
+            </span>
+          </div>
+        )}
 
         {/* Informative scale notice */}
         <div className="p-3 rounded-2xl bg-[#101114] border border-white/10 text-[11px] text-[#9299A5] space-y-0.5">

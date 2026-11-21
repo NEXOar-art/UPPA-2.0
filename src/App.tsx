@@ -884,7 +884,11 @@ export default function App() {
     driverId: string;
     driverName: string;
     solicitudId: string;
+    origen?: string;
+    destino?: string;
   } | null>(null);
+  const autoPromptedRateSolicitudIdsRef = useRef<Set<string>>(new Set());
+  const seenMyPassengerSolicitudIdsRef = useRef<Set<string>>(new Set());
   const [activeMapGlassRideId, setActiveMapGlassRideId] = useState<string | null>(null);
   const shownMapGlassRideIdsRef = useRef<Set<string>>(new Set());
   const mapGlassAutoHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -2361,7 +2365,14 @@ export default function App() {
     }
   }, [isDriverAlarmRinging, isDriverAlarmMuted]);
 
-  // Viaje finalizado del pasajero pendiente de calificación (últimas 3 horas, solo si aún no calificó al prestador)
+  // Registrar IDs de viajes propios del pasajero mientras están activos para detectar su finalización al instante
+  useEffect(() => {
+    if (myLiveActiveSolicitud?.id) {
+      seenMyPassengerSolicitudIdsRef.current.add(myLiveActiveSolicitud.id);
+    }
+  }, [myLiveActiveSolicitud?.id]);
+
+  // Viaje finalizado del pasajero pendiente de calificación (últimas 3 horas, uno por cada viaje finalizado)
   const unratedCompletedPassengerRide = useMemo(() => {
     if (isDriverUser || currentUser.role === 'admin' || currentUser.rol === 'administrador') {
       return null;
@@ -2372,13 +2383,13 @@ export default function App() {
       .filter((sol) => {
         if (sol.estado !== 'completado') return false;
         if (ratedSolicitudIds.includes(sol.id)) return false;
-        if (isDriverAlreadyRatedByMe(sol.choferId, sol.choferNombre)) return false;
+        const matchedTracked = seenMyPassengerSolicitudIdsRef.current.has(sol.id);
         const matchId =
           (currentUser.id && currentUser.id !== 'usr-anon' && sol.pasajeroId === currentUser.id) ||
           (currentUser.uid && sol.pasajeroId === currentUser.uid);
         const cleanPass = (sol.nombrePasajero || '').trim().toLowerCase();
         const matchName = Boolean(cleanUser && cleanPass && cleanPass === cleanUser);
-        if (!matchId && !matchName) return false;
+        if (!matchedTracked && !matchId && !matchName) return false;
         const ts = Number(sol.fechaCompletado || sol.fechaAceptado || sol.fechaSolicitud || 0);
         return !ts || ts >= cutoff;
       })
@@ -2397,9 +2408,40 @@ export default function App() {
     currentUser.name,
     solicitudesList,
     ratedSolicitudIds,
-    isDriverAlreadyRatedByMe,
     requestNowTick,
   ]);
+
+  // Cada vez que el prestador termina el viaje, abrir automáticamente la ficha para calificarlo
+  useEffect(() => {
+    if (!unratedCompletedPassengerRide) return;
+    if (unratedCompletedPassengerRide.id === dismissedRateBannerId) return;
+    if (autoPromptedRateSolicitudIdsRef.current.has(unratedCompletedPassengerRide.id)) return;
+
+    const finishedTs = Number(
+      unratedCompletedPassengerRide.fechaCompletado ||
+        unratedCompletedPassengerRide.fechaAceptado ||
+        0
+    );
+    const isRecentOrTracked =
+      seenMyPassengerSolicitudIdsRef.current.has(unratedCompletedPassengerRide.id) ||
+      !finishedTs ||
+      Date.now() - finishedTs <= 20 * 60 * 1000;
+
+    if (!isRecentOrTracked) return;
+
+    autoPromptedRateSolicitudIdsRef.current.add(unratedCompletedPassengerRide.id);
+    playMicroSound('payment_done');
+    setMapCalificarTarget({
+      driverId:
+        unratedCompletedPassengerRide.choferId ||
+        unratedCompletedPassengerRide.choferNombre ||
+        'chofer',
+      driverName: unratedCompletedPassengerRide.choferNombre || 'Prestador UPPA',
+      solicitudId: unratedCompletedPassengerRide.id,
+      origen: unratedCompletedPassengerRide.origen,
+      destino: unratedCompletedPassengerRide.destino,
+    });
+  }, [unratedCompletedPassengerRide, dismissedRateBannerId]);
 
   // Mostrar la tarjeta de viaje activo al pasajero: 4s mientras busca móvil, y permanente al confirmarse el viaje con su Código de Viaje
   useEffect(() => {
@@ -3887,6 +3929,8 @@ export default function App() {
                               'chofer',
                             driverName: unratedCompletedPassengerRide.choferNombre || 'Prestador UPPA',
                             solicitudId: unratedCompletedPassengerRide.id,
+                            origen: unratedCompletedPassengerRide.origen,
+                            destino: unratedCompletedPassengerRide.destino,
                           });
                         }}
                         title="Calificar prestador"
@@ -4368,6 +4412,9 @@ export default function App() {
           driverName={mapCalificarTarget.driverName}
           pasajeroId={currentUser.id}
           pasajeroNombre={currentUser.name}
+          solicitudId={mapCalificarTarget.solicitudId}
+          origen={mapCalificarTarget.origen}
+          destino={mapCalificarTarget.destino}
           onSuccess={() => {
             markSolicitudAsRated(
               mapCalificarTarget.solicitudId,

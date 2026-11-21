@@ -158,6 +158,8 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
     driverId: string;
     driverName: string;
     solicitudId: string;
+    origen?: string;
+    destino?: string;
   } | null>(null);
 
   const [ratedSolicitudIds, setRatedSolicitudIds] = useState<string[]>(() => {
@@ -467,7 +469,7 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
     return visibleSolicitudes.filter((sol) => doesSolicitudBelongToMeAsPassenger(sol));
   }, [visibleSolicitudes, currentUserId, currentUserName]);
 
-  // Viajes completados elegibles para calificar (del pasajero, últimas 3 horas, solo si aún no calificó al prestador)
+  // Viajes completados elegibles para calificar (del pasajero, últimas 3 horas, uno por cada viaje finalizado)
   const eligibleCompletedRides = useMemo(() => {
     if (isPrestadorLogueado) return [];
     const cutoff = nowTimestamp - RANKING_WINDOW_MS;
@@ -476,7 +478,6 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
         if (s.estado !== 'completado') return false;
         if (!doesSolicitudBelongToMeAsPassenger(s)) return false;
         if (ratedSolicitudIds.includes(s.id)) return false;
-        if (isDriverAlreadyRatedByMe(s.choferId, s.choferNombre)) return false;
         const ts = Number(s.fechaCompletado || s.fechaAceptado || s.fechaSolicitud || 0);
         return !ts || ts >= cutoff;
       })
@@ -485,7 +486,7 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
           Number(b.fechaCompletado || b.fechaAceptado || 0) -
           Number(a.fechaCompletado || a.fechaAceptado || 0)
       );
-  }, [isPrestadorLogueado, solicitudes, ratedSolicitudIds, ratedDriverKeys, rankingList, nowTimestamp, currentUserId, currentUserName]);
+  }, [isPrestadorLogueado, solicitudes, ratedSolicitudIds, nowTimestamp, currentUserId, currentUserName]);
 
   const formatRemainingTime = (endsAt: number) => {
     const diff = endsAt - Date.now();
@@ -619,26 +620,24 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
           driverName.trim().toLowerCase() === currentUserName.trim().toLowerCase())
     );
 
-    const alreadyRatedDriver = isDriverAlreadyRatedByMe(driverId, driverName);
+    const cutoff = nowTimestamp - RANKING_WINDOW_MS;
+    const eligibleCompletedRide =
+      solicitudes
+        .filter((s) => {
+          if (s.estado !== 'completado') return false;
+          if (!doesSolicitudMatchDriver(s, driverId, driverName)) return false;
+          if (!doesSolicitudBelongToMeAsPassenger(s)) return false;
+          if (ratedSolicitudIds.includes(s.id)) return false;
+          const ts = Number(s.fechaCompletado || s.fechaAceptado || s.fechaSolicitud || 0);
+          return !ts || ts >= cutoff;
+        })
+        .sort(
+          (a, b) =>
+            Number(b.fechaCompletado || b.fechaAceptado || b.fechaSolicitud || 0) -
+            Number(a.fechaCompletado || a.fechaAceptado || a.fechaSolicitud || 0)
+        )[0] || null;
 
-    const eligibleCompletedRide = alreadyRatedDriver
-      ? null
-      : solicitudes
-          .filter(
-            (s) =>
-              s.estado === 'completado' &&
-              doesSolicitudMatchDriver(s, driverId, driverName) &&
-              doesSolicitudBelongToMeAsPassenger(s) &&
-              !ratedSolicitudIds.includes(s.id) &&
-              !isDriverAlreadyRatedByMe(s.choferId, s.choferNombre)
-          )
-          .sort(
-            (a, b) =>
-              Number(b.fechaAceptado || b.fechaSolicitud || 0) -
-              Number(a.fechaAceptado || a.fechaSolicitud || 0)
-          )[0] || null;
-
-    const canRate = Boolean(eligibleCompletedRide && !isBusy && !isViewerOwnCard && !alreadyRatedDriver);
+    const canRate = Boolean(eligibleCompletedRide && !isBusy && !isViewerOwnCard);
     const isWhatsAppLocked = Boolean(isBusy && !isViewerActivePassenger && !isViewerOwnCard);
 
     return {
@@ -1905,6 +1904,8 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                           driverId: ride.choferId || ride.choferNombre || 'chofer',
                           driverName: ride.choferNombre || 'Prestador UPPA',
                           solicitudId: ride.id,
+                          origen: ride.origen,
+                          destino: ride.destino,
                         })
                       }
                       className="min-h-[38px] px-3 py-1.5 rounded-xl uppa-cta-yellow uppa-calificar-destello font-black text-xs flex items-center gap-1.5 cursor-pointer shrink-0"
@@ -2447,6 +2448,8 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                           driverId: activeDriverFeatured.userId || activeDriverFeatured.id,
                           driverName: activeDriverFeatured.driverName,
                           solicitudId: featuredAccess.eligibleCompletedRide.id,
+                          origen: featuredAccess.eligibleCompletedRide.origen,
+                          destino: featuredAccess.eligibleCompletedRide.destino,
                         });
                       }}
                       className={`min-h-[42px] px-3 py-2 rounded-xl border-2 text-xs font-black flex items-center justify-center gap-1.5 transition-all ${
@@ -2732,6 +2735,9 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
           driverName={calificarTarget.driverName}
           pasajeroId={currentUserId}
           pasajeroNombre={currentUserName}
+          solicitudId={calificarTarget.solicitudId}
+          origen={calificarTarget.origen}
+          destino={calificarTarget.destino}
           onSuccess={() => {
             markSolicitudAsRated(
               calificarTarget.solicitudId,
