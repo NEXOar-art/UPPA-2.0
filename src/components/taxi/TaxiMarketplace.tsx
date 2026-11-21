@@ -11,6 +11,7 @@ import {
   getDriversDisponibilidadMap,
   subscribeToDriversDisponibilidad,
   setDriverDisponibilidad,
+  syncDriverDisponibilidadToFirestore,
   validarCodigoSeguridadViaje,
   anularViajePorCodigo,
   activarGpsHaciaPasajero,
@@ -288,6 +289,17 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
   }, []);
 
   const getTaxiDisponibilidad = (taxi: TaxiListing): 'desocupado' | 'ocupado' => {
+    const cleanDriverName = (taxi.driverName || '').trim().toLowerCase();
+    const hasActiveRide = solicitudes.some((s) => {
+      if (s.estado !== 'aceptado' && s.estado !== 'en_camino') return false;
+      const cleanSolChofer = (s.choferNombre || '').trim().toLowerCase();
+      return Boolean(
+        (s.choferId && (s.choferId === taxi.userId || s.choferId === taxi.id)) ||
+          (cleanDriverName && cleanSolChofer && cleanSolChofer === cleanDriverName)
+      );
+    });
+    if (hasActiveRide) return 'ocupado';
+
     const keys = [
       taxi.id,
       taxi.userId,
@@ -520,7 +532,7 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
     }
 
     return list;
-  }, [taxis, consoleVehicleType, nowTimestamp, refCoords, disponibilidadMap]);
+  }, [taxis, consoleVehicleType, nowTimestamp, refCoords, disponibilidadMap, solicitudes]);
 
   const safeFeaturedIndex =
     consoleMatchingTaxis.length > 0 ? featuredIndex % consoleMatchingTaxis.length : 0;
@@ -661,14 +673,24 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
     return `https://wa.me/${phone}?text=${text}`;
   }, [activeDriverFeatured, consoleVehicleType]);
 
-  const autoCount = useMemo(
-    () => taxis.filter((t) => t.endsAt > nowTimestamp && normalizeVehicleType(t.vehicleType) === 'auto').length,
-    [taxis, nowTimestamp]
-  );
-  const motoCount = useMemo(
-    () => taxis.filter((t) => t.endsAt > nowTimestamp && normalizeVehicleType(t.vehicleType) === 'moto').length,
-    [taxis, nowTimestamp]
-  );
+  const autoTaxisStats = useMemo(() => {
+    const active = taxis.filter(
+      (t) => t.endsAt > nowTimestamp && normalizeVehicleType(t.vehicleType) === 'auto'
+    );
+    const available = active.filter((t) => getTaxiDisponibilidad(t) === 'desocupado').length;
+    return { total: active.length, available, busy: active.length - available };
+  }, [taxis, nowTimestamp, disponibilidadMap, solicitudes]);
+
+  const motoTaxisStats = useMemo(() => {
+    const active = taxis.filter(
+      (t) => t.endsAt > nowTimestamp && normalizeVehicleType(t.vehicleType) === 'moto'
+    );
+    const available = active.filter((t) => getTaxiDisponibilidad(t) === 'desocupado').length;
+    return { total: active.length, available, busy: active.length - available };
+  }, [taxis, nowTimestamp, disponibilidadMap, solicitudes]);
+
+  const autoCount = autoTaxisStats.total;
+  const motoCount = motoTaxisStats.total;
 
   const handleToggleMyDisponibilidad = async (
     forceNext?: 'desocupado' | 'ocupado',
@@ -714,6 +736,7 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
     ].filter(Boolean) as string[];
 
     keys.forEach((k) => setDriverDisponibilidad(k, nextDisp));
+    syncDriverDisponibilidadToFirestore(keys, nextDisp).catch(() => {});
     setDisponibilidadMap((prev) => {
       const next = { ...prev };
       keys.forEach((k) => {
@@ -724,8 +747,8 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
 
     setRideSuccessNotice(
       nextDisp === 'desocupado'
-        ? 'Estado cambiado a DISPONIBLE. Ya podés ver las solicitudes de pasajeros.'
-        : 'Estado cambiado a OCUPADO. No recibirás nuevas solicitudes hasta pasar a DISPONIBLE.'
+        ? 'Estado cambiado a DISPONIBLE (sincronizado con Mapa). Ya podés ver las solicitudes de pasajeros.'
+        : 'Estado cambiado a OCUPADO (sincronizado con Mapa). No recibirás nuevas solicitudes hasta pasar a DISPONIBLE.'
     );
     setTimeout(() => setRideSuccessNotice(null), 5000);
   };
@@ -806,6 +829,7 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
       ].filter(Boolean) as string[];
 
       keys.forEach((k) => setDriverDisponibilidad(k, 'ocupado'));
+      syncDriverDisponibilidadToFirestore(keys, 'ocupado').catch(() => {});
       setDisponibilidadMap((prev) => {
         const next = { ...prev };
         keys.forEach((k) => {
@@ -1932,30 +1956,44 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
             : null;
           const isFeaturedOcupado = Boolean(featuredAccess?.isBusy);
 
+          const consoleStats = consoleVehicleType === 'auto' ? autoTaxisStats : motoTaxisStats;
+
           return (
             <div className="w-full max-w-[460px] mx-auto rounded-3xl bg-[#202329] border-2 border-white/15 p-3.5 sm:p-4 shadow-[5px_5px_0px_rgba(0,0,0,0.65)] space-y-3">
               {/* Fila de Estado Superior */}
               <div className="flex items-center justify-between gap-2 flex-wrap">
-                <div className="text-[#B7F36B] font-black text-xs sm:text-sm flex items-center gap-2">
+                <div
+                  className={`font-black text-xs sm:text-sm flex items-center gap-2 ${
+                    activeDriverFeatured
+                      ? isFeaturedOcupado
+                        ? 'text-[#FFF19A]'
+                        : 'text-[#B7F36B]'
+                      : 'text-[#9299A5]'
+                  }`}
+                >
                   <span
                     className={`w-2.5 h-2.5 rounded-full ${
                       activeDriverFeatured
                         ? isFeaturedOcupado
-                          ? 'bg-[#FFF19A]'
+                          ? 'bg-[#FFF19A] animate-pulse'
                           : 'bg-[#B7F36B]'
                         : 'bg-[#9299A5]'
                     }`}
                   />
                   <span>
                     {activeDriverFeatured
-                      ? `Llegada estimada ~${dynamicEtaMin} min · ${
-                          consoleVehicleType === 'moto' ? 'Moto Taxi' : 'Auto Taxi'
-                        }`
+                      ? isFeaturedOcupado
+                        ? `OCUPADO (En viaje) · ${
+                            consoleVehicleType === 'moto' ? 'Moto Taxi' : 'Auto Taxi'
+                          }`
+                        : `DISPONIBLE · Llegada ~${dynamicEtaMin} min`
                       : `Disponibilidad de ${consoleVehicleType === 'moto' ? 'Moto Taxi' : 'Auto Taxi'}`}
                   </span>
                 </div>
-                <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-[#101114] border border-white/15 text-[#9299A5]">
-                  {consoleVehicleType === 'auto' ? `${autoCount} autos` : `${motoCount} motos`}
+                <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-[#101114] border border-white/15 text-white flex items-center gap-1.5">
+                  <span className="text-[#B7F36B]">{consoleStats.available} disp.</span>
+                  <span className="text-[#9299A5]">·</span>
+                  <span className="text-[#FFF19A]">{consoleStats.busy} ocup.</span>
                 </span>
               </div>
 
@@ -1968,7 +2006,7 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                     setReqType('auto');
                     setFeaturedIndex(0);
                   }}
-                  title="Ver fichas de Auto Taxi"
+                  title="Ver fichas y disponibilidad de Auto Taxi"
                   className={`min-h-[58px] px-3 py-2 rounded-2xl border-2 flex items-center gap-2.5 transition-all cursor-pointer active:scale-[0.98] ${
                     consoleVehicleType === 'auto'
                       ? 'bg-[#101114] border-[#FFF19A] text-white shadow-[0_0_0_1px_#FFF19A]'
@@ -1990,8 +2028,29 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                     >
                       Auto Taxi
                     </div>
-                    <div className="text-[10px] font-semibold text-[#9299A5] truncate">
-                      {autoCount} {autoCount === 1 ? 'prestador' : 'prestadores'}
+                    <div className="text-[10px] font-bold flex items-center gap-1 truncate mt-0.5">
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                          autoTaxisStats.total === 0
+                            ? 'bg-[#9299A5]'
+                            : autoTaxisStats.available > 0
+                            ? 'bg-[#B7F36B]'
+                            : 'bg-[#FFF19A]'
+                        }`}
+                      />
+                      <span
+                        className={
+                          autoTaxisStats.total === 0
+                            ? 'text-[#9299A5]'
+                            : autoTaxisStats.available > 0
+                            ? 'text-[#B7F36B]'
+                            : 'text-[#FFF19A]'
+                        }
+                      >
+                        {autoTaxisStats.total === 0
+                          ? '0 activos'
+                          : `${autoTaxisStats.available} disp. · ${autoTaxisStats.busy} ocup.`}
+                      </span>
                     </div>
                   </div>
                 </button>
@@ -2003,7 +2062,7 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                     setReqType('moto');
                     setFeaturedIndex(0);
                   }}
-                  title="Ver fichas de Moto Taxi"
+                  title="Ver fichas y disponibilidad de Moto Taxi"
                   className={`min-h-[58px] px-3 py-2 rounded-2xl border-2 flex items-center gap-2.5 transition-all cursor-pointer active:scale-[0.98] ${
                     consoleVehicleType === 'moto'
                       ? 'bg-[#101114] border-[#FFF19A] text-white shadow-[0_0_0_1px_#FFF19A]'
@@ -2025,12 +2084,72 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                     >
                       Moto Taxi
                     </div>
-                    <div className="text-[10px] font-semibold text-[#9299A5] truncate">
-                      {motoCount} {motoCount === 1 ? 'prestador' : 'prestadores'}
+                    <div className="text-[10px] font-bold flex items-center gap-1 truncate mt-0.5">
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                          motoTaxisStats.total === 0
+                            ? 'bg-[#9299A5]'
+                            : motoTaxisStats.available > 0
+                            ? 'bg-[#B7F36B]'
+                            : 'bg-[#FFF19A]'
+                        }`}
+                      />
+                      <span
+                        className={
+                          motoTaxisStats.total === 0
+                            ? 'text-[#9299A5]'
+                            : motoTaxisStats.available > 0
+                            ? 'text-[#B7F36B]'
+                            : 'text-[#FFF19A]'
+                        }
+                      >
+                        {motoTaxisStats.total === 0
+                          ? '0 activos'
+                          : `${motoTaxisStats.available} disp. · ${motoTaxisStats.busy} ocup.`}
+                      </span>
                     </div>
                   </div>
                 </button>
               </div>
+
+              {/* Barra rápida de disponibilidad de todos los móviles del tipo seleccionado */}
+              {consoleMatchingTaxis.length > 0 && (
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 no-scrollbar">
+                  {consoleMatchingTaxis.map((item, idx) => {
+                    const itemBusy = !item.isDesocupado;
+                    const isSelected = idx === safeFeaturedIndex;
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => setFeaturedIndex(idx)}
+                        title={`${item.driverName} · ${itemBusy ? 'OCUPADO (En viaje)' : 'DISPONIBLE'}`}
+                        className={`px-2.5 py-1.5 rounded-xl border text-[10.5px] font-bold flex items-center gap-1.5 shrink-0 cursor-pointer transition-all ${
+                          isSelected
+                            ? itemBusy
+                              ? 'bg-[#FFF19A]/20 border-[#FFF19A] text-white'
+                              : 'bg-[#B7F36B]/20 border-[#B7F36B] text-white'
+                            : 'bg-[#101114] border-white/15 text-[#9299A5] hover:border-white/35 hover:text-white'
+                        }`}
+                      >
+                        <span
+                          className={`w-2 h-2 rounded-full shrink-0 ${
+                            itemBusy ? 'bg-[#FFF19A]' : 'bg-[#B7F36B]'
+                          }`}
+                        />
+                        <span className="truncate max-w-[92px] text-white">{item.driverName}</span>
+                        <span
+                          className={`text-[9px] font-black uppercase ${
+                            itemBusy ? 'text-[#FFF19A]' : 'text-[#B7F36B]'
+                          }`}
+                        >
+                          {itemBusy ? 'Ocup.' : 'Disp.'}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
 
               {/* Contenedor Único: Logo Botón (siguiente ficha del mismo vehículo) + Ficha Completa */}
               <div className="grid grid-cols-12 gap-2.5 items-stretch">
@@ -2067,7 +2186,7 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                     </span>
                   </div>
 
-                  <div className="my-1 flex items-center justify-center h-[160px] w-full">
+                  <div className="my-1 flex items-center justify-center h-[145px] w-full">
                     <img
                       src={
                         consoleVehicleType === 'auto'
@@ -2080,6 +2199,18 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                       }`}
                     />
                   </div>
+
+                  {activeDriverFeatured && (
+                    <div
+                      className={`w-full py-1 px-2 rounded-lg text-[9.5px] font-black uppercase text-center mb-1 ${
+                        isFeaturedOcupado
+                          ? 'bg-[#FFF19A] text-[#101114]'
+                          : 'bg-[#B7F36B] text-[#101114]'
+                      }`}
+                    >
+                      {isFeaturedOcupado ? '● Ocupado' : '● Disponible'}
+                    </div>
+                  )}
 
                   <div className="text-[10px] text-[#9299A5] font-bold text-center w-full pt-1.5 border-t border-white/10 leading-tight">
                     {consoleMatchingTaxis.length > 1 ? (
@@ -2098,10 +2229,27 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                 {activeDriverFeatured ? (
                   <div
                     className={`col-span-7 rounded-2xl bg-[#101114] border-2 p-3 flex flex-col justify-between space-y-2 ${
-                      isFeaturedOcupado ? 'border-[#FFF19A]/60' : 'border-[#B7F36B]/45'
+                      isFeaturedOcupado ? 'border-[#FFF19A]/70' : 'border-[#B7F36B]/55'
                     }`}
                   >
                     <div className="space-y-1.5">
+                      <div
+                        className={`px-2 py-1 rounded-lg text-[9.5px] font-black uppercase tracking-wide flex items-center justify-between gap-1 ${
+                          isFeaturedOcupado
+                            ? 'bg-[#FFF19A]/15 border border-[#FFF19A]/60 text-[#FFF19A]'
+                            : 'bg-[#B7F36B]/15 border border-[#B7F36B]/60 text-[#B7F36B]'
+                        }`}
+                      >
+                        <span>
+                          {isFeaturedOcupado ? 'Ocupado · En viaje' : 'Disponible ahora'}
+                        </span>
+                        <span
+                          className={`w-2 h-2 rounded-full ${
+                            isFeaturedOcupado ? 'bg-[#FFF19A] animate-pulse' : 'bg-[#B7F36B]'
+                          }`}
+                        />
+                      </div>
+
                       <div className="flex items-start gap-2">
                         <div className="relative shrink-0">
                           <div className="w-10 h-10 rounded-xl bg-[#202329] border border-[#B7F36B] overflow-hidden flex items-center justify-center">

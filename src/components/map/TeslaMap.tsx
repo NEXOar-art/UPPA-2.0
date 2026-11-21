@@ -111,6 +111,9 @@ interface TeslaMapProps {
   userLocation?: UserLocation | null;
   isDriverMode?: boolean;
   isDriverOnline?: boolean;
+  driverDisponibilidad?: 'desocupado' | 'ocupado';
+  onToggleDriverDisponibilidad?: () => void;
+  hasUnvalidatedRide?: boolean;
   activeTrackingTaxi?: TaxiListing | null;
   onClearTrackingTaxi?: () => void;
   activeTrackingPassenger?: SolicitudTransporteFirestore | null;
@@ -279,6 +282,9 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
   userLocation,
   isDriverMode = false,
   isDriverOnline = false,
+  driverDisponibilidad = 'desocupado',
+  onToggleDriverDisponibilidad,
+  hasUnvalidatedRide = false,
   activeTrackingTaxi,
   onClearTrackingTaxi,
   activeTrackingPassenger,
@@ -996,12 +1002,13 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
     if (!userLocation) return;
 
     const isDriver = isDriverMode && isDriverOnline;
+    const isDriverOcupado = isDriver && driverDisponibilidad === 'ocupado';
 
     if (userLocation.accuracy && userLocation.accuracy < 100) {
       L.circle([userLocation.lat, userLocation.lng], {
         radius: userLocation.accuracy,
-        color: isDriver ? '#22c55e' : '#38bdf8',
-        fillColor: isDriver ? '#86efac' : '#7dd3fc',
+        color: isDriver ? (isDriverOcupado ? '#f59e0b' : '#22c55e') : '#38bdf8',
+        fillColor: isDriver ? (isDriverOcupado ? '#FFF19A' : '#86efac') : '#7dd3fc',
         fillOpacity: 0.14,
         weight: 1,
       }).addTo(layer);
@@ -1012,11 +1019,21 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
       html: `
         <div class="relative flex items-center justify-center">
           <div class="absolute -inset-2.5 rounded-full ${
-            isDriver ? 'bg-emerald-400/30' : 'bg-sky-400/30'
+            isDriver
+              ? isDriverOcupado
+                ? 'bg-amber-400/35'
+                : 'bg-emerald-400/30'
+              : 'bg-sky-400/30'
           } animate-pulse-ring"></div>
           <div class="w-5 h-5 rounded-full ${
-            isDriver ? 'bg-emerald-400 border-2 border-white' : 'bg-sky-400 border-2 border-white'
-          } shadow-[0_0_15px_${isDriver ? '#86efac' : '#7dd3fc'}] flex items-center justify-center text-[10px] text-slate-950 font-bold">
+            isDriver
+              ? isDriverOcupado
+                ? 'bg-[#FFF19A] border-2 border-[#101114]'
+                : 'bg-emerald-400 border-2 border-white'
+              : 'bg-sky-400 border-2 border-white'
+          } shadow-[0_0_15px_${
+            isDriver ? (isDriverOcupado ? '#FFF19A' : '#86efac') : '#7dd3fc'
+          }] flex items-center justify-center text-[10px] text-slate-950 font-bold">
             ${isDriver ? '🚕' : '●'}
           </div>
         </div>
@@ -1025,8 +1042,14 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
       iconAnchor: [10, 10],
     });
 
-    L.marker([userLocation.lat, userLocation.lng], { icon: beaconIcon }).addTo(layer);
-  }, [userLocation, isDriverMode, isDriverOnline]);
+    const userMarker = L.marker([userLocation.lat, userLocation.lng], { icon: beaconIcon }).addTo(layer);
+    if (isDriverMode) {
+      userMarker.bindTooltip(
+        isDriverOcupado ? 'Tu móvil · OCUPADO' : 'Tu móvil · DISPONIBLE',
+        { direction: 'top', offset: [0, -10], className: 'uppa-map-tooltip' }
+      );
+    }
+  }, [userLocation, isDriverMode, isDriverOnline, driverDisponibilidad]);
 
   const handleClearStopTrajectory = () => {
     setStopTrajectoryInfo(null);
@@ -2116,6 +2139,45 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
       )}
 
       {/* El indicador compacto sin texto de Modo Mapa Libre ahora se ubica junto al botón Opciones de transporte */}
+
+      {/* Indicador de Disponibilidad sincronizado en el Mapa para Prestadores (Ocupado / Disponible) */}
+      {isDriverMode && (
+        <div className="absolute top-3 left-12 z-[41] pointer-events-auto">
+          <button
+            type="button"
+            disabled={hasUnvalidatedRide || !onToggleDriverDisponibilidad}
+            onClick={() => {
+              resetHideTimer();
+              onToggleDriverDisponibilidad?.();
+            }}
+            title={
+              hasUnvalidatedRide
+                ? 'Estado: OCUPADO (validá el código del pasajero en Taxis & Motos antes de pasar a disponible)'
+                : driverDisponibilidad === 'ocupado'
+                ? 'Estado en Mapa y Taxis & Motos: OCUPADO. Tocá para pasar a DISPONIBLE'
+                : 'Estado en Mapa y Taxis & Motos: DISPONIBLE. Tocá para pasar a OCUPADO'
+            }
+            className={`h-7 sm:h-8 px-2.5 sm:px-3 rounded-full border-2 shadow-[0_2px_10px_rgba(0,0,0,0.55)] text-[10px] sm:text-[11px] font-black uppercase tracking-wide flex items-center gap-1.5 transition-all ${
+              hasUnvalidatedRide
+                ? 'bg-[#FFF19A]/85 text-[#101114] border-[#101114] cursor-not-allowed'
+                : driverDisponibilidad === 'ocupado'
+                ? 'bg-[#FFF19A] text-[#101114] border-[#101114] cursor-pointer active:scale-95'
+                : 'bg-[#101114]/95 text-[#B7F36B] border-[#B7F36B] hover:bg-[#B7F36B]/15 cursor-pointer active:scale-95'
+            }`}
+          >
+            <span
+              className={`w-2 h-2 rounded-full shrink-0 ${
+                driverDisponibilidad === 'ocupado'
+                  ? 'bg-[#101114] animate-ping'
+                  : 'bg-[#B7F36B]'
+              }`}
+            />
+            <span>
+              {driverDisponibilidad === 'ocupado' ? 'OCUPADO' : 'DISPONIBLE'}
+            </span>
+          </button>
+        </div>
+      )}
 
       {/* Parte Superior del Mapa: Barra Horizontal de Botones Flotantes (Paradas, Estaciones, Escuelas, Hospitales, Prestadores, Filtros, Eventos) */}
       <div

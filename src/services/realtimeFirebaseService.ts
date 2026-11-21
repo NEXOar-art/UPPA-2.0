@@ -1661,10 +1661,11 @@ export async function aceptarSolicitudTransporte(
     { solicitudId, choferId }
   );
 
-  // Cuando un prestador acepta un servicio, pasa automáticamente a estado OCUPADO
+  // Cuando un prestador acepta un servicio, pasa automáticamente a estado OCUPADO en caché y Firestore
   if (choferId) setDriverDisponibilidad(choferId, 'ocupado');
   if (choferNombre) setDriverDisponibilidad(choferNombre, 'ocupado');
   if (choferTelefono) setDriverDisponibilidad(choferTelefono, 'ocupado');
+  syncDriverDisponibilidadToFirestore([choferId, choferNombre, choferTelefono], 'ocupado').catch(() => {});
 
   try {
     await ensureFirebaseAuthSession();
@@ -2032,6 +2033,83 @@ export function setDriverDisponibilidad(key: string, estado: 'desocupado' | 'ocu
     try {
       window.dispatchEvent(new CustomEvent('uppa_disponibilidad_change', { detail: updated }));
     } catch {}
+  }
+}
+
+/**
+ * Sincroniza la disponibilidad (desocupado / ocupado) tanto en caché/BroadcastChannel
+ * como en las fichas activas de Firestore (habilitaciones) para que Mapa, Taxis & Motos
+ * y todos los pasajeros vean el mismo estado en tiempo real.
+ */
+export async function syncDriverDisponibilidadToFirestore(
+  identifiers: (string | undefined | null)[],
+  estado: 'desocupado' | 'ocupado'
+): Promise<void> {
+  const cleanIds = Array.from(
+    new Set(
+      identifiers
+        .filter((v): v is string => typeof v === 'string' && v.trim().length > 0)
+        .map((v) => v.trim())
+    )
+  );
+  const normSet = new Set(cleanIds.map((v) => v.toLowerCase()));
+  const phoneDigitsSet = new Set(
+    cleanIds
+      .map((v) => v.replace(/\D/g, ''))
+      .filter((d) => d.length >= 6)
+      .map((d) => d.slice(-8))
+  );
+
+  const currentHabs = obtenerHabilitacionesActuales();
+  const matchingHabs = currentHabs.filter((h) => {
+    if (h.estado !== 'activo') return false;
+    const hId = (h.id || '').trim();
+    const hDriverId = (h.driverId || '').trim();
+    const hName = (h.driverName || '').trim().toLowerCase();
+    const hPhoneDigits = (h.whatsapp || '').replace(/\D/g, '');
+    const hPhoneSuffix = hPhoneDigits.length >= 6 ? hPhoneDigits.slice(-8) : '';
+
+    return (
+      (hId && (cleanIds.includes(hId) || normSet.has(hId.toLowerCase()))) ||
+      (hDriverId && (cleanIds.includes(hDriverId) || normSet.has(hDriverId.toLowerCase()))) ||
+      (hName && normSet.has(hName)) ||
+      (hPhoneSuffix && phoneDigitsSet.has(hPhoneSuffix))
+    );
+  });
+
+  const allKeys = Array.from(
+    new Set([
+      ...cleanIds,
+      ...matchingHabs.flatMap((m) => [m.id, m.driverId, m.driverName, m.whatsapp].filter(Boolean)),
+    ])
+  ) as string[];
+
+  allKeys.forEach((k) => setDriverDisponibilidad(k, estado));
+
+  if (matchingHabs.length > 0) {
+    const updatedHabs = currentHabs.map((h) =>
+      matchingHabs.some((m) => m.id === h.id) ? { ...h, disponibilidad: estado } : h
+    );
+    setCached('habilitaciones', updatedHabs);
+    notifyHabilitacionesListeners(updatedHabs);
+
+    try {
+      await ensureFirebaseAuthSession();
+      for (const m of matchingHabs) {
+        try {
+          const docRef = doc(db, COL_HABILITACIONES, m.id);
+          await updateDoc(docRef, {
+            disponibilidad: estado,
+          });
+          notifyFirestoreSyncHealthy(`${COL_HABILITACIONES}/${m.id}`);
+        } catch (err) {
+          console.warn('Firestore syncDriverDisponibilidadToFirestore resilient mode:', err);
+          reportFirestorePermissionIssue(err, OperationType.UPDATE, `${COL_HABILITACIONES}/${m.id}`);
+        }
+      }
+    } catch (err) {
+      console.warn('syncDriverDisponibilidadToFirestore auth/update notice:', err);
+    }
   }
 }
 

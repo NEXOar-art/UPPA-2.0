@@ -78,7 +78,9 @@ import {
   triggerInAppPushNotification,
   crearReporte,
   subscribeToDriversDisponibilidad,
+  getDriversDisponibilidadMap,
   setDriverDisponibilidad,
+  syncDriverDisponibilidadToFirestore,
   finalizarViajeDeChofer,
   activarGpsHaciaPasajero,
   actualizarUbicacionPasajeroSolicitud,
@@ -696,33 +698,20 @@ export default function App() {
     return 0;
   }, [userHabilitacionRecord, driverSession]);
 
-  // Disponibilidad de prestador (Desocupado / Ocupado) gestionada únicamente por el titular
-  const [driverDisponibilidad, setDriverDisponibilidadState] = useState<'desocupado' | 'ocupado'>('desocupado');
+  // Disponibilidad de prestador (Desocupado / Ocupado) gestionada únicamente por el titular y sincronizada entre Mapa y Taxis & Motos
+  const [driversDisponibilidadMap, setDriversDisponibilidadMap] = useState<
+    Record<string, 'desocupado' | 'ocupado'>
+  >(() => getDriversDisponibilidadMap());
+  const [driverDisponibilidad, setDriverDisponibilidadState] = useState<'desocupado' | 'ocupado'>(
+    () => userHabilitacionRecord?.disponibilidad || 'desocupado'
+  );
 
   useEffect(() => {
     const unsub = subscribeToDriversDisponibilidad((map) => {
-      const keys = [
-        currentUser?.uid,
-        currentUser?.id,
-        currentUser?.nombre,
-        currentUser?.name,
-        currentUser?.phone,
-        driverSession?.driverName,
-        userHabilitacionRecord?.driverId,
-        userHabilitacionRecord?.driverName,
-      ].filter(Boolean) as string[];
-
-      for (const k of keys) {
-        const val = map[k] || map[k.toLowerCase()];
-        if (val) {
-          setDriverDisponibilidadState(val);
-          return;
-        }
-      }
-      setDriverDisponibilidadState('desocupado');
+      setDriversDisponibilidadMap(map);
     });
     return () => unsub();
-  }, [currentUser, driverSession, userHabilitacionRecord]);
+  }, []);
 
   const handleSetDriverDisponibilidad = async (
     nextState: 'desocupado' | 'ocupado',
@@ -770,7 +759,9 @@ export default function App() {
       currentUser?.nombre,
       currentUser?.name,
       currentUser?.phone,
+      driverSession?.driverId,
       driverSession?.driverName,
+      userHabilitacionRecord?.id,
       userHabilitacionRecord?.driverId,
       userHabilitacionRecord?.driverName,
       userHabilitacionRecord?.whatsapp,
@@ -796,12 +787,13 @@ export default function App() {
     keys.forEach((k) => {
       setDriverDisponibilidad(k, nextState);
     });
+    syncDriverDisponibilidadToFirestore(keys, nextState).catch(() => {});
     setDriverDisponibilidadState(nextState);
 
     showToast(
       nextState === 'ocupado'
-        ? '🟡 Estado: OCUPADO (En viaje activo con pasajero)'
-        : '🟢 ¡Estado: DISPONIBLE! Viaje finalizado con éxito. Toda la comunidad ve que estás activo y disponible para nuevos viajes.'
+        ? '🟡 Estado: OCUPADO (Sincronizado en Mapa y Taxis & Motos)'
+        : '🟢 ¡Estado: DISPONIBLE! Sincronizado en Mapa y Taxis & Motos.'
     );
   };
 
@@ -2032,6 +2024,34 @@ export default function App() {
     const result: TaxiListing[] = [];
     const seen = new Set<string>();
 
+    const resolveTaxiDisponibilidad = (
+      keys: (string | undefined)[],
+      fallback?: 'desocupado' | 'ocupado',
+      driverName?: string,
+      driverId?: string,
+      habId?: string
+    ): 'desocupado' | 'ocupado' => {
+      const cleanName = (driverName || '').trim().toLowerCase();
+      const hasActiveRide = solicitudesList.some((s) => {
+        if (s.estado !== 'aceptado' && s.estado !== 'en_camino') return false;
+        const solName = (s.choferNombre || '').trim().toLowerCase();
+        return Boolean(
+          (s.choferId && (s.choferId === driverId || s.choferId === habId)) ||
+            (cleanName && solName && solName === cleanName)
+        );
+      });
+      if (hasActiveRide) return 'ocupado';
+
+      for (const rawKey of keys) {
+        if (!rawKey) continue;
+        const val =
+          driversDisponibilidadMap[rawKey] ||
+          driversDisponibilidadMap[rawKey.trim().toLowerCase()];
+        if (val) return val;
+      }
+      return fallback || 'desocupado';
+    };
+
     // 1. Prestadores habilitados por el Administrador en 'habilitaciones'
     habilitacionesList.forEach((hab, idx) => {
       const isActivo = hab.estado === 'activo';
@@ -2066,6 +2086,14 @@ export default function App() {
             ? hab.lng
             : detLng;
 
+        const effectiveDisp = resolveTaxiDisponibilidad(
+          [hab.id, hab.driverId, hab.driverName, hab.whatsapp],
+          hab.disponibilidad,
+          hab.driverName,
+          hab.driverId,
+          hab.id
+        );
+
         result.push({
           id: hab.id,
           userId: hab.driverId || hab.id,
@@ -2085,7 +2113,7 @@ export default function App() {
           completedRides: (hab as any).completedRides || (hab as any).viajesRealizados || 0,
           indiceSeguridad: hab.indiceSeguridad,
           activationCode: hab.activationCode,
-          disponibilidad: hab.disponibilidad || 'desocupado',
+          disponibilidad: effectiveDisp,
           asientos: hab.asientos,
           aireAcondicionado: hab.aireAcondicionado,
           baul: hab.baul,
@@ -2100,6 +2128,20 @@ export default function App() {
       const sName = (driverSession.driverName || currentUser.name || '').trim().toLowerCase();
       if (!seen.has(sName)) {
         seen.add(sName);
+        const sessionDisp = resolveTaxiDisponibilidad(
+          [
+            driverSession.driverId,
+            driverSession.driverName,
+            driverSession.whatsapp,
+            currentUser.id,
+            currentUser.uid,
+            currentUser.name,
+            currentUser.phone,
+          ],
+          'desocupado',
+          driverSession.driverName || currentUser.name,
+          driverSession.driverId || currentUser.id
+        );
         result.push({
           id: driverSession.driverId || `session-${currentUser.id}`,
           userId: driverSession.driverId || currentUser.id,
@@ -2119,6 +2161,7 @@ export default function App() {
           completedRides: (driverSession as any).completedRides || 0,
           indiceSeguridad: (driverSession as any).indiceSeguridad,
           activationCode: driverSession.activationCode,
+          disponibilidad: sessionDisp,
           asientos: (driverSession as any).asientos,
           aireAcondicionado: (driverSession as any).aireAcondicionado,
           baul: (driverSession as any).baul,
@@ -2130,7 +2173,89 @@ export default function App() {
 
     // Solo se devuelven los prestadores de servicio 100% reales habilitados por el Administrador
     return result;
-  }, [habilitacionesList, driverSession, currentUser, userLocation]);
+  }, [habilitacionesList, driverSession, currentUser, userLocation, driversDisponibilidadMap, solicitudesList]);
+
+  // Viaje activo asignado al prestador logueado y sincronización total de su estado OCUPADO / DISPONIBLE
+  const myDriverActiveRide = useMemo(() => {
+    if (!isDriverUser) return null;
+    const myIds = new Set(
+      [currentUser?.id, currentUser?.uid, driverSession?.driverId, userHabilitacionRecord?.driverId].filter(
+        Boolean
+      ) as string[]
+    );
+    const myNames = new Set(
+      [currentUser?.name, currentUser?.nombre, driverSession?.driverName, userHabilitacionRecord?.driverName]
+        .filter(Boolean)
+        .map((n) => String(n).trim().toLowerCase())
+    );
+    return (
+      solicitudesList.find((s) => {
+        if (s.estado !== 'aceptado' && s.estado !== 'en_camino') return false;
+        const matchId = Boolean(s.choferId && myIds.has(s.choferId));
+        const matchName = Boolean(
+          s.choferNombre && myNames.has(s.choferNombre.trim().toLowerCase())
+        );
+        return matchId || matchName;
+      }) || null
+    );
+  }, [
+    isDriverUser,
+    solicitudesList,
+    currentUser?.id,
+    currentUser?.uid,
+    currentUser?.name,
+    currentUser?.nombre,
+    driverSession?.driverId,
+    driverSession?.driverName,
+    userHabilitacionRecord?.driverId,
+    userHabilitacionRecord?.driverName,
+  ]);
+
+  const myUnvalidatedDriverRide = Boolean(myDriverActiveRide && !myDriverActiveRide.codigoValidado);
+
+  useEffect(() => {
+    if (myDriverActiveRide) {
+      setDriverDisponibilidadState('ocupado');
+      return;
+    }
+
+    const keys = [
+      currentUser?.uid,
+      currentUser?.id,
+      currentUser?.nombre,
+      currentUser?.name,
+      currentUser?.phone,
+      driverSession?.driverId,
+      driverSession?.driverName,
+      userHabilitacionRecord?.id,
+      userHabilitacionRecord?.driverId,
+      userHabilitacionRecord?.driverName,
+      userHabilitacionRecord?.whatsapp,
+    ].filter(Boolean) as string[];
+
+    for (const k of keys) {
+      const val =
+        driversDisponibilidadMap[k] ||
+        driversDisponibilidadMap[k.trim().toLowerCase()];
+      if (val) {
+        setDriverDisponibilidadState(val);
+        return;
+      }
+    }
+
+    if (userHabilitacionRecord?.disponibilidad) {
+      setDriverDisponibilidadState(userHabilitacionRecord.disponibilidad);
+      return;
+    }
+
+    setDriverDisponibilidadState('desocupado');
+  }, [
+    myDriverActiveRide,
+    driversDisponibilidadMap,
+    currentUser,
+    driverSession,
+    userHabilitacionRecord,
+  ]);
 
   const myLiveActiveSolicitud = useMemo(() => {
     const now = Date.now();
@@ -2950,7 +3075,7 @@ export default function App() {
                 {isDriverUser && isDriverHabilitado && (
                   driverDisponibilidad === 'ocupado' ? (
                     <span className="text-[10px] font-black uppercase tracking-wider text-[#101114] hidden sm:inline px-2 py-0.5 rounded-md bg-[#FFF19A]">
-                      ACTIVO
+                      OCUPADO
                     </span>
                   ) : (
                     <span className="text-[10px] font-black uppercase tracking-wider text-[#101114] hidden sm:inline px-2 py-0.5 rounded-md bg-[#B7F36B]">
@@ -3004,7 +3129,7 @@ export default function App() {
                           {isDriverUser
                             ? isDriverHabilitado
                               ? driverDisponibilidad === 'ocupado'
-                                ? 'ACTIVO (En Viaje)'
+                                ? 'OCUPADO (En Viaje)'
                                 : 'Habilitado (Disponible)'
                               : 'Chofer Pendiente'
                             : 'Pasajero'}
@@ -3305,6 +3430,7 @@ export default function App() {
           endsAt={driverPaidEndsAt}
           activationCode={userHabilitacionRecord?.activationCode || driverSession?.activationCode}
           disponibilidad={driverDisponibilidad}
+          hasUnvalidatedRide={myUnvalidatedDriverRide}
           onToggleDisponibilidad={handleToggleDriverDisponibilidad}
           onCenterMap={() => setActiveTab('map')}
           onOpenRenewModal={() => setIsPublishTaxiOpen(true)}
@@ -3373,6 +3499,9 @@ export default function App() {
                 userLocation={userLocation}
                 isDriverMode={isPrestandoServicioTaxi}
                 isDriverOnline={isDriverOnline}
+                driverDisponibilidad={driverDisponibilidad}
+                onToggleDriverDisponibilidad={handleToggleDriverDisponibilidad}
+                hasUnvalidatedRide={myUnvalidatedDriverRide}
                 activeTrackingTaxi={liveActiveTrackingTaxi}
                 onClearTrackingTaxi={() => setActiveTrackingTaxi(null)}
                 onOpenPedirTransporte={handleRequestPedirTransporte}

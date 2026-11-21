@@ -23,6 +23,7 @@ interface DriverConnectionBarProps {
   endsAt?: number;
   activationCode?: string;
   disponibilidad?: 'desocupado' | 'ocupado';
+  hasUnvalidatedRide?: boolean;
   onToggleDisponibilidad?: () => void;
   onCenterMap: () => void;
   onOpenRenewModal?: () => void;
@@ -37,6 +38,7 @@ export const DriverConnectionBar: React.FC<DriverConnectionBarProps> = ({
   endsAt = 0,
   activationCode,
   disponibilidad = 'desocupado',
+  hasUnvalidatedRide = false,
   onToggleDisponibilidad,
   onCenterMap,
   onOpenRenewModal,
@@ -115,31 +117,41 @@ export const DriverConnectionBar: React.FC<DriverConnectionBarProps> = ({
           </span>
         </div>
 
-        {/* Botón de Disponibilidad (Ocupado / Desocupado) */}
+        {/* Botón de Disponibilidad sincronizado con Taxis & Motos (Ocupado / Disponible) */}
         {onToggleDisponibilidad && (
           <button
             type="button"
+            disabled={hasUnvalidatedRide}
             onClick={onToggleDisponibilidad}
-            className={`min-h-[38px] flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-black text-xs transition-all active:scale-95 cursor-pointer border-2 ${
-              disponibilidad === 'ocupado'
-                ? 'bg-[#FFF19A] text-[#101114] border-[#FFF19A]'
-                : 'bg-[#101114] hover:bg-white/5 border-[#B7F36B] text-[#B7F36B]'
+            className={`min-h-[38px] flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-black text-xs transition-all border-2 ${
+              hasUnvalidatedRide
+                ? 'bg-[#FFF19A]/75 text-[#101114] border-[#FFF19A]/75 cursor-not-allowed opacity-90'
+                : disponibilidad === 'ocupado'
+                ? 'bg-[#FFF19A] text-[#101114] border-[#FFF19A] active:scale-95 cursor-pointer'
+                : 'bg-[#101114] hover:bg-white/5 border-[#B7F36B] text-[#B7F36B] active:scale-95 cursor-pointer'
             }`}
             title={
-              disponibilidad === 'ocupado'
-                ? 'Estás en estado OCUPADO. Clic para pasar a DISPONIBLE'
-                : 'Estás en estado DISPONIBLE. Clic para pasar a OCUPADO'
+              hasUnvalidatedRide
+                ? 'Estás OCUPADO. Validá el código del pasajero en Taxis & Motos antes de pasar a disponible'
+                : disponibilidad === 'ocupado'
+                ? 'Estás en estado OCUPADO (sincronizado con Taxis & Motos). Clic para pasar a DISPONIBLE'
+                : 'Estás en estado DISPONIBLE (sincronizado con Taxis & Motos). Clic para pasar a OCUPADO'
             }
           >
-            {disponibilidad === 'ocupado' ? (
+            {hasUnvalidatedRide ? (
               <>
                 <span className="w-2 h-2 rounded-full bg-[#101114] animate-pulse" />
-                <span>Pasar a Disponible</span>
+                <span>Estado: OCUPADO (Validar código)</span>
+              </>
+            ) : disponibilidad === 'ocupado' ? (
+              <>
+                <span className="w-2 h-2 rounded-full bg-[#101114] animate-pulse" />
+                <span>Estado: OCUPADO · Pasar a Disponible</span>
               </>
             ) : (
               <>
                 <span className="w-2 h-2 rounded-full bg-[#B7F36B]" />
-                <span>Disponible (Listo)</span>
+                <span>Estado: DISPONIBLE</span>
               </>
             )}
           </button>
