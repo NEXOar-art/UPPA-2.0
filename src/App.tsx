@@ -62,7 +62,11 @@ import { ShareQrModal } from './components/common/ShareQrModal';
 import { CalificarChoferModal } from './components/taxi/CalificarChoferModal';
 import { Linea228Stop } from './data/linea228Stops';
 import { useAuth } from './context/AuthContext';
-import { playMicroSound } from './utils/soundEffects';
+import {
+  playMicroSound,
+  startDriverRequestAlarm,
+  stopDriverRequestAlarm,
+} from './utils/soundEffects';
 import {
   ActiveDriverSession,
   getActiveDriverSession,
@@ -126,6 +130,9 @@ import {
   QrCode,
   Star,
   Users,
+  BellRing,
+  Volume2,
+  VolumeX,
 } from 'lucide-react';
 
 function GlobalHoverTooltip() {
@@ -2291,12 +2298,68 @@ export default function App() {
     return sorted[0] || null;
   }, [solicitudesList, currentUser.id, currentUser.uid]);
 
-  // Solicitudes pendientes activas para mostrar luz roja superior sin texto
+  // Solicitudes pendientes activas para alarma global en todas las secciones para prestadores
   const activePendingTransportRequests = useMemo(() => {
     return solicitudesList.filter(
       (sol) => sol.estado === 'pendiente' && !isSolicitudExpired(sol, requestNowTick)
     );
   }, [solicitudesList, requestNowTick]);
+
+  const [isDriverAlarmMuted, setIsDriverAlarmMuted] = useState(false);
+  const [isDriverAlarmRinging, setIsDriverAlarmRinging] = useState(false);
+  const seenPendingAlarmIdsRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    const activeIds = new Set(activePendingTransportRequests.map((s) => s.id));
+    seenPendingAlarmIdsRef.current.forEach((id) => {
+      if (!activeIds.has(id)) {
+        seenPendingAlarmIdsRef.current.delete(id);
+      }
+    });
+
+    if (!isDriverUser || activePendingTransportRequests.length === 0) {
+      stopDriverRequestAlarm();
+      setIsDriverAlarmRinging(false);
+      setIsDriverAlarmMuted(false);
+      return;
+    }
+
+    let hasNew = false;
+    activePendingTransportRequests.forEach((sol) => {
+      if (!seenPendingAlarmIdsRef.current.has(sol.id)) {
+        seenPendingAlarmIdsRef.current.add(sol.id);
+        hasNew = true;
+      }
+    });
+
+    if (hasNew) {
+      setIsDriverAlarmMuted(false);
+      setIsDriverAlarmRinging(true);
+      startDriverRequestAlarm(60000, () => {
+        setIsDriverAlarmRinging(false);
+      });
+    }
+  }, [isDriverUser, activePendingTransportRequests]);
+
+  useEffect(() => {
+    return () => {
+      stopDriverRequestAlarm();
+    };
+  }, []);
+
+  const handleToggleDriverAlarmSound = useCallback(() => {
+    if (isDriverAlarmRinging && !isDriverAlarmMuted) {
+      stopDriverRequestAlarm();
+      setIsDriverAlarmMuted(true);
+      setIsDriverAlarmRinging(false);
+    } else {
+      setIsDriverAlarmMuted(false);
+      setIsDriverAlarmRinging(true);
+      startDriverRequestAlarm(60000, () => {
+        setIsDriverAlarmRinging(false);
+      });
+    }
+  }, [isDriverAlarmRinging, isDriverAlarmMuted]);
 
   // Viaje finalizado del pasajero pendiente de calificación (últimas 3 horas, solo si aún no calificó al prestador)
   const unratedCompletedPassengerRide = useMemo(() => {
@@ -2917,12 +2980,18 @@ export default function App() {
                 playMicroSound('ui_tap');
                 setActiveTab('taxi');
               }}
-              title="Pasajero solicitando transporte"
+              title={`Pasajero solicitando transporte (${activePendingTransportRequests.length}) · Ir a Taxis & Motos`}
               aria-label="Pasajero solicitando transporte"
-              className="relative w-8 h-8 rounded-full bg-red-500/15 border border-red-500/70 hover:border-red-400 flex items-center justify-center cursor-pointer active:scale-95 transition-all shrink-0"
+              className="relative min-h-[34px] px-2 sm:px-2.5 py-1 rounded-full bg-red-600/25 border-2 border-red-400 hover:bg-red-600/40 text-red-100 flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all shrink-0 shadow-[0_0_16px_rgba(239,68,68,0.6)]"
             >
-              <span className="animate-ping absolute inline-flex h-4 w-4 rounded-full bg-red-500 opacity-85" />
-              <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-red-500 shadow-[0_0_12px_#ef4444]" />
+              <span className="relative flex h-2.5 w-2.5 shrink-0">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-95" />
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500" />
+              </span>
+              <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-wide whitespace-nowrap">
+                <span className="sm:hidden">Pedido ({activePendingTransportRequests.length})</span>
+                <span className="hidden sm:inline">Pasajero solicitando ({activePendingTransportRequests.length})</span>
+              </span>
             </button>
           )}
         </div>
@@ -3415,6 +3484,92 @@ export default function App() {
         </div>
       </header>
 
+      {/* Alarma Global en TODAS las secciones para Prestadores: Pasajero Solicitando Transporte */}
+      {isDriverUser && activePendingTransportRequests.length > 0 && (() => {
+        const latestPending = activePendingTransportRequests[0];
+        const pendingCount = activePendingTransportRequests.length;
+        const soundActive = isDriverAlarmRinging && !isDriverAlarmMuted;
+        return (
+          <div
+            role="status"
+            aria-live="polite"
+            className="w-full bg-gradient-to-r from-red-950/95 via-[#202329] to-red-950/95 border-b-2 border-red-500 px-2.5 sm:px-4 py-1.5 flex items-center justify-between gap-2 text-xs z-30 shadow-[0_6px_22px_rgba(239,68,68,0.45)] shrink-0"
+          >
+            <button
+              type="button"
+              onClick={() => {
+                playMicroSound('ui_tap');
+                setActiveTab('taxi');
+              }}
+              className="flex items-center gap-2 min-w-0 flex-1 text-left cursor-pointer group"
+              title="Abrir Taxis & Motos para aceptar pedido"
+            >
+              <span className="relative flex items-center justify-center w-7 h-7 rounded-xl bg-red-500 text-white shrink-0 shadow-[0_0_12px_rgba(239,68,68,0.85)]">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-xl bg-red-400 opacity-60" />
+                <BellRing className="w-4 h-4 relative z-10 animate-bounce" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5 flex-wrap leading-tight">
+                  <span className="text-[10.5px] sm:text-xs font-black uppercase tracking-wide text-red-200">
+                    Pasajero solicitando transporte ({pendingCount})
+                  </span>
+                  <span className="px-1.5 py-0.2 rounded bg-red-500 text-white text-[9px] font-black uppercase shrink-0">
+                    {latestPending.tipoVehiculoRequerido === 'moto' ? 'Moto' : 'Auto'}
+                  </span>
+                  {soundActive && (
+                    <span className="hidden sm:inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-400/20 border border-amber-400/40 text-amber-200 text-[9px] font-bold uppercase animate-pulse">
+                      <Volume2 className="w-2.5 h-2.5" />
+                      Alarma sonora
+                    </span>
+                  )}
+                </div>
+                <p className="text-[10.5px] text-white/90 truncate leading-tight mt-0.5">
+                  <strong className="text-[#FFF19A]">{latestPending.nombrePasajero}</strong>:{' '}
+                  {latestPending.origen} ➔ <strong className="text-[#B7F36B]">{latestPending.destino}</strong>
+                </p>
+              </div>
+            </button>
+
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                type="button"
+                onClick={handleToggleDriverAlarmSound}
+                title={soundActive ? 'Silenciar alarma sonora' : 'Activar alarma sonora'}
+                aria-label={soundActive ? 'Silenciar alarma sonora' : 'Activar alarma sonora'}
+                className={`min-h-[32px] px-2 py-1 rounded-xl border font-bold text-[10px] sm:text-[11px] flex items-center gap-1 cursor-pointer active:scale-95 transition-all ${
+                  soundActive
+                    ? 'bg-red-500/25 border-red-400 text-red-100 hover:bg-red-500/40'
+                    : 'bg-white/10 border-white/20 text-white/80 hover:bg-white/15'
+                }`}
+              >
+                {soundActive ? (
+                  <>
+                    <Volume2 className="w-3.5 h-3.5 animate-pulse text-amber-300" />
+                    <span className="hidden sm:inline">Silenciar</span>
+                  </>
+                ) : (
+                  <>
+                    <VolumeX className="w-3.5 h-3.5 text-white/70" />
+                    <span className="hidden sm:inline">Sonar</span>
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  playMicroSound('ui_tap');
+                  setActiveTab('taxi');
+                }}
+                className="min-h-[32px] px-2.5 sm:px-3 py-1 rounded-xl bg-[#FFF19A] hover:brightness-95 text-[#101114] border border-[#101114] font-black text-[10.5px] sm:text-xs shrink-0 cursor-pointer active:scale-95 transition-all"
+              >
+                {activeTab === 'taxi' ? 'Ver abajo' : 'Ver pedido'}
+              </button>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Driver GPS Status Bar with Real-time Countdown Timer - EXCLUSIVO en la sección "mapa" y SOLO para el prestador de servicio habilitado con tiempo real abonado */}
       {activeTab === 'map' && isPrestandoServicioTaxi && isDriverHabilitado && driverPaidEndsAt > Date.now() && (
         <DriverConnectionBar
@@ -3533,6 +3688,10 @@ export default function App() {
             {myLiveActiveSolicitud &&
               !activeTrackingPassenger &&
               !activeTrackingTaxi &&
+              !(
+                passengerPendingCodeSolicitud &&
+                !dismissedPassengerCodePopupIds.includes(passengerPendingCodeSolicitud.id)
+              ) &&
               (myLiveActiveSolicitud.id === activeMapGlassRideId ? (
                 <div className="absolute top-16 left-3 right-3 sm:left-4 sm:right-auto sm:w-[375px] z-[48] pointer-events-auto">
                   <ActiveRideGlassWidget
@@ -3973,14 +4132,21 @@ export default function App() {
             }`}
           >
             <div
-              className={`p-2 rounded-xl transition-all flex items-center -space-x-1 border ${
+              className={`p-2 rounded-xl transition-all relative flex items-center -space-x-1 border ${
                 activeTab === 'taxi'
                   ? 'bg-[#B7F36B] border-[#B7F36B] text-[#101114] shadow-[0_0_10px_rgba(183,243,107,0.35)]'
+                  : isDriverUser && activePendingTransportRequests.length > 0
+                  ? 'bg-red-500/20 border-red-400 text-red-200 shadow-[0_0_12px_rgba(239,68,68,0.55)] animate-pulse'
                   : 'bg-[#202329] border-white/20 text-[#9299A5] group-hover:text-[#FFF19A] group-hover:border-[#FFF19A] group-hover:shadow-[0_0_10px_rgba(255,241,154,0.45)]'
               }`}
             >
               <Bike className="w-4 h-4" />
               <Car className="w-4 h-4" />
+              {isDriverUser && activePendingTransportRequests.length > 0 && (
+                <span className="absolute -top-1 -right-1 px-1 py-0.2 rounded-full bg-red-500 text-white font-black text-[8.5px] min-w-3.5 text-center border border-[#101114] shadow-[0_0_8px_#ef4444]">
+                  {activePendingTransportRequests.length}
+                </span>
+              )}
             </div>
           </button>
 

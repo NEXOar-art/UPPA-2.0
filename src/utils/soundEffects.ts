@@ -1,4 +1,4 @@
-import { Howl } from 'howler';
+import { Howl, Howler } from 'howler';
 
 export type MicroSoundType =
   | 'ride_accepted'
@@ -7,7 +7,8 @@ export type MicroSoundType =
   | 'step_progress'
   | 'ad_spark'
   | 'ui_tap'
-  | 'passenger_approach_alarm';
+  | 'passenger_approach_alarm'
+  | 'driver_request_alarm';
 
 interface ToneSegment {
   startSec: number;
@@ -71,6 +72,15 @@ const SOUND_RECIPES: Record<MicroSoundType, { totalSec: number; volume: number; 
     tones: [
       { startSec: 0, durSec: 0.14, freqStart: 880, freqEnd: 987.77, gain: 0.26, wave: 'sine' },
       { startSec: 0.17, durSec: 0.2, freqStart: 1174.66, freqEnd: 1318.51, gain: 0.28, wave: 'triangle' },
+    ],
+  },
+  driver_request_alarm: {
+    totalSec: 0.66,
+    volume: 0.92,
+    tones: [
+      { startSec: 0, durSec: 0.15, freqStart: 987.77, freqEnd: 1174.66, gain: 0.36, wave: 'triangle' },
+      { startSec: 0.18, durSec: 0.15, freqStart: 1318.51, freqEnd: 1567.98, gain: 0.4, wave: 'sine' },
+      { startSec: 0.37, durSec: 0.24, freqStart: 1567.98, freqEnd: 1760.0, gain: 0.44, wave: 'triangle' },
     ],
   },
 };
@@ -230,5 +240,110 @@ export function startPassengerApproachAlarm(durationMs: number = 10000): () => v
   }, durationMs);
 
   return () => stopPassengerApproachAlarm();
+}
+
+let driverRequestAlarmInterval: ReturnType<typeof setInterval> | null = null;
+let driverRequestAlarmTimeout: ReturnType<typeof setTimeout> | null = null;
+let driverRequestAlarmActive = false;
+let driverUnlockCleanup: (() => void) | null = null;
+
+function clearDriverUnlockListeners(): void {
+  if (driverUnlockCleanup) {
+    driverUnlockCleanup();
+    driverUnlockCleanup = null;
+  }
+}
+
+function playDriverRequestPulse(): void {
+  try {
+    const ctx = (Howler as unknown as { ctx?: AudioContext }).ctx;
+    if (ctx && ctx.state === 'suspended') {
+      void ctx.resume().catch(() => {});
+    }
+    const howl = getOrCreateHowl('driver_request_alarm');
+    if (howl) {
+      howl.volume(0.92);
+      howl.play();
+    }
+    if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+      navigator.vibrate([200, 90, 200]);
+    }
+  } catch {
+    // Graceful no-op on restricted autoplay environments
+  }
+}
+
+export function isDriverRequestAlarmActive(): boolean {
+  return driverRequestAlarmActive;
+}
+
+/**
+ * Detiene inmediatamente la alarma sonora de pedido de transporte para prestadores.
+ */
+export function stopDriverRequestAlarm(): void {
+  driverRequestAlarmActive = false;
+  clearDriverUnlockListeners();
+  if (driverRequestAlarmInterval) {
+    clearInterval(driverRequestAlarmInterval);
+    driverRequestAlarmInterval = null;
+  }
+  if (driverRequestAlarmTimeout) {
+    clearTimeout(driverRequestAlarmTimeout);
+    driverRequestAlarmTimeout = null;
+  }
+  try {
+    const howl = howlCache['driver_request_alarm'];
+    if (howl) {
+      howl.stop();
+    }
+  } catch {}
+}
+
+/**
+ * Inicia una alarma sonora audible y repetitiva para alertar rápidamente al prestador
+ * cuando un pasajero solicita transporte. Incluye desbloqueo automático tras interacción
+ * si el navegador bloqueó el autoplay inicial.
+ */
+export function startDriverRequestAlarm(
+  durationMs: number = 60000,
+  onAutoStop?: () => void
+): () => void {
+  stopDriverRequestAlarm();
+  driverRequestAlarmActive = true;
+
+  playDriverRequestPulse();
+
+  // Si el navegador aún tiene el AudioContext suspendido, re-disparar al primer toque/tecla
+  try {
+    const ctx = (Howler as unknown as { ctx?: AudioContext }).ctx;
+    if (typeof window !== 'undefined' && (!ctx || ctx.state === 'suspended')) {
+      const handleUnlock = () => {
+        clearDriverUnlockListeners();
+        if (driverRequestAlarmActive) {
+          playDriverRequestPulse();
+        }
+      };
+      window.addEventListener('pointerdown', handleUnlock, { passive: true, once: true });
+      window.addEventListener('keydown', handleUnlock, { passive: true, once: true });
+      window.addEventListener('touchstart', handleUnlock, { passive: true, once: true });
+      driverUnlockCleanup = () => {
+        window.removeEventListener('pointerdown', handleUnlock);
+        window.removeEventListener('keydown', handleUnlock);
+        window.removeEventListener('touchstart', handleUnlock);
+      };
+    }
+  } catch {}
+
+  driverRequestAlarmInterval = setInterval(() => {
+    if (!driverRequestAlarmActive) return;
+    playDriverRequestPulse();
+  }, 2200);
+
+  driverRequestAlarmTimeout = setTimeout(() => {
+    stopDriverRequestAlarm();
+    onAutoStop?.();
+  }, durationMs);
+
+  return () => stopDriverRequestAlarm();
 }
 
