@@ -1,7 +1,7 @@
 export interface PointOfInterest {
   id: string;
   name: string;
-  type: 'gas_station' | 'school';
+  type: 'gas_station' | 'school' | 'hospital';
   lat: number;
   lng: number;
   categoryName: string;
@@ -125,17 +125,6 @@ export const SCHOOLS_DATA: PointOfInterest[] = [
     zone: 'Ariel del Plata',
   },
   {
-    id: 'poi-escuela-35',
-    name: 'Escuela Primaria N° 35 (Ariel del Plata)',
-    type: 'school',
-    lat: -34.2021,
-    lng: -58.9365,
-    categoryName: 'Escuela Primaria',
-    address: 'Calle Aguer y Goujon',
-    details: 'Escuela comunitaria B° Ariel del Plata con alto caudal de alumnos',
-    zone: 'Ariel del Plata',
-  },
-  {
     id: 'poi-primaria-17',
     name: 'Escuela Primaria N° 17',
     type: 'school',
@@ -222,5 +211,52 @@ export const SCHOOLS_DATA: PointOfInterest[] = [
     address: 'Av. Rivadavia & Leandro N. Alem',
     details: 'Histórico colegio secundario y profesorado de Zárate Centro',
     zone: 'Zárate Centro',
+  },
+];
+
+export const HOSPITALS_DATA: PointOfInterest[] = [
+  {
+    id: 'poi-hospital-san-jose',
+    name: 'Hospital Municipal San José',
+    type: 'hospital',
+    lat: -34.167978,
+    lng: -58.949259,
+    categoryName: 'Hospital Público Municipal',
+    address: 'Alberdi 570, Campana',
+    details: 'Guardia médica 24 hs, emergencias e internación en Campana',
+    zone: 'Campana',
+  },
+  {
+    id: 'poi-clinica-delta',
+    name: 'Clínica Delta',
+    type: 'hospital',
+    lat: -34.159445,
+    lng: -58.962797,
+    categoryName: 'Clínica Médica Privada',
+    address: 'Zona Centro, Campana',
+    details: 'Atención médica, consultorios externos y guardia clínica',
+    zone: 'Campana Centro',
+  },
+  {
+    id: 'poi-hospital-virgen-del-carmen',
+    name: 'Hospital Zonal Virgen del Carmen',
+    type: 'hospital',
+    lat: -34.159445,
+    lng: -58.962797,
+    categoryName: 'Hospital Zonal Interzonal',
+    address: 'Corredor Campana - Zárate',
+    details: 'Guardia de emergencias, especialidades médicas y alta complejidad',
+    zone: 'Corredor Campana / Zárate',
+  },
+  {
+    id: 'poi-sanatorio-anchorena',
+    name: 'Sanatorio Anchorena Zárate',
+    type: 'hospital',
+    lat: -34.102946,
+    lng: -59.008686,
+    categoryName: 'Sanatorio de Alta Complejidad',
+    address: 'Zárate Centro / Acceso',
+    details: 'Guardia 24 hs, internación, diagnóstico por imágenes y especialidades',
+    zone: 'Zárate',
   },
 ];

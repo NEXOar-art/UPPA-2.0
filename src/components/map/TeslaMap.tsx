@@ -55,7 +55,7 @@ import {
   Filter,
 } from 'lucide-react';
 import { isRealCommunityReport } from '../../services/realtimeFirebaseService';
-import { GAS_STATIONS_DATA, SCHOOLS_DATA, PointOfInterest } from '../../data/poiCorredorData';
+import { GAS_STATIONS_DATA, SCHOOLS_DATA, HOSPITALS_DATA, PointOfInterest } from '../../data/poiCorredorData';
 import { LINEA_228_STOPS, LINEA_228_COORDINATES } from '../../data/linea228Stops';
 import { computeEventExpiresAtMs, isMapEventExpired } from '../../utils/eventExpiration';
 
@@ -304,6 +304,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
   const passengerTrackingLayerRef = useRef<L.LayerGroup | null>(null);
   const gasStationsLayerRef = useRef<L.LayerGroup | null>(null);
   const schoolsLayerRef = useRef<L.LayerGroup | null>(null);
+  const hospitalsLayerRef = useRef<L.LayerGroup | null>(null);
 
   // Passenger Trajectory state for drivers navigating to passenger pickup
   const [passengerTrajectoryInfo, setPassengerTrajectoryInfo] = useState<{
@@ -323,6 +324,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
   const [showStops, setShowStops] = useState(true);
   const [showGasStations, setShowGasStations] = useState(false);
   const [showSchools, setShowSchools] = useState(false);
+  const [showHospitals, setShowHospitals] = useState(false);
   const [showEvents, setShowEvents] = useState(true);
   const [showTaxis, setShowTaxis] = useState(true);
   const [isEventFilterPanelOpen, setIsEventFilterPanelOpen] = useState(false);
@@ -735,6 +737,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
     passengerTrackingLayerRef.current = L.layerGroup().addTo(map);
     gasStationsLayerRef.current = L.layerGroup().addTo(map);
     schoolsLayerRef.current = L.layerGroup().addTo(map);
+    hospitalsLayerRef.current = L.layerGroup().addTo(map);
 
     mapInstanceRef.current = map;
 
@@ -902,6 +905,66 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
       marker.addTo(layer);
     });
   }, [showSchools]);
+
+  // Hospitals & Health Centers Markers Layer (Toggleable via top-bar icon)
+  useEffect(() => {
+    if (!mapInstanceRef.current || !hospitalsLayerRef.current) return;
+    const layer = hospitalsLayerRef.current;
+    layer.clearLayers();
+
+    if (!showHospitals) return;
+
+    const seenCoordCounts = new Map<string, number>();
+
+    HOSPITALS_DATA.forEach((hospital) => {
+      const coordKey = `${hospital.lat.toFixed(5)}_${hospital.lng.toFixed(5)}`;
+      const dupIndex = seenCoordCounts.get(coordKey) ?? 0;
+      seenCoordCounts.set(coordKey, dupIndex + 1);
+
+      const markerLat = hospital.lat + dupIndex * 0.00018;
+      const markerLng = hospital.lng + dupIndex * 0.00018;
+
+      const icon = L.divIcon({
+        className: 'custom-hospital-marker',
+        html: `
+          <div class="relative flex items-center justify-center cursor-pointer group">
+            <div class="w-8 h-8 rounded-2xl bg-gradient-to-br from-rose-500 to-red-600 border-2 border-white text-white flex items-center justify-center text-sm shadow-[0_0_15px_rgba(244,63,94,0.6)] font-bold transition-transform group-hover:scale-125">
+              🏥
+            </div>
+            <div class="absolute -bottom-5 bg-black/90 text-rose-200 text-[9px] font-bold px-1.5 py-0.2 rounded-md border border-rose-400/40 whitespace-nowrap shadow-md pointer-events-none">
+              ${escapeHtml(hospital.name.split('(')[0].trim())}
+            </div>
+          </div>
+        `,
+        iconSize: [32, 32],
+        iconAnchor: [16, 16],
+      });
+
+      const marker = L.marker([markerLat, markerLng], { icon });
+      marker.bindPopup(`
+        <div style="font-family: inherit; padding: 4px; color: #0f172a; max-width: 240px;">
+          <div style="font-size: 13px; font-weight: 800; display: flex; align-items: center; gap: 4px; color: #0f172a;">
+            <span>🏥</span> <span>${escapeHtml(hospital.name)}</span>
+          </div>
+          <div style="font-size: 10px; color: #e11d48; font-weight: 800; text-transform: uppercase; margin-top: 2px;">
+            ${escapeHtml(hospital.categoryName)}
+          </div>
+          <div style="font-size: 11px; color: #334155; margin-top: 4px; line-height: 1.3;">
+            ${escapeHtml(hospital.address)} <span style="color: #64748b;">(${escapeHtml(hospital.zone)})</span>
+          </div>
+          <div style="font-size: 10.5px; color: #475569; margin-top: 4px; background: #f8fafc; padding: 4px 6px; border-radius: 6px; border: 1px solid #e2e8f0;">
+            ${escapeHtml(hospital.details)}
+          </div>
+          <div style="margin-top: 8px;">
+            <a href="https://www.google.com/maps/dir/?api=1&destination=${hospital.lat},${hospital.lng}" target="_blank" rel="noopener noreferrer" title="Abrir Google Maps" style="display: block; text-align: center; background: #FFF19A; color: #101114; font-size: 11px; font-weight: 800; padding: 6px 10px; border-radius: 8px; text-decoration: none;">
+              Llevarme a este Hospital ➔
+            </a>
+          </div>
+        </div>
+      `);
+      marker.addTo(layer);
+    });
+  }, [showHospitals]);
 
   // Handle map click
   useEffect(() => {
@@ -2036,13 +2099,13 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
 
       {/* El indicador compacto sin texto de Modo Mapa Libre ahora se ubica junto al botón Opciones de transporte */}
 
-      {/* Parte Superior del Mapa: Barra Horizontal de Botones Flotantes (Paradas, Estaciones, Escuelas, Prestadores, Filtros, Eventos) */}
+      {/* Parte Superior del Mapa: Barra Horizontal de Botones Flotantes (Paradas, Estaciones, Escuelas, Hospitales, Prestadores, Filtros, Eventos) */}
       <div
         onMouseEnter={handleCardMouseEnter}
         onMouseLeave={handleCardMouseLeave}
-        className={`absolute top-3 left-12 right-3 sm:left-auto sm:right-4 z-[42] ${
+        className={`absolute top-3 left-11 right-2.5 sm:left-auto sm:right-4 z-[42] ${
           passengerTrajectoryInfo && !isPassengerHudMinimized ? 'hidden sm:flex' : 'flex'
-        } flex-row items-center justify-end gap-1.5 sm:gap-2 transition-all duration-500 ease-in-out ${
+        } flex-row items-center justify-end gap-1 sm:gap-2 transition-all duration-500 ease-in-out ${
           areCardsVisible
             ? 'opacity-100 translate-y-0 pointer-events-auto'
             : 'opacity-0 -translate-y-3 pointer-events-none'
@@ -2056,7 +2119,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
               const next = !showStops;
               setShowStops(next);
             }}
-            className={`w-10 h-10 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center text-base sm:text-lg border-2 shadow-[2px_2px_0px_#101114] transition-all active:scale-95 cursor-pointer ${
+            className={`w-9 h-9 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center text-base sm:text-lg border-2 shadow-[2px_2px_0px_#101114] transition-all active:scale-95 cursor-pointer ${
               showStops
                 ? 'bg-[#FFF19A] text-[#101114] border-[#101114]'
                 : 'bg-[#202329]/90 text-[#9299A5] border-white/15 opacity-70 hover:opacity-100 grayscale'
@@ -2190,7 +2253,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
               mapInstanceRef.current.panTo([-34.1683, -58.9592]);
             }
           }}
-          className={`w-10 h-10 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center text-base sm:text-lg border-2 shadow-[2px_2px_0px_#101114] transition-all active:scale-95 cursor-pointer shrink-0 ${
+          className={`w-9 h-9 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center text-base sm:text-lg border-2 shadow-[2px_2px_0px_#101114] transition-all active:scale-95 cursor-pointer shrink-0 ${
             showGasStations
               ? 'bg-[#FFF19A] text-[#101114] border-[#101114]'
               : 'bg-[#202329]/90 text-[#9299A5] border-white/15 opacity-70 hover:opacity-100 grayscale'
@@ -2210,7 +2273,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
               mapInstanceRef.current.panTo([-34.1800, -58.9500]);
             }
           }}
-          className={`w-10 h-10 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center text-base sm:text-lg border-2 shadow-[2px_2px_0px_#101114] transition-all active:scale-95 cursor-pointer shrink-0 ${
+          className={`w-9 h-9 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center text-base sm:text-lg border-2 shadow-[2px_2px_0px_#101114] transition-all active:scale-95 cursor-pointer shrink-0 ${
             showSchools
               ? 'bg-[#FFF19A] text-[#101114] border-[#101114]'
               : 'bg-[#202329]/90 text-[#9299A5] border-white/15 opacity-70 hover:opacity-100 grayscale'
@@ -2218,6 +2281,26 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
           title={showSchools ? 'Ocultar escuelas' : 'Mostrar escuelas'}
         >
           <span className="leading-none select-none">🏫</span>
+        </button>
+
+        {/* Botón 3b: Hospitales y Sanatorios (solo icono 🏥) */}
+        <button
+          onClick={() => {
+            resetHideTimer();
+            const next = !showHospitals;
+            setShowHospitals(next);
+            if (next && mapInstanceRef.current) {
+              mapInstanceRef.current.panTo([-34.1594, -58.9628]);
+            }
+          }}
+          className={`w-9 h-9 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center text-base sm:text-lg border-2 shadow-[2px_2px_0px_#101114] transition-all active:scale-95 cursor-pointer shrink-0 ${
+            showHospitals
+              ? 'bg-[#FFF19A] text-[#101114] border-[#101114]'
+              : 'bg-[#202329]/90 text-[#9299A5] border-white/15 opacity-70 hover:opacity-100 grayscale'
+          }`}
+          title={showHospitals ? 'Ocultar hospitales' : 'Mostrar hospitales'}
+        >
+          <span className="leading-none select-none">🏥</span>
         </button>
 
         {/* Botón Prestadores de Servicio (Solo para Pasajeros) */}
@@ -2228,7 +2311,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
               const next = !showTaxis;
               setShowTaxis(next);
             }}
-            className={`w-10 h-10 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center text-base sm:text-lg border-2 shadow-[2px_2px_0px_#101114] transition-all active:scale-95 cursor-pointer shrink-0 ${
+            className={`w-9 h-9 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center text-base sm:text-lg border-2 shadow-[2px_2px_0px_#101114] transition-all active:scale-95 cursor-pointer shrink-0 ${
               showTaxis
                 ? 'bg-[#B7F36B] text-[#101114] border-[#101114]'
                 : 'bg-[#202329]/90 text-[#9299A5] border-white/15 opacity-70 hover:opacity-100 grayscale'
@@ -2251,7 +2334,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
                 setIsStopsPanelOpen(false);
               }
             }}
-            className={`w-10 h-10 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center text-base sm:text-lg border-2 shadow-[2px_2px_0px_#101114] transition-all active:scale-95 cursor-pointer shrink-0 ${
+            className={`w-9 h-9 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center text-base sm:text-lg border-2 shadow-[2px_2px_0px_#101114] transition-all active:scale-95 cursor-pointer shrink-0 ${
               isEventFilterPanelOpen
                 ? 'bg-[#FFF19A] text-[#101114] border-[#101114]'
                 : 'bg-[#202329]/95 text-white border-white/15 hover:border-[#FFF19A]'
@@ -2293,6 +2376,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
                       setShowStops(true);
                       setShowGasStations(true);
                       setShowSchools(true);
+                      setShowHospitals(true);
                       setShowEvents(true);
                       setShowTaxis(true);
                       setActiveEventCategories({
@@ -2326,13 +2410,13 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
               </div>
 
               {/* Fila 1: Alternancia de Capas Principales */}
-              <div className="py-2.5 border-b border-white/10 flex items-center justify-center gap-2">
+              <div className="py-2.5 border-b border-white/10 flex items-center justify-center gap-1.5">
                 <button
                   onClick={() => {
                     resetHideTimer();
                     setShowStops(!showStops);
                   }}
-                  className={`w-11 h-11 rounded-xl flex items-center justify-center text-lg border transition-all cursor-pointer active:scale-95 ${
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center text-base border transition-all cursor-pointer active:scale-95 ${
                     showStops
                       ? 'bg-[#FFF19A] text-[#101114] border-[#101114]'
                       : 'bg-[#101114] text-[#9299A5] border-white/10 opacity-50 grayscale'
@@ -2347,7 +2431,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
                     resetHideTimer();
                     setShowGasStations(!showGasStations);
                   }}
-                  className={`w-11 h-11 rounded-xl flex items-center justify-center text-lg border transition-all cursor-pointer active:scale-95 ${
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center text-base border transition-all cursor-pointer active:scale-95 ${
                     showGasStations
                       ? 'bg-[#FFF19A] text-[#101114] border-[#101114]'
                       : 'bg-[#101114] text-[#9299A5] border-white/10 opacity-50 grayscale'
@@ -2362,7 +2446,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
                     resetHideTimer();
                     setShowSchools(!showSchools);
                   }}
-                  className={`w-11 h-11 rounded-xl flex items-center justify-center text-lg border transition-all cursor-pointer active:scale-95 ${
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center text-base border transition-all cursor-pointer active:scale-95 ${
                     showSchools
                       ? 'bg-[#FFF19A] text-[#101114] border-[#101114]'
                       : 'bg-[#101114] text-[#9299A5] border-white/10 opacity-50 grayscale'
@@ -2375,10 +2459,25 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
                 <button
                   onClick={() => {
                     resetHideTimer();
+                    setShowHospitals(!showHospitals);
+                  }}
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center text-base border transition-all cursor-pointer active:scale-95 ${
+                    showHospitals
+                      ? 'bg-[#FFF19A] text-[#101114] border-[#101114]'
+                      : 'bg-[#101114] text-[#9299A5] border-white/10 opacity-50 grayscale'
+                  }`}
+                  title={showHospitals ? 'Ocultar hospitales' : 'Mostrar hospitales'}
+                >
+                  <span className="leading-none select-none">🏥</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    resetHideTimer();
                     setIsStopsPanelOpen(true);
                     setIsEventFilterPanelOpen(false);
                   }}
-                  className="w-11 h-11 rounded-xl flex items-center justify-center text-[#FFF19A] bg-[#101114] hover:border-[#FFF19A] border border-white/15 transition-all cursor-pointer active:scale-95"
+                  className="w-10 h-10 rounded-xl flex items-center justify-center text-[#FFF19A] bg-[#101114] hover:border-[#FFF19A] border border-white/15 transition-all cursor-pointer active:scale-95"
                   title="Buscar paradas"
                 >
                   <Search className="w-4 h-4" />
@@ -2445,7 +2544,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
               setIsEventFilterPanelOpen(false);
             }
           }}
-          className={`w-10 h-10 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center text-base sm:text-lg border-2 shadow-[2px_2px_0px_#101114] transition-all active:scale-95 cursor-pointer shrink-0 ${
+          className={`w-9 h-9 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center text-base sm:text-lg border-2 shadow-[2px_2px_0px_#101114] transition-all active:scale-95 cursor-pointer shrink-0 ${
             isEventsPanelOpen
               ? 'bg-[#FFF19A] text-[#101114] border-[#101114]'
               : 'bg-[#202329]/95 text-[#FFF19A] border-white/15 hover:border-[#FFF19A]'
