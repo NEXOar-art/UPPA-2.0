@@ -95,6 +95,9 @@ import {
   getMessageTimestampMs,
   subscribeToRankingChoferes,
   subscribeToConnectedUsersPresence,
+  BusLocationActivityPoint,
+  subscribeToBusActivity24h,
+  appendBusLocationActivityPoint,
 } from './services/realtimeFirebaseService';
 import { ensureFirebaseAuthSession } from './config/firebase';
 
@@ -360,6 +363,7 @@ export default function App() {
   // Global State
   const [routes, setRoutes] = useState<TransitRoute[]>(MOCK_ROUTES);
   const [events, setEvents] = useState<MapEvent[]>([]);
+  const [busActivity24h, setBusActivity24h] = useState<BusLocationActivityPoint[]>([]);
   const [liveBuses, setLiveBuses] = useState<LiveBus[]>(MOCK_LIVE_BUSES);
   // Prestadores de Servicio Habilitados 100% Reales (sin datos simulados)
   const [taxis, setTaxis] = useState<TaxiListing[]>([]);
@@ -1254,6 +1258,10 @@ export default function App() {
       setSelectedEvent((prev) => (prev && isMapEventExpired(prev, now) ? null : prev));
     }, 5000);
 
+    const unsubBusActivity24h = subscribeToBusActivity24h((points) => {
+      setBusActivity24h(points);
+    });
+
     const unsubReportes = subscribeToReportes((reps) => {
       const realReports = (reps || []).filter(isRealCommunityReport);
       const now = Date.now();
@@ -1413,6 +1421,7 @@ export default function App() {
 
     return () => {
       clearInterval(expiredEventsCleaner);
+      unsubBusActivity24h();
       unsubReportes();
       unsubHabs();
       unsubNotif();
@@ -1932,7 +1941,14 @@ export default function App() {
     setActiveTab('map');
 
     if (newEventData.type === 'bus_location') {
-      const dirText = newEventData.direction === 'hacia_zarate' ? 'Hacia Zárate' : 'Hacia Malvinas';
+      const resolvedDir: 'hacia_zarate' | 'hacia_malvinas' =
+        newEventData.direction === 'hacia_zarate' ? 'hacia_zarate' : 'hacia_malvinas';
+      appendBusLocationActivityPoint({
+        id: created.id,
+        direction: resolvedDir,
+        createdAtMs,
+      });
+      const dirText = resolvedDir === 'hacia_zarate' ? 'Hacia Zárate' : 'Hacia Malvinas';
       const speedText = newEventData.velocidadKmH ? ` · ${newEventData.velocidadKmH} km/h` : '';
       showToast(`📍 Ubicación de colectivo ahora (${dirText}${speedText}) registrada`);
     } else if (newEventData.type === 'control') {
@@ -3967,6 +3983,7 @@ export default function App() {
                 }}
                 unreadChatCount={communityChatList.length}
                 busEvents={eventsWithStreet.filter((e) => e.type === 'bus_location')}
+                busActivity24h={busActivity24h}
                 allEvents={eventsWithStreet}
                 recentChatMessages={communityChatList}
                 pendingRequestsCount={activePendingTransportRequests.length}

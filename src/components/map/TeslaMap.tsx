@@ -55,7 +55,13 @@ import {
   Filter,
 } from 'lucide-react';
 import { isRealCommunityReport } from '../../services/realtimeFirebaseService';
-import { GAS_STATIONS_DATA, SCHOOLS_DATA, HOSPITALS_DATA, PointOfInterest } from '../../data/poiCorredorData';
+import {
+  GAS_STATIONS_DATA,
+  SCHOOLS_DATA,
+  HOSPITALS_DATA,
+  TRAIN_STATIONS_DATA,
+  PointOfInterest,
+} from '../../data/poiCorredorData';
 import { LINEA_228_STOPS, LINEA_228_COORDINATES } from '../../data/linea228Stops';
 import { computeEventExpiresAtMs, isMapEventExpired } from '../../utils/eventExpiration';
 
@@ -315,6 +321,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
   const gasStationsLayerRef = useRef<L.LayerGroup | null>(null);
   const schoolsLayerRef = useRef<L.LayerGroup | null>(null);
   const hospitalsLayerRef = useRef<L.LayerGroup | null>(null);
+  const trainStationsLayerRef = useRef<L.LayerGroup | null>(null);
 
   // Passenger Trajectory state for drivers navigating to passenger pickup
   const [passengerTrajectoryInfo, setPassengerTrajectoryInfo] = useState<{
@@ -335,6 +342,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
   const [showGasStations, setShowGasStations] = useState(false);
   const [showSchools, setShowSchools] = useState(false);
   const [showHospitals, setShowHospitals] = useState(false);
+  const [showTrainStations, setShowTrainStations] = useState(true);
   const [showEvents, setShowEvents] = useState(true);
   const [showTaxis, setShowTaxis] = useState(true);
   const [isEventFilterPanelOpen, setIsEventFilterPanelOpen] = useState(false);
@@ -748,6 +756,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
     gasStationsLayerRef.current = L.layerGroup().addTo(map);
     schoolsLayerRef.current = L.layerGroup().addTo(map);
     hospitalsLayerRef.current = L.layerGroup().addTo(map);
+    trainStationsLayerRef.current = L.layerGroup().addTo(map);
 
     mapInstanceRef.current = map;
 
@@ -975,6 +984,57 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
       marker.addTo(layer);
     });
   }, [showHospitals]);
+
+  // Train Stations Markers Layer (Campana & Zárate Línea Mitre)
+  useEffect(() => {
+    if (!mapInstanceRef.current || !trainStationsLayerRef.current) return;
+    const layer = trainStationsLayerRef.current;
+    layer.clearLayers();
+
+    if (!showTrainStations) return;
+
+    TRAIN_STATIONS_DATA.forEach((station) => {
+      const icon = L.divIcon({
+        className: 'custom-train-station-marker',
+        html: `
+          <div class="relative flex items-center justify-center cursor-pointer group">
+            <div class="w-8 h-8 rounded-2xl bg-gradient-to-br from-sky-500 to-blue-700 border-2 border-[#FFF19A] text-white flex items-center justify-center text-sm shadow-[0_0_16px_rgba(14,165,233,0.7)] font-bold transition-transform group-hover:scale-125">
+              🚆
+            </div>
+            <div class="absolute -bottom-5 bg-black/95 text-sky-200 text-[9px] font-black px-1.5 py-0.2 rounded-md border border-sky-400/60 whitespace-nowrap shadow-md pointer-events-none">
+              ${escapeHtml(station.name.replace('Estación de Trenes de ', 'Est. Tren ').replace('Estación de Trenes ', 'Est. Tren '))}
+            </div>
+          </div>
+        `,
+        iconSize: [32, 32],
+        iconAnchor: [16, 16],
+      });
+
+      const marker = L.marker([station.lat, station.lng], { icon });
+      marker.bindPopup(`
+        <div style="font-family: inherit; padding: 4px; color: #0f172a; max-width: 245px;">
+          <div style="font-size: 13px; font-weight: 800; display: flex; align-items: center; gap: 5px; color: #0f172a;">
+            <span>🚆</span> <span>${escapeHtml(station.name)}</span>
+          </div>
+          <div style="font-size: 10px; color: #0284c7; font-weight: 800; text-transform: uppercase; margin-top: 2px;">
+            ${escapeHtml(station.categoryName)}
+          </div>
+          <div style="font-size: 11px; color: #334155; margin-top: 4px; line-height: 1.3;">
+            ${escapeHtml(station.address)} <span style="color: #64748b;">(${escapeHtml(station.zone)})</span>
+          </div>
+          <div style="font-size: 10.5px; color: #475569; margin-top: 4px; background: #f8fafc; padding: 4px 6px; border-radius: 6px; border: 1px solid #e2e8f0;">
+            ${escapeHtml(station.details)}
+          </div>
+          <div style="margin-top: 8px;">
+            <a href="https://www.google.com/maps/dir/?api=1&destination=${station.lat},${station.lng}" target="_blank" rel="noopener noreferrer" title="Abrir Google Maps" style="display: block; text-align: center; background: #FFF19A; color: #101114; font-size: 11px; font-weight: 800; padding: 6px 10px; border-radius: 8px; text-decoration: none;">
+              Llevarme a esta Estación de Trenes ➔
+            </a>
+          </div>
+        </div>
+      `);
+      marker.addTo(layer);
+    });
+  }, [showTrainStations]);
 
   // Handle map click
   useEffect(() => {
@@ -2199,7 +2259,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
               const next = !showStops;
               setShowStops(next);
             }}
-            className={`w-9 h-9 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center text-base sm:text-lg border-2 shadow-[2px_2px_0px_#101114] transition-all active:scale-95 cursor-pointer ${
+            className={`w-8 h-8 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center text-sm sm:text-lg border-2 shadow-[2px_2px_0px_#101114] transition-all active:scale-95 cursor-pointer shrink-0 ${
               showStops
                 ? 'bg-[#FFF19A] text-[#101114] border-[#101114]'
                 : 'bg-[#202329]/90 text-[#9299A5] border-white/15 opacity-70 hover:opacity-100 grayscale'
@@ -2333,7 +2393,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
               mapInstanceRef.current.panTo([-34.1683, -58.9592]);
             }
           }}
-          className={`w-9 h-9 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center text-base sm:text-lg border-2 shadow-[2px_2px_0px_#101114] transition-all active:scale-95 cursor-pointer shrink-0 ${
+          className={`w-8 h-8 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center text-sm sm:text-lg border-2 shadow-[2px_2px_0px_#101114] transition-all active:scale-95 cursor-pointer shrink-0 ${
             showGasStations
               ? 'bg-[#FFF19A] text-[#101114] border-[#101114]'
               : 'bg-[#202329]/90 text-[#9299A5] border-white/15 opacity-70 hover:opacity-100 grayscale'
@@ -2353,7 +2413,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
               mapInstanceRef.current.panTo([-34.1800, -58.9500]);
             }
           }}
-          className={`w-9 h-9 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center text-base sm:text-lg border-2 shadow-[2px_2px_0px_#101114] transition-all active:scale-95 cursor-pointer shrink-0 ${
+          className={`w-8 h-8 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center text-sm sm:text-lg border-2 shadow-[2px_2px_0px_#101114] transition-all active:scale-95 cursor-pointer shrink-0 ${
             showSchools
               ? 'bg-[#FFF19A] text-[#101114] border-[#101114]'
               : 'bg-[#202329]/90 text-[#9299A5] border-white/15 opacity-70 hover:opacity-100 grayscale'
@@ -2373,7 +2433,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
               mapInstanceRef.current.panTo([-34.1594, -58.9628]);
             }
           }}
-          className={`w-9 h-9 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center text-base sm:text-lg border-2 shadow-[2px_2px_0px_#101114] transition-all active:scale-95 cursor-pointer shrink-0 ${
+          className={`w-8 h-8 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center text-sm sm:text-lg border-2 shadow-[2px_2px_0px_#101114] transition-all active:scale-95 cursor-pointer shrink-0 ${
             showHospitals
               ? 'bg-[#FFF19A] text-[#101114] border-[#101114]'
               : 'bg-[#202329]/90 text-[#9299A5] border-white/15 opacity-70 hover:opacity-100 grayscale'
@@ -2381,6 +2441,26 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
           title={showHospitals ? 'Ocultar hospitales' : 'Mostrar hospitales'}
         >
           <span className="leading-none select-none">🏥</span>
+        </button>
+
+        {/* Botón 3c: Estaciones de Trenes Campana & Zárate (solo icono 🚆) */}
+        <button
+          onClick={() => {
+            resetHideTimer();
+            const next = !showTrainStations;
+            setShowTrainStations(next);
+            if (next && mapInstanceRef.current) {
+              mapInstanceRef.current.panTo([-34.1270, -58.9985]);
+            }
+          }}
+          className={`w-8 h-8 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center text-sm sm:text-lg border-2 shadow-[2px_2px_0px_#101114] transition-all active:scale-95 cursor-pointer shrink-0 ${
+            showTrainStations
+              ? 'bg-[#FFF19A] text-[#101114] border-[#101114]'
+              : 'bg-[#202329]/90 text-[#9299A5] border-white/15 opacity-70 hover:opacity-100 grayscale'
+          }`}
+          title={showTrainStations ? 'Ocultar estaciones de trenes' : 'Mostrar estaciones de trenes'}
+        >
+          <span className="leading-none select-none">🚆</span>
         </button>
 
         {/* Botón Prestadores de Servicio (Solo para Pasajeros) */}
@@ -2391,7 +2471,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
               const next = !showTaxis;
               setShowTaxis(next);
             }}
-            className={`w-9 h-9 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center text-base sm:text-lg border-2 shadow-[2px_2px_0px_#101114] transition-all active:scale-95 cursor-pointer shrink-0 ${
+            className={`w-8 h-8 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center text-sm sm:text-lg border-2 shadow-[2px_2px_0px_#101114] transition-all active:scale-95 cursor-pointer shrink-0 ${
               showTaxis
                 ? 'bg-[#B7F36B] text-[#101114] border-[#101114]'
                 : 'bg-[#202329]/90 text-[#9299A5] border-white/15 opacity-70 hover:opacity-100 grayscale'
@@ -2414,7 +2494,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
                 setIsStopsPanelOpen(false);
               }
             }}
-            className={`w-9 h-9 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center text-base sm:text-lg border-2 shadow-[2px_2px_0px_#101114] transition-all active:scale-95 cursor-pointer shrink-0 ${
+            className={`w-8 h-8 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center text-sm sm:text-lg border-2 shadow-[2px_2px_0px_#101114] transition-all active:scale-95 cursor-pointer shrink-0 ${
               isEventFilterPanelOpen
                 ? 'bg-[#FFF19A] text-[#101114] border-[#101114]'
                 : 'bg-[#202329]/95 text-white border-white/15 hover:border-[#FFF19A]'
@@ -2457,6 +2537,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
                       setShowGasStations(true);
                       setShowSchools(true);
                       setShowHospitals(true);
+                      setShowTrainStations(true);
                       setShowEvents(true);
                       setShowTaxis(true);
                       setActiveEventCategories({
@@ -2554,6 +2635,21 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
                 <button
                   onClick={() => {
                     resetHideTimer();
+                    setShowTrainStations(!showTrainStations);
+                  }}
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center text-base border transition-all cursor-pointer active:scale-95 ${
+                    showTrainStations
+                      ? 'bg-[#FFF19A] text-[#101114] border-[#101114]'
+                      : 'bg-[#101114] text-[#9299A5] border-white/10 opacity-50 grayscale'
+                  }`}
+                  title={showTrainStations ? 'Ocultar estaciones de trenes' : 'Mostrar estaciones de trenes'}
+                >
+                  <span className="leading-none select-none">🚆</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    resetHideTimer();
                     setIsStopsPanelOpen(true);
                     setIsEventFilterPanelOpen(false);
                   }}
@@ -2624,7 +2720,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
               setIsEventFilterPanelOpen(false);
             }
           }}
-          className={`w-9 h-9 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center text-base sm:text-lg border-2 shadow-[2px_2px_0px_#101114] transition-all active:scale-95 cursor-pointer shrink-0 ${
+          className={`w-8 h-8 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center text-sm sm:text-lg border-2 shadow-[2px_2px_0px_#101114] transition-all active:scale-95 cursor-pointer shrink-0 ${
             isEventsPanelOpen
               ? 'bg-[#FFF19A] text-[#101114] border-[#101114]'
               : 'bg-[#202329]/95 text-[#FFF19A] border-white/15 hover:border-[#FFF19A]'

@@ -1,7 +1,7 @@
 export interface PointOfInterest {
   id: string;
   name: string;
-  type: 'gas_station' | 'school' | 'hospital';
+  type: 'gas_station' | 'school' | 'hospital' | 'train_station';
   lat: number;
   lng: number;
   categoryName: string;
@@ -241,12 +241,12 @@ export const HOSPITALS_DATA: PointOfInterest[] = [
     id: 'poi-hospital-virgen-del-carmen',
     name: 'Hospital Zonal Virgen del Carmen',
     type: 'hospital',
-    lat: -34.159445,
-    lng: -58.962797,
+    lat: -34.083814,
+    lng: -59.034177,
     categoryName: 'Hospital Zonal Interzonal',
-    address: 'Corredor Campana - Zárate',
+    address: 'Félix Pagola 1502, Zárate',
     details: 'Guardia de emergencias, especialidades médicas y alta complejidad',
-    zone: 'Corredor Campana / Zárate',
+    zone: 'Zárate',
   },
   {
     id: 'poi-sanatorio-anchorena',
@@ -257,6 +257,31 @@ export const HOSPITALS_DATA: PointOfInterest[] = [
     categoryName: 'Sanatorio de Alta Complejidad',
     address: 'Zárate Centro / Acceso',
     details: 'Guardia 24 hs, internación, diagnóstico por imágenes y especialidades',
+    zone: 'Zárate',
+  },
+];
+
+export const TRAIN_STATIONS_DATA: PointOfInterest[] = [
+  {
+    id: 'poi-tren-campana',
+    name: 'Estación de Trenes de Campana',
+    type: 'train_station',
+    lat: -34.156884,
+    lng: -58.958537,
+    categoryName: 'Estación Ferroviaria · Línea Mitre',
+    address: 'Av. Leandro N. Alem y Rivadavia, Campana',
+    details: 'Ferrocarril Mitre (Ramal Villa Ballester – Zárate) · Conexión directa con Línea 228',
+    zone: 'Campana',
+  },
+  {
+    id: 'poi-tren-zarate',
+    name: 'Estación de Trenes Zárate',
+    type: 'train_station',
+    lat: -34.097031,
+    lng: -59.038489,
+    categoryName: 'Estación Ferroviaria · Línea Mitre',
+    address: 'Zárate Centro / Acceso Ferroviario',
+    details: 'Estación Terminal Zárate · Ferrocarril Mitre (Servicios hacia Campana y Retiro)',
     zone: 'Zárate',
   },
 ];

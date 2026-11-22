@@ -6,21 +6,17 @@ import {
   MessageSquare,
   Zap,
   Navigation,
-  Clock,
-  Gauge,
   ChevronDown,
   ChevronUp,
   Search,
-  Activity,
   SlidersHorizontal,
-  Users,
-  TrendingUp,
   Sparkles,
   X,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { LINEA_228_STOPS, Linea228Stop } from '../../data/linea228Stops';
 import { LottieMicroIcon } from './LottieMicroIcon';
+import { BusActivityMicroChart, BusActivitySample } from './BusActivityMicroChart';
 import { playMicroSound } from '../../utils/soundEffects';
 import { MapEvent, MensajeChatFirestore } from '../../types';
 import { calculateRealBusSpeed } from '../../utils/busSpeedEstimator';
@@ -49,6 +45,7 @@ interface MobilityBottomSheetProps {
   onSelectStop?: (stop: Linea228Stop) => void;
   unreadChatCount?: number;
   busEvents?: BusReportEventSummary[];
+  busActivity24h?: BusActivitySample[];
   allEvents?: MapEvent[];
   recentChatMessages?: MensajeChatFirestore[];
   pendingRequestsCount?: number;
@@ -65,6 +62,7 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
   onSelectStop,
   unreadChatCount = 0,
   busEvents = [],
+  busActivity24h = [],
   allEvents = [],
   recentChatMessages = [],
   pendingRequestsCount = 0,
@@ -110,13 +108,25 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
   }, []);
 
   useEffect(() => {
-    if (!busEvents || busEvents.length === 0) return;
     setNowTs(Date.now());
+    const intervalMs = busEvents && busEvents.length > 0 ? 2000 : 15000;
     const timer = setInterval(() => {
       setNowTs(Date.now());
-    }, 2000);
+    }, intervalMs);
     return () => clearInterval(timer);
   }, [busEvents]);
+
+  const combinedBusActivity24h = useMemo<BusActivitySample[]>(() => {
+    const merged: BusActivitySample[] = [...busActivity24h];
+    busEvents.forEach((ev, idx) => {
+      merged.push({
+        id: `live-${idx}-${ev.createdAtMs || 0}`,
+        direction: ev.direction,
+        createdAtMs: ev.createdAtMs,
+      });
+    });
+    return merged;
+  }, [busActivity24h, busEvents]);
 
   const activeZarateCount = useMemo(
     () =>
@@ -974,77 +984,8 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
               </motion.button>
             </div>
 
-            {/* 5 KPIs en tiempo real — Diseño limpio solo íconos (mismo lenguaje que los 4 botones superiores) + hover informativo */}
-            <div className="grid grid-cols-5 gap-1.5 sm:gap-2">
-              {/* KPI 1: Demora estimada actual */}
-              <div
-                className={`min-h-[48px] sm:min-h-[52px] p-1.5 rounded-2xl bg-[#181B20] border-2 transition-colors flex items-center justify-center cursor-help ${
-                  corridorAiMetrics.delayMinutes >= 15
-                    ? 'border-amber-400/50 hover:border-amber-300'
-                    : 'border-[#FFF19A]/40 hover:border-[#FFF19A]'
-                }`}
-                title={corridorAiMetrics.delayHover}
-                aria-label={corridorAiMetrics.delayHover}
-              >
-                <div
-                  className={`w-9 h-9 rounded-xl flex items-center justify-center shadow-sm ${
-                    corridorAiMetrics.delayMinutes >= 15
-                      ? 'bg-amber-400 text-[#101114]'
-                      : 'bg-[#FFF19A] text-[#101114]'
-                  }`}
-                >
-                  <Clock className="w-[18px] h-[18px] stroke-[2.4]" />
-                </div>
-              </div>
-
-              {/* KPI 2: Velocidad promedio */}
-              <div
-                className="min-h-[48px] sm:min-h-[52px] p-1.5 rounded-2xl bg-[#181B20] border-2 border-white/15 hover:border-[#FFF19A]/65 transition-colors flex items-center justify-center cursor-help"
-                title={corridorAiMetrics.speedHover}
-                aria-label={corridorAiMetrics.speedHover}
-              >
-                <div className="w-9 h-9 rounded-xl bg-[#202329] text-[#FFF19A] border border-white/20 flex items-center justify-center shadow-sm">
-                  <Gauge className="w-[18px] h-[18px] stroke-[2.2]" />
-                </div>
-              </div>
-
-              {/* KPI 3: Próximo arribo (ETA) */}
-              <div
-                className="min-h-[48px] sm:min-h-[52px] p-1.5 rounded-2xl bg-[#181B20] border-2 border-[#B7F36B]/45 hover:border-[#B7F36B] transition-colors flex items-center justify-center cursor-help"
-                title={corridorAiMetrics.etaHover}
-                aria-label={corridorAiMetrics.etaHover}
-              >
-                <div className="w-9 h-9 rounded-xl bg-[#B7F36B] text-[#101114] flex items-center justify-center shadow-sm">
-                  <Activity className="w-[18px] h-[18px] stroke-[2.5]" />
-                </div>
-              </div>
-
-              {/* KPI 4: Nivel de ocupación */}
-              <div
-                className={`min-h-[48px] sm:min-h-[52px] p-1.5 rounded-2xl bg-[#181B20] border-2 transition-colors flex items-center justify-center cursor-help ${corridorAiMetrics.occupancyTone}`}
-                title={corridorAiMetrics.occupancyHover}
-                aria-label={corridorAiMetrics.occupancyHover}
-              >
-                <div
-                  className={`w-9 h-9 rounded-xl flex items-center justify-center shadow-sm ${corridorAiMetrics.occupancyIconTone}`}
-                >
-                  <Users className="w-[18px] h-[18px] stroke-[2.2]" />
-                </div>
-              </div>
-
-              {/* KPI 5: Predicción de demanda */}
-              <div
-                className={`min-h-[48px] sm:min-h-[52px] p-1.5 rounded-2xl bg-[#181B20] border-2 transition-colors flex items-center justify-center cursor-help ${corridorAiMetrics.demandTone}`}
-                title={corridorAiMetrics.demandHover}
-                aria-label={corridorAiMetrics.demandHover}
-              >
-                <div
-                  className={`w-9 h-9 rounded-xl flex items-center justify-center shadow-sm ${corridorAiMetrics.demandIconTone}`}
-                >
-                  <TrendingUp className="w-[18px] h-[18px] stroke-[2.2]" />
-                </div>
-              </div>
-            </div>
+            {/* Micrográfico Analítico Dark FinTech: Actividad de viajes en colectivo 24 hs (Hacia Zárate vs Hacia Malvinas) */}
+            <BusActivityMicroChart events={combinedBusActivity24h} nowTs={nowTs} />
 
             {/* Micro-Banner en movimiento infinito con Lectura IA y métricas en tiempo real */}
             <div

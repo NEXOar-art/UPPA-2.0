@@ -50,6 +50,92 @@ interface PublishTaxiModalProps {
   currentUserPhone?: string;
 }
 
+const MAX_PROOF_IMAGE_BYTES = 60 * 1024; // 60 KB máximo
+
+async function processReceiptImageUnder60Kb(file: File): Promise<{
+  dataUrl: string;
+  finalFile: File;
+  sizeBytes: number;
+  wasOptimized: boolean;
+}> {
+  if (!file.type.startsWith('image/')) {
+    throw new Error('Por favor seleccioná una imagen (JPG, PNG o WebP) que no supere los 60 KB.');
+  }
+
+  const readAsDataUrl = (blob: Blob): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ''));
+      reader.onerror = () => reject(new Error('No se pudo leer la imagen seleccionada.'));
+      reader.readAsDataURL(blob);
+    });
+
+  if (file.size <= MAX_PROOF_IMAGE_BYTES) {
+    const dataUrl = await readAsDataUrl(file);
+    return {
+      dataUrl,
+      finalFile: file,
+      sizeBytes: file.size,
+      wasOptimized: false,
+    };
+  }
+
+  // Optimizar automáticamente imágenes > 60 KB mediante canvas para no superar los 60 KB
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = () => reject(new Error('No se pudo procesar la imagen del comprobante.'));
+      el.src = objectUrl;
+    });
+
+    const attempts: Array<{ maxDim: number; quality: number }> = [
+      { maxDim: 960, quality: 0.78 },
+      { maxDim: 800, quality: 0.65 },
+      { maxDim: 640, quality: 0.55 },
+      { maxDim: 520, quality: 0.45 },
+      { maxDim: 420, quality: 0.36 },
+    ];
+
+    for (const { maxDim, quality } of attempts) {
+      const scale = Math.min(1, maxDim / Math.max(img.width || 1, img.height || 1));
+      const w = Math.max(1, Math.round((img.width || 1) * scale));
+      const h = Math.max(1, Math.round((img.height || 1) * scale));
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) break;
+      ctx.drawImage(img, 0, 0, w, h);
+
+      const blob = await new Promise<Blob | null>((resolve) =>
+        canvas.toBlob((b) => resolve(b), 'image/jpeg', quality)
+      );
+
+      if (blob && blob.size <= MAX_PROOF_IMAGE_BYTES) {
+        const cleanBaseName = file.name.replace(/\.[^.]+$/, '') || 'comprobante';
+        const finalFile = new File([blob], `${cleanBaseName}.jpg`, { type: 'image/jpeg' });
+        const dataUrl = await readAsDataUrl(blob);
+        return {
+          dataUrl,
+          finalFile,
+          sizeBytes: blob.size,
+          wasOptimized: true,
+        };
+      }
+    }
+
+    throw new Error(
+      'La imagen seleccionada supera los 60 KB permitidos. Probá con una captura o foto más liviana (máx. 60 KB).'
+    );
+  } finally {
+    try {
+      URL.revokeObjectURL(objectUrl);
+    } catch {}
+  }
+}
+
 const PRESET_TIERS = [
   { hours: 2, price: 6000, label: '2 Horas', badge: 'Turno Corto' },
   { hours: 6, price: 16000, label: '6 Horas', badge: 'Medio Turno' },
@@ -91,6 +177,11 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
   // Generated code & step state
   const [formStep, setFormStep] = useState<'form' | 'review-payment' | 'submitted'>('form');
   const [proofPreviewUrl, setProofPreviewUrl] = useState<string | null>(null);
+  const [proofDataUrl, setProofDataUrl] = useState<string | null>(null);
+  const [proofFileObj, setProofFileObj] = useState<File | null>(null);
+  const [proofSizeBytes, setProofSizeBytes] = useState<number | null>(null);
+  const [proofStatusNote, setProofStatusNote] = useState<string | null>(null);
+  const [isProcessingProof, setIsProcessingProof] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [generatedCodeResult, setGeneratedCodeResult] = useState<string | null>(null);
   const [createdHabId, setCreatedHabId] = useState<string | null>(null);
@@ -104,14 +195,12 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       setFormStep('form');
-      setProofPreviewUrl((prev) => {
-        if (prev) {
-          try {
-            URL.revokeObjectURL(prev);
-          } catch {}
-        }
-        return null;
-      });
+      setProofPreviewUrl(null);
+      setProofDataUrl(null);
+      setProofFileObj(null);
+      setProofSizeBytes(null);
+      setProofStatusNote(null);
+      setIsProcessingProof(false);
       setIsSubmitting(false);
       setGeneratedCodeResult(null);
       setCreatedHabId(null);
@@ -137,16 +226,6 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
       setCascoExtra(true);
     }
   }, [isOpen, initialVehicleType, currentUserName, currentUserPhone]);
-
-  useEffect(() => {
-    return () => {
-      if (proofPreviewUrl) {
-        try {
-          URL.revokeObjectURL(proofPreviewUrl);
-        } catch {}
-      }
-    };
-  }, [proofPreviewUrl]);
 
   if (!isOpen) return null;
 
@@ -178,20 +257,76 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
   };
 
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      setProofFileName(file.name);
-      setProofPreviewUrl((prev) => {
-        if (prev) {
-          try {
-            URL.revokeObjectURL(prev);
-          } catch {}
-        }
-        return file.type.startsWith('image/') ? URL.createObjectURL(file) : null;
-      });
+    e.target.value = '';
+    if (!file) return;
+
+    setErrorMsg('');
+    setProofStatusNote(null);
+    setIsProcessingProof(true);
+    try {
+      const processed = await processReceiptImageUnder60Kb(file);
+      setProofFileName(processed.finalFile.name);
+      setProofFileObj(processed.finalFile);
+      setProofDataUrl(processed.dataUrl);
+      setProofPreviewUrl(processed.dataUrl);
+      setProofSizeBytes(processed.sizeBytes);
+      const kbStr = (processed.sizeBytes / 1024).toFixed(1);
+      setProofStatusNote(
+        processed.wasOptimized
+          ? `Imagen optimizada a ${kbStr} KB (≤ 60 KB) lista para enviar.`
+          : `Imagen cargada: ${kbStr} KB (≤ 60 KB) lista para enviar.`
+      );
       playMicroSound('ui_tap');
+    } catch (err: any) {
+      setProofFileName('');
+      setProofFileObj(null);
+      setProofDataUrl(null);
+      setProofPreviewUrl(null);
+      setProofSizeBytes(null);
+      setErrorMsg(err?.message || 'La imagen del comprobante no debe superar los 60 KB.');
+    } finally {
+      setIsProcessingProof(false);
     }
+  };
+
+  const buildWhatsappSummaryText = () => {
+    const comfortText =
+      vehicleType === 'auto'
+        ? `Asientos: ${asientos}, Aire: ${aireAcondicionado ? 'Sí' : 'No'}, Baúl: ${baul ? 'Sí' : 'No'}, Mascotas: ${aceptaMascotas ? 'Sí' : 'No'}`
+        : `Casco extra: ${cascoExtra ? 'Sí' : 'No'}, Baúl/Portaequipaje: ${baul ? 'Sí' : 'No'}`;
+    const sizeInfo = proofSizeBytes ? ` (${(proofSizeBytes / 1024).toFixed(1)} KB)` : '';
+    return `Hola Lucia Veronica Gimenez! Acabo de transferir $${totalAmount.toLocaleString('es-AR')} ARS a Alias: luciaveronicag (CVU: 0000003100020253501840) para prestar servicio de ${
+      vehicleType === 'moto' ? 'Moto Taxi' : 'Auto Taxi'
+    } por ${selectedHours} horas.\n• Chofer: ${driverName.trim()}\n• WhatsApp: ${whatsapp.trim()}\n• Vehículo: ${vehicleModel.trim()}\n• Patente: ${patente.trim().toUpperCase()}\n• Zona: ${zone.trim() || 'Zárate ↔ Campana'}\n• Confort: ${comfortText}\n• Índice Seguridad: ${currentSafetyIndex}%\n• Comprobante: ${proofFileName ? `${proofFileName}${sizeInfo}` : 'Adjunto a continuación'}`;
+  };
+
+  const handleShareImageAndDataToWhatsApp = async () => {
+    const text = buildWhatsappSummaryText();
+    if (createdHabId) {
+      marcarSolicitudWhatsappEnviada(createdHabId);
+    }
+    if (
+      proofFileObj &&
+      typeof navigator !== 'undefined' &&
+      typeof navigator.share === 'function' &&
+      typeof navigator.canShare === 'function' &&
+      navigator.canShare({ files: [proofFileObj] })
+    ) {
+      try {
+        await navigator.share({
+          title: 'Habilitación de Chofer UPPA',
+          text,
+          files: [proofFileObj],
+        });
+        return;
+      } catch (err: any) {
+        if (err?.name === 'AbortError') return;
+      }
+    }
+    const url = `https://wa.me/5493489690058?text=${encodeURIComponent(text)}`;
+    window.location.assign(url);
   };
 
   // Paso 1 -> Paso 2: Validar datos personales y del vehículo, y habilitar Alias/CVU + Resumen + Adjuntar Comprobante
@@ -291,8 +426,10 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
           zone: zone.trim() || 'Zárate ↔ Campana',
           amount: totalAmount,
           hours: selectedHours,
-          proofUrl: 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?auto=format&fit=crop&w=600&q=80',
-          proofFileName: proofFileName || 'comprobante_luciaveronicag.pdf',
+          proofUrl:
+            proofDataUrl ||
+            'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?auto=format&fit=crop&w=600&q=80',
+          proofFileName: proofFileName || 'comprobante_luciaveronicag.jpg',
           alias: 'luciaveronicag',
           activationCode: generatedCodeObj.code,
         }
@@ -440,12 +577,24 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
 
               {/* Botón de WhatsApp para comunicarse con el Administrador */}
               <div className="max-w-sm mx-auto space-y-2">
+                {proofPreviewUrl && (
+                  <div className="p-2.5 rounded-xl bg-[#101114] border border-[#B7F36B]/40 flex items-center gap-2.5 text-left">
+                    <img
+                      src={proofPreviewUrl}
+                      alt="Comprobante cargado"
+                      className="w-12 h-12 rounded-lg object-cover border border-[#B7F36B] shrink-0"
+                    />
+                    <div className="min-w-0 flex-1 text-[11px]">
+                      <span className="font-bold text-white block truncate">{proofFileName}</span>
+                      <span className="text-[#B7F36B] font-mono">
+                        {proofSizeBytes ? `${(proofSizeBytes / 1024).toFixed(1)} KB (≤ 60 KB)` : 'Imagen lista'}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
                 <a
-                  href={`https://wa.me/5493489690058?text=${encodeURIComponent(
-                    `Hola Lucia Veronica Gimenez! Acabo de transferir $${totalAmount.toLocaleString('es-AR')} ARS a Alias: luciaveronicag (CVU: 0000003100020253501840) para prestar servicio de ${
-                      vehicleType === 'moto' ? 'Moto Taxi' : 'Auto Taxi'
-                    } por ${selectedHours} horas.\n• Chofer: ${driverName.trim()}\n• WhatsApp: ${whatsapp.trim()}\n• Vehículo: ${vehicleModel.trim()}\n• Patente: ${patente.trim().toUpperCase()}\n• Zona: ${zone.trim() || 'Zárate ↔ Campana'}\n• Índice Seguridad: ${currentSafetyIndex}%\n• Comprobante: ${proofFileName || 'Adjunto a continuación'}`
-                  )}`}
+                  href={`https://wa.me/5493489690058?text=${encodeURIComponent(buildWhatsappSummaryText())}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={() => {
@@ -453,12 +602,23 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
                       marcarSolicitudWhatsappEnviada(createdHabId);
                     }
                   }}
-                  title="Enviar comprobante de transferencia al WhatsApp del Administrador"
+                  title="Enviar todos los datos y comprobante al WhatsApp 3489690058"
                   className="w-full min-h-[46px] py-3 px-3 rounded-xl uppa-cta-green text-xs font-black flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <MessageCircle className="w-4 h-4 shrink-0" />
-                  <span>Enviar Comprobante al WhatsApp 3489690058</span>
+                  <span>Enviar Toda la Info al WhatsApp 3489690058</span>
                 </a>
+
+                {proofFileObj && (
+                  <button
+                    type="button"
+                    onClick={handleShareImageAndDataToWhatsApp}
+                    className="w-full min-h-[42px] py-2 px-3 rounded-xl bg-[#202329] hover:bg-white/10 border border-[#FFF19A]/45 text-[#FFF19A] text-[11px] font-black flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <Upload className="w-3.5 h-3.5 shrink-0" />
+                    <span>Adjuntar / Compartir Imagen + Datos por WhatsApp</span>
+                  </button>
+                )}
               </div>
 
               <div className="p-3.5 rounded-2xl bg-[#101114] border border-white/15 text-[11px] text-[#9299A5] max-w-sm mx-auto text-left space-y-1.5">
@@ -600,50 +760,63 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
                 </div>
               </div>
 
-              {/* 3. Adjuntar Comprobante */}
+              {/* 3. Adjuntar Comprobante (Imagen máx. 60 KB) */}
               <div className="p-3.5 rounded-2xl bg-[#101114] border-2 border-[#B7F36B]/40 space-y-2.5">
-                <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
                   <span className="text-xs font-black text-white flex items-center gap-1.5">
                     <Upload className="w-4 h-4 text-[#B7F36B]" />
-                    <span>Adjuntar Comprobante de Transferencia</span>
+                    <span>Adjuntar Imagen del Comprobante</span>
                   </span>
-                  {proofFileName && (
-                    <span className="px-2 py-0.5 rounded-md bg-[#B7F36B]/15 border border-[#B7F36B]/40 text-[#B7F36B] text-[10px] font-bold">
-                      Adjunto
-                    </span>
-                  )}
+                  <span className="px-2 py-0.5 rounded-md bg-[#FFF19A]/15 border border-[#FFF19A]/40 text-[#FFF19A] text-[10px] font-mono font-bold">
+                    {proofSizeBytes
+                      ? `${(proofSizeBytes / 1024).toFixed(1)} KB / 60 KB ✓`
+                      : 'Imagen máx. 60 KB'}
+                  </span>
                 </div>
 
                 <label
-                  title="Seleccionar imagen o PDF del comprobante de transferencia"
-                  className="w-full min-h-[52px] px-3 py-2.5 rounded-xl bg-[#202329] hover:bg-white/10 border-2 border-dashed border-[#FFF19A]/50 hover:border-[#FFF19A] text-xs flex items-center justify-between gap-2 cursor-pointer transition-all"
+                  title="Seleccionar imagen del comprobante de transferencia (hasta 60 KB)"
+                  className="w-full min-h-[56px] px-3 py-2.5 rounded-xl bg-[#202329] hover:bg-white/10 border-2 border-dashed border-[#FFF19A]/50 hover:border-[#FFF19A] text-xs flex items-center justify-between gap-2 cursor-pointer transition-all"
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
                     {proofPreviewUrl ? (
                       <img
                         src={proofPreviewUrl}
                         alt="Vista previa comprobante"
-                        className="w-10 h-10 rounded-lg object-cover border border-[#B7F36B] shrink-0"
+                        className="w-11 h-11 rounded-lg object-cover border border-[#B7F36B] shrink-0"
                       />
                     ) : (
-                      <div className="w-9 h-9 rounded-lg bg-[#101114] border border-white/15 flex items-center justify-center text-[#FFF19A] shrink-0">
+                      <div className="w-10 h-10 rounded-lg bg-[#101114] border border-white/15 flex items-center justify-center text-[#FFF19A] shrink-0">
                         <Upload className="w-4 h-4" />
                       </div>
                     )}
                     <div className="min-w-0">
                       <span className="block font-bold text-white truncate">
-                        {proofFileName || 'Tocar para subir comprobante (Imagen o PDF)'}
+                        {isProcessingProof
+                          ? 'Optimizando imagen a ≤ 60 KB...'
+                          : proofFileName || 'Tocar para cargar imagen (hasta 60 KB)'}
                       </span>
                       <span className="block text-[10px] text-[#9299A5]">
-                        {proofFileName ? 'Tocar para cambiar archivo' : 'También podés enviarlo luego por WhatsApp al 3489690058'}
+                        {proofStatusNote || 'JPG, PNG o WebP hasta 60 KB (optimización automática) para enviar por WhatsApp'}
                       </span>
                     </div>
                   </div>
                   <span className="px-2.5 py-1 rounded-lg bg-[#FFF19A] text-[#101114] font-black text-[10.5px] shrink-0">
                     {proofFileName ? 'Cambiar' : 'Elegir'}
                   </span>
-                  <input type="file" accept="image/*,.pdf" onChange={handleFileChange} className="hidden" />
+                  <input type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
                 </label>
+
+                <a
+                  href={`https://wa.me/5493489690058?text=${encodeURIComponent(buildWhatsappSummaryText())}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full min-h-[40px] px-3 py-2 rounded-xl bg-[#202329] hover:bg-white/10 border border-[#B7F36B]/45 text-[#B7F36B] text-[11px] font-black flex items-center justify-center gap-2 transition-all"
+                  title="Enviar toda la información cargada al WhatsApp 3489690058"
+                >
+                  <MessageCircle className="w-3.5 h-3.5 shrink-0" />
+                  <span>Enviar toda la información al WhatsApp 3489690058</span>
+                </a>
 
                 {/* 4. Acciones Finales */}
                 <div className="flex flex-col sm:flex-row gap-2 pt-1">

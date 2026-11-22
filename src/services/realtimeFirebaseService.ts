@@ -546,6 +546,95 @@ if (typeof window !== 'undefined' && window.localStorage) {
   } catch {}
 }
 
+export interface BusLocationActivityPoint {
+  id: string;
+  direction: 'hacia_zarate' | 'hacia_malvinas';
+  createdAtMs: number;
+}
+
+const BUS_ACTIVITY_24H_STORAGE_KEY = 'UPPA_BUS_ACTIVITY_24H_V1';
+const BUS_ACTIVITY_WINDOW_MS = 24 * 60 * 60 * 1000;
+const busActivityListeners = new Set<(points: BusLocationActivityPoint[]) => void>();
+
+function readBusActivity24hStore(nowMs: number = Date.now()): BusLocationActivityPoint[] {
+  if (typeof window === 'undefined' || !window.localStorage) return [];
+  try {
+    const raw = window.localStorage.getItem(BUS_ACTIVITY_24H_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (p): p is BusLocationActivityPoint =>
+        Boolean(p) &&
+        typeof p.id === 'string' &&
+        (p.direction === 'hacia_zarate' || p.direction === 'hacia_malvinas') &&
+        typeof p.createdAtMs === 'number' &&
+        Number.isFinite(p.createdAtMs) &&
+        nowMs - p.createdAtMs <= BUS_ACTIVITY_WINDOW_MS &&
+        p.createdAtMs <= nowMs + 60000
+    );
+  } catch {
+    return [];
+  }
+}
+
+function writeAndNotifyBusActivity24h(points: BusLocationActivityPoint[]) {
+  const nowMs = Date.now();
+  const dedup = new Map<string, BusLocationActivityPoint>();
+  points.forEach((p) => {
+    if (
+      p &&
+      typeof p.createdAtMs === 'number' &&
+      nowMs - p.createdAtMs <= BUS_ACTIVITY_WINDOW_MS &&
+      p.createdAtMs <= nowMs + 60000
+    ) {
+      // Evita duplicar entre id local temporal y documento Firestore emitido en el mismo segundo
+      const bucketKey = `${p.direction}_${Math.floor(p.createdAtMs / 2000)}`;
+      if (!dedup.has(p.id) && !dedup.has(bucketKey)) {
+        dedup.set(bucketKey, p);
+      }
+    }
+  });
+  const sorted = Array.from(dedup.values()).sort((a, b) => a.createdAtMs - b.createdAtMs);
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
+      window.localStorage.setItem(BUS_ACTIVITY_24H_STORAGE_KEY, JSON.stringify(sorted));
+    } catch {}
+  }
+  busActivityListeners.forEach((cb) => {
+    try {
+      cb(sorted);
+    } catch {}
+  });
+}
+
+function mergeBusActivityPoints(incoming: BusLocationActivityPoint[]) {
+  const existing = readBusActivity24hStore();
+  writeAndNotifyBusActivity24h([...existing, ...incoming]);
+}
+
+export function appendBusLocationActivityPoint(point: BusLocationActivityPoint) {
+  const existing = readBusActivity24hStore();
+  writeAndNotifyBusActivity24h([...existing, point]);
+}
+
+export function subscribeToBusActivity24h(
+  callback: (points: BusLocationActivityPoint[]) => void
+): () => void {
+  busActivityListeners.add(callback);
+  callback(readBusActivity24hStore());
+  return () => {
+    busActivityListeners.delete(callback);
+  };
+}
+
+function resolveReporteCreatedMs(rep: Partial<ReporteFirestore>): number {
+  if (typeof rep.creadoEnMs === 'number' && Number.isFinite(rep.creadoEnMs)) return rep.creadoEnMs;
+  if (typeof rep.creadoEn === 'number' && Number.isFinite(rep.creadoEn)) return rep.creadoEn;
+  if (typeof rep.creadoEn?.seconds === 'number') return rep.creadoEn.seconds * 1000;
+  return 0;
+}
+
 export function subscribeToReportes(
   callback: (reportes: ReporteFirestore[]) => void,
   onError?: (error: any) => void
@@ -559,13 +648,34 @@ export function subscribeToReportes(
         q,
         (snapshot) => {
           notifyFirestoreSyncHealthy(COL_REPORTES);
+          const nowMs = Date.now();
           const realReports: ReporteFirestore[] = [];
+          const recentBusPoints: BusLocationActivityPoint[] = [];
+
           snapshot.docs.forEach((d) => {
             const data = {
               id: d.id,
               ...(d.data() as Omit<ReporteFirestore, 'id'>),
             };
             if (isRealCommunityReport(data)) {
+              const createdMs = resolveReporteCreatedMs(data);
+              if (
+                data.tipo === 'ubicacion_colectivo' &&
+                createdMs > 0 &&
+                nowMs - createdMs <= BUS_ACTIVITY_WINDOW_MS
+              ) {
+                const dir: 'hacia_zarate' | 'hacia_malvinas' =
+                  data.sentido === 'hacia_zarate' ||
+                  (data.sentido !== 'hacia_malvinas' && data.ruta === 'campana-zarate')
+                    ? 'hacia_zarate'
+                    : 'hacia_malvinas';
+                recentBusPoints.push({
+                  id: data.id,
+                  direction: dir,
+                  createdAtMs: createdMs,
+                });
+              }
+
               if (!isReporteExpired(data)) {
                 realReports.push(data);
               }
@@ -576,6 +686,10 @@ export function subscribeToReportes(
               } catch {}
             }
           });
+
+          if (recentBusPoints.length > 0) {
+            mergeBusActivityPoints(recentBusPoints);
+          }
 
           setCached('reportes', realReports);
           callback(realReports);
@@ -611,6 +725,20 @@ export async function crearReporte(data: {
   const now = Date.now();
   const cleanCalle = data.calle?.trim() || undefined;
   const resolvedExpiresAtMs = computeEventExpiresAtMs(data.tipo, now, data.expiresAtMs);
+
+  if (data.tipo === 'ubicacion_colectivo') {
+    const dir: 'hacia_zarate' | 'hacia_malvinas' =
+      data.sentido === 'hacia_zarate' ||
+      (data.sentido !== 'hacia_malvinas' && data.ruta === 'campana-zarate')
+        ? 'hacia_zarate'
+        : 'hacia_malvinas';
+    appendBusLocationActivityPoint({
+      id: `bus-act-${now}`,
+      direction: dir,
+      createdAtMs: now,
+    });
+  }
+
   try {
     await ensureFirebaseAuthSession();
     const colRef = collection(db, COL_REPORTES);
