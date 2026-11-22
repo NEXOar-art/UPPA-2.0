@@ -363,6 +363,7 @@ export interface AdListing {
   linkUrl: string;
   whatsappUrl?: string;
   imageUrl?: string;
+  flyerUrl?: string;
   zone: string;
   discountBadge?: string;
   isActive: boolean;

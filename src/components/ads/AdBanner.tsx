@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import gsap from 'gsap';
 import { motion } from 'motion/react';
 import { AdListing } from '../../types';
 import { AdBanner3DStage } from './AdBanner3DStage';
+import { AdFlyerCarouselModal } from './AdFlyerCarouselModal';
 import { LottieMicroIcon } from '../common/LottieMicroIcon';
 import { playMicroSound } from '../../utils/soundEffects';
 import {
@@ -11,6 +12,8 @@ import {
   X,
   Megaphone,
   Sparkles,
+  Maximize2,
+  Images,
 } from 'lucide-react';
 
 interface AdBannerProps {
@@ -30,6 +33,7 @@ export const AdBanner: React.FC<AdBannerProps> = ({ ads, onOpenContactModal }) =
   const [isCompact, setIsCompact] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
   const [isTrackHovered, setIsTrackHovered] = useState(false);
+  const [selectedFlyerAdId, setSelectedFlyerAdId] = useState<string | null>(null);
   const [pointer, setPointer] = useState({ x: 0, y: 0 });
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -44,7 +48,7 @@ export const AdBanner: React.FC<AdBannerProps> = ({ ads, onOpenContactModal }) =
     return () => clearTimeout(timer);
   }, []);
 
-  const activeAds = ads.filter((a) => a.isActive);
+  const activeAds = useMemo(() => ads.filter((a) => a.isActive), [ads]);
 
   // GSAP: Marquee continuo + destellos persuasivos + entrada coreografiada
   useEffect(() => {
@@ -91,17 +95,18 @@ export const AdBanner: React.FC<AdBannerProps> = ({ ads, onOpenContactModal }) =
     };
   }, [isDismissed, activeAds.length]);
 
-  // Suavizar pausa/reanudación GSAP cuando el usuario pasa el cursor sobre las publicidades
+  // Suavizar pausa/reanudación GSAP cuando el usuario pasa el cursor o ve el carrusel de flyers
   useEffect(() => {
     if (!marqueeTweenRef.current) return;
     gsap.to(marqueeTweenRef.current, {
-      timeScale: isTrackHovered ? 0 : 1,
+      timeScale: isTrackHovered || Boolean(selectedFlyerAdId) ? 0 : 1,
       duration: 0.4,
       ease: 'power2.out',
     });
-  }, [isTrackHovered]);
+  }, [isTrackHovered, selectedFlyerAdId]);
 
   const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (selectedFlyerAdId) return;
     const rect = e.currentTarget.getBoundingClientRect();
     if (!rect.width || !rect.height) return;
     const nx = ((e.clientX - rect.left) / rect.width) * 2 - 1;
@@ -153,6 +158,7 @@ export const AdBanner: React.FC<AdBannerProps> = ({ ads, onOpenContactModal }) =
   const marqueeItems = [...halfCycle, ...halfCycle];
 
   return (
+    <>
     <div
       ref={containerRef}
       onPointerMove={handlePointerMove}
@@ -161,8 +167,10 @@ export const AdBanner: React.FC<AdBannerProps> = ({ ads, onOpenContactModal }) =
         setIsTrackHovered(false);
         setPointer({ x: 0, y: 0 });
       }}
+      onTouchStart={() => setIsTrackHovered(true)}
+      onTouchEnd={() => setIsTrackHovered(false)}
       className="w-full bg-[#101114] border-t-2 border-[#FFF19A]/25 relative overflow-hidden z-20 transition-all select-none"
-      title="Auspicios locales en vivo: pasá el cursor para pausar y hacer clic en cualquier comercio"
+      title="Auspicios locales en vivo: pasá el cursor para pausar y hacé clic en la miniatura o 'Ver Flyer' para ver los flyers en carrusel"
     >
       {/* Fondo 3D interactivo (Three.js + React Three Fiber) detrás de las tarjetas */}
       <AdBanner3DStage
@@ -223,21 +231,26 @@ export const AdBanner: React.FC<AdBannerProps> = ({ ads, onOpenContactModal }) =
                     className="uppa-ad-sheen pointer-events-none absolute inset-y-0 left-0 w-16 bg-gradient-to-r from-transparent via-[#FFF19A]/20 to-transparent skew-x-[-20deg]"
                   />
 
-                  <a
-                    href={safeWebUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={() => playMicroSound('ad_spark')}
-                    className="relative w-8 h-8 rounded-none overflow-hidden shrink-0 border border-[#FFF19A]/35 group-hover:border-[#FFF19A] transition-colors"
-                    title={`Visitar ${ad.businessName}`}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      playMicroSound('ad_spark');
+                      setSelectedFlyerAdId(ad.id);
+                    }}
+                    className="relative w-9 h-9 rounded-none overflow-hidden shrink-0 border border-[#FFF19A]/55 hover:border-[#FFF19A] cursor-pointer transition-colors group/thumb touch-manipulation z-10"
+                    title={`Ver flyer completo de ${ad.businessName} (carrusel deslizante)`}
+                    aria-label={`Ver flyer completo de ${ad.businessName}`}
                   >
                     <img
-                      src={ad.imageUrl || 'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=300&q=80'}
-                      alt={ad.businessName}
-                      referrerPolicy="no-referrer"
-                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                      src={ad.flyerUrl || ad.imageUrl || 'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=300&q=80'}
+                      alt={`Flyer ${ad.businessName}`}
+                      className="w-full h-full object-cover object-top group-hover/thumb:scale-110 transition-transform duration-300"
                     />
-                  </a>
+                    <span className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-[#FFF19A] text-[#101114] flex items-center justify-center">
+                      <Maximize2 className="w-2.5 h-2.5" />
+                    </span>
+                  </button>
 
                   <a
                     href={safeWebUrl}
@@ -266,6 +279,22 @@ export const AdBanner: React.FC<AdBannerProps> = ({ ads, onOpenContactModal }) =
                   </a>
 
                   <div className="flex items-center gap-1.5 ml-1 shrink-0 relative z-10">
+                    <motion.button
+                      type="button"
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.94 }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        playMicroSound('ad_spark');
+                        setSelectedFlyerAdId(ad.id);
+                      }}
+                      className="h-7 px-2 rounded-none bg-[#FFF19A] hover:brightness-95 border border-[#FFF19A] text-[#101114] text-[10.5px] font-black flex items-center gap-1 transition-all cursor-pointer touch-manipulation"
+                      title={`Ver flyer de ${ad.businessName}`}
+                    >
+                      <Images className="w-3 h-3" />
+                      <span>Ver Flyer</span>
+                    </motion.button>
+
                     <motion.a
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.94 }}
@@ -334,5 +363,12 @@ export const AdBanner: React.FC<AdBannerProps> = ({ ads, onOpenContactModal }) =
         </div>
       </div>
     </div>
+
+    <AdFlyerCarouselModal
+      ads={activeAds}
+      initialAdId={selectedFlyerAdId}
+      onClose={() => setSelectedFlyerAdId(null)}
+    />
+    </>
   );
 };
