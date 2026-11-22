@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { TaxiListing, PaymentProof } from '../../types';
 import {
   generateActivationCode,
@@ -26,10 +26,13 @@ import {
   AlertCircle,
   KeyRound,
   ArrowRight,
+  ArrowLeft,
   Sparkles,
   CheckCircle2,
   Send,
   MessageCircle,
+  FileCheck2,
+  Edit3,
 } from 'lucide-react';
 
 interface PublishTaxiModalProps {
@@ -85,14 +88,30 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
   const [aceptaMascotas, setAceptaMascotas] = useState<boolean>(false);
   const [cascoExtra, setCascoExtra] = useState<boolean>(true);
 
-  // Generated code presentation state
+  // Generated code & step state
+  const [formStep, setFormStep] = useState<'form' | 'review-payment' | 'submitted'>('form');
+  const [proofPreviewUrl, setProofPreviewUrl] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [generatedCodeResult, setGeneratedCodeResult] = useState<string | null>(null);
   const [createdHabId, setCreatedHabId] = useState<string | null>(null);
   const [codeSuccessMsg, setCodeSuccessMsg] = useState<string | null>(null);
+  const scrollBodyRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    scrollBodyRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [formStep]);
 
   useEffect(() => {
     if (isOpen) {
+      setFormStep('form');
+      setProofPreviewUrl((prev) => {
+        if (prev) {
+          try {
+            URL.revokeObjectURL(prev);
+          } catch {}
+        }
+        return null;
+      });
       setIsSubmitting(false);
       setGeneratedCodeResult(null);
       setCreatedHabId(null);
@@ -118,6 +137,16 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
       setCascoExtra(true);
     }
   }, [isOpen, initialVehicleType, currentUserName, currentUserPhone]);
+
+  useEffect(() => {
+    return () => {
+      if (proofPreviewUrl) {
+        try {
+          URL.revokeObjectURL(proofPreviewUrl);
+        } catch {}
+      }
+    };
+  }, [proofPreviewUrl]);
 
   if (!isOpen) return null;
 
@@ -150,15 +179,24 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
 
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setProofFileName(e.target.files[0].name);
+    const file = e.target.files?.[0];
+    if (file) {
+      setProofFileName(file.name);
+      setProofPreviewUrl((prev) => {
+        if (prev) {
+          try {
+            URL.revokeObjectURL(prev);
+          } catch {}
+        }
+        return file.type.startsWith('image/') ? URL.createObjectURL(file) : null;
+      });
+      playMicroSound('ui_tap');
     }
   };
 
-  // Step 1: Submit Transfer and automatically record in Firestore & Administración UPPA
-  const handleTransferSubmit = async (e?: React.FormEvent) => {
+  // Paso 1 -> Paso 2: Validar datos personales y del vehículo, y habilitar Alias/CVU + Resumen + Adjuntar Comprobante
+  const handleProceedToPaymentAndReview = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (isSubmitting) return;
     setErrorMsg('');
 
     const cleanWhatsapp = whatsapp.replace(/\D/g, '');
@@ -179,6 +217,16 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
       return;
     }
 
+    playMicroSound('ui_tap');
+    setFormStep('review-payment');
+  };
+
+  // Paso 2 -> Final: Registrar en Firestore & Administración UPPA todos los datos + comprobante
+  const handleConfirmFinalSubmission = async () => {
+    if (isSubmitting) return;
+    setErrorMsg('');
+
+    const cleanWhatsapp = whatsapp.replace(/\D/g, '');
     const cleanPatente = patente.trim().toUpperCase();
     const formattedWhatsapp = cleanWhatsapp.startsWith('54') ? cleanWhatsapp : `549${cleanWhatsapp}`;
 
@@ -250,9 +298,9 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
         }
       );
 
-      // Show generated code and direct WhatsApp anchor to user
       playMicroSound('payment_done');
       setGeneratedCodeResult(generatedCodeObj.code);
+      setFormStep('submitted');
     } catch (err: any) {
       console.error('Error al registrar solicitud de chofer:', err);
       setErrorMsg(err?.message || 'No se pudo registrar la solicitud. Intentá nuevamente.');
@@ -292,15 +340,26 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
           </button>
         </div>
 
-        {/* Título: Transferir para prestar servicio */}
-        {!generatedCodeResult && (
+        {/* Título dinámico según paso */}
+        {formStep === 'form' && (
           <div className="py-2.5 px-3 rounded-xl bg-[#101114] border-2 border-[#FFF19A]/40 text-center my-3 shrink-0 space-y-0.5">
             <h3 className="text-xs sm:text-sm font-black text-[#FFF19A] tracking-wider uppercase font-display flex items-center justify-center gap-2">
               <Sparkles className="w-4 h-4 text-[#FFF19A]" />
-              <span>TRANSFERIR PARA PRESTAR SERVICIO</span>
+              <span>PASO 1 · CARGAR DATOS PERSONALES Y VEHÍCULO</span>
             </h3>
             <p className="text-[10.5px] text-[#9299A5]">
-              Abono obligatorio de turno para habilitar tu unidad de transporte alternativo en UPPA
+              Completá tus datos y luego se habilitarán el Alias, CVU y resumen para adjuntar tu comprobante
+            </p>
+          </div>
+        )}
+        {formStep === 'review-payment' && (
+          <div className="py-2.5 px-3 rounded-xl bg-[#101114] border-2 border-[#B7F36B]/55 text-center my-3 shrink-0 space-y-0.5">
+            <h3 className="text-xs sm:text-sm font-black text-[#B7F36B] tracking-wider uppercase font-display flex items-center justify-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-[#B7F36B]" />
+              <span>PASO 2 · TRANSFERIR, VERIFICAR DATOS Y ENVIAR</span>
+            </h3>
+            <p className="text-[10.5px] text-[#9299A5]">
+              Revisá todo lo que vas a mandar, realizá la transferencia y adjuntá el comprobante
             </p>
           </div>
         )}
@@ -321,8 +380,8 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
         )}
 
         {/* Scrollable Form Content */}
-        <div className="flex-1 overflow-y-auto pr-1">
-          {generatedCodeResult ? (
+        <div ref={scrollBodyRef} className="flex-1 overflow-y-auto pr-1">
+          {formStep === 'submitted' && generatedCodeResult ? (
             <div className="py-3 space-y-3.5 animate-in fade-in duration-200 text-center">
               <div className="w-14 h-14 rounded-2xl bg-[#B7F36B]/15 border-2 border-[#B7F36B] text-[#B7F36B] mx-auto flex items-center justify-center">
                 <CheckCircle2 className="w-7 h-7" />
@@ -331,11 +390,11 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
               <div>
                 <h3 className="text-base font-black text-white">¡Solicitud de Chofer Enviada!</h3>
                 <p className="text-xs text-[#9299A5] mt-1 max-w-sm mx-auto leading-relaxed">
-                  Tus datos se registraron en el sistema. El Administrador verifica tu comprobante de transferencia y te habilita directamente para comenzar a prestar servicio:
+                  Tus datos y comprobante se registraron en el sistema. El Administrador verifica tu transferencia y te habilita directamente para comenzar a prestar servicio:
                 </p>
               </div>
 
-              {/* Resumen Real del Prestador (Sin input de clave administrativa) */}
+              {/* Resumen Real del Prestador */}
               <div className="p-3.5 rounded-2xl bg-[#101114] border-2 border-white/15 max-w-sm mx-auto text-left space-y-2 text-xs">
                 <div className="flex justify-between text-white">
                   <span className="text-[#9299A5]">Prestador:</span>
@@ -363,7 +422,13 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
                 </div>
                 <div className="flex justify-between text-white">
                   <span className="text-[#9299A5]">WhatsApp de contacto:</span>
-                  <span className="font-mono text-white">+{whatsapp}</span>
+                  <span className="font-mono text-white">+{whatsapp.replace(/\D/g, '')}</span>
+                </div>
+                <div className="flex justify-between text-white">
+                  <span className="text-[#9299A5]">Comprobante:</span>
+                  <span className="font-semibold text-[#B7F36B] truncate max-w-[180px]">
+                    {proofFileName || 'Vía WhatsApp 3489690058'}
+                  </span>
                 </div>
                 <div className="flex justify-between text-white pt-1.5 border-t border-white/10 gap-2">
                   <span className="text-[#9299A5] shrink-0">Estado en Admin UPPA:</span>
@@ -377,9 +442,9 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
               <div className="max-w-sm mx-auto space-y-2">
                 <a
                   href={`https://wa.me/5493489690058?text=${encodeURIComponent(
-                    `Hola Lucia Veronica Gimenez! Acabo de transferir $${totalAmount.toLocaleString('es-AR')} ARS a luciaveronicag para prestar servicio de ${
+                    `Hola Lucia Veronica Gimenez! Acabo de transferir $${totalAmount.toLocaleString('es-AR')} ARS a Alias: luciaveronicag (CVU: 0000003100020253501840) para prestar servicio de ${
                       vehicleType === 'moto' ? 'Moto Taxi' : 'Auto Taxi'
-                    } por ${selectedHours} horas.\nChofer: ${driverName.trim()}\nVehículo: ${vehicleModel.trim()}\nWhatsApp chofer: ${whatsapp.trim()}\nZona: ${zone.trim() || 'Zárate ↔ Campana'}`
+                    } por ${selectedHours} horas.\n• Chofer: ${driverName.trim()}\n• WhatsApp: ${whatsapp.trim()}\n• Vehículo: ${vehicleModel.trim()}\n• Patente: ${patente.trim().toUpperCase()}\n• Zona: ${zone.trim() || 'Zárate ↔ Campana'}\n• Índice Seguridad: ${currentSafetyIndex}%\n• Comprobante: ${proofFileName || 'Adjunto a continuación'}`
                   )}`}
                   target="_blank"
                   rel="noopener noreferrer"
@@ -417,8 +482,200 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
                 </button>
               </div>
             </div>
+          ) : formStep === 'review-payment' ? (
+            <div className="space-y-3.5 animate-in fade-in duration-200">
+              {/* 1. Datos Bancarios Habilitados después de apretar "Enviar Solicitud y Adjuntar Comprobante" */}
+              <div className="p-3.5 rounded-2xl bg-[#101114] border-2 border-[#FFF19A]/60 space-y-2.5 shadow-[0_0_20px_rgba(255,241,154,0.12)]">
+                <div className="flex items-center justify-between text-xs pb-1 border-b border-white/10">
+                  <span className="text-[#FFF19A] font-black uppercase tracking-wide">
+                    Datos Habilitados para Transferir
+                  </span>
+                  <span className="text-sm font-black text-[#B7F36B] font-mono">
+                    ${totalAmount.toLocaleString('es-AR')} ARS
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between p-2 rounded-xl bg-[#202329] border border-white/10 gap-2">
+                  <div className="text-xs truncate">
+                    <span className="text-[#9299A5] font-mono text-[11px]">Alias:</span>{' '}
+                    <strong className="text-[#B7F36B] font-mono font-black tracking-wider">luciaveronicag</strong>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleCopyAlias}
+                    title="Copiar Alias bancario luciaveronicag"
+                    className="min-h-[34px] px-3 py-1 rounded-lg bg-[#FFF19A] hover:bg-[#fff5b8] text-[#101114] text-[11px] font-black flex items-center gap-1 transition-colors cursor-pointer shrink-0"
+                  >
+                    {copiedAlias ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                    <span>{copiedAlias ? 'Copiado' : 'Copiar Alias'}</span>
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-between p-2 rounded-xl bg-[#202329] border border-white/10 gap-2">
+                  <div className="text-xs truncate max-w-[240px]">
+                    <span className="text-[#9299A5] font-mono text-[11px]">CVU:</span>{' '}
+                    <span className="text-white font-mono text-[11px] font-bold">0000003100020253501840</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleCopyCbu}
+                    title="Copiar CVU 0000003100020253501840"
+                    className="min-h-[34px] px-3 py-1 rounded-lg bg-[#101114] hover:bg-white/10 border border-white/15 text-white text-[11px] font-bold flex items-center gap-1 transition-colors cursor-pointer shrink-0"
+                  >
+                    {copiedCbu ? <Check className="w-3 h-3 text-[#B7F36B]" /> : <Copy className="w-3 h-3" />}
+                    <span>{copiedCbu ? 'Copiado' : 'Copiar CVU'}</span>
+                  </button>
+                </div>
+
+                <div className="text-xs text-[#9299A5] font-medium px-1">
+                  Titular: <strong className="text-white">Lucia Veronica Gimenez</strong>
+                </div>
+              </div>
+
+              {/* 2. Vista Previa Completa de Todos los Datos Cargados para que el Prestador Vea lo que Va a Mandar */}
+              <div className="p-3.5 rounded-2xl bg-[#101114] border-2 border-white/15 space-y-2 text-xs">
+                <div className="flex items-center justify-between pb-1.5 border-b border-white/10">
+                  <span className="text-[11px] font-black uppercase tracking-wider text-white flex items-center gap-1.5">
+                    <FileCheck2 className="w-3.5 h-3.5 text-[#FFF19A]" />
+                    <span>Resumen de Datos a Enviar</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      playMicroSound('ui_tap');
+                      setFormStep('form');
+                    }}
+                    className="text-[11px] font-bold text-[#FFF19A] hover:underline flex items-center gap-1 cursor-pointer"
+                  >
+                    <Edit3 className="w-3 h-3" />
+                    <span>Editar datos</span>
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-[11.5px]">
+                  <div className="p-2 rounded-xl bg-[#202329] border border-white/5">
+                    <span className="text-[#9299A5] block text-[10px]">Nombre / Apodo</span>
+                    <strong className="text-white">{driverName.trim()}</strong>
+                  </div>
+                  <div className="p-2 rounded-xl bg-[#202329] border border-white/5">
+                    <span className="text-[#9299A5] block text-[10px]">WhatsApp de Contacto</span>
+                    <strong className="text-white font-mono">{whatsapp.trim()}</strong>
+                  </div>
+                  <div className="p-2 rounded-xl bg-[#202329] border border-white/5">
+                    <span className="text-[#9299A5] block text-[10px]">Servicio y Vehículo</span>
+                    <strong className="text-[#B7F36B]">
+                      {vehicleType === 'moto' ? 'Moto Taxi' : 'Auto Taxi'} · {vehicleModel.trim()}
+                    </strong>
+                  </div>
+                  <div className="p-2 rounded-xl bg-[#202329] border border-white/5">
+                    <span className="text-[#9299A5] block text-[10px]">Patente / Matrícula</span>
+                    <strong className="font-mono uppercase text-[#FFF19A]">{patente.trim().toUpperCase()}</strong>
+                  </div>
+                  <div className="p-2 rounded-xl bg-[#202329] border border-white/5">
+                    <span className="text-[#9299A5] block text-[10px]">Zona Habitual</span>
+                    <strong className="text-white">{zone.trim() || 'Zárate ↔ Campana'}</strong>
+                  </div>
+                  <div className="p-2 rounded-xl bg-[#202329] border border-white/5">
+                    <span className="text-[#9299A5] block text-[10px]">Turno y Seguridad</span>
+                    <strong className="text-white">
+                      {selectedHours}h (${totalAmount.toLocaleString('es-AR')}) · Seg. {currentSafetyIndex}%
+                    </strong>
+                  </div>
+                </div>
+
+                <div className="px-2.5 py-1.5 rounded-xl bg-[#202329]/80 border border-white/5 text-[10.5px] text-[#9299A5] flex flex-wrap gap-x-3 gap-y-1">
+                  {vehicleType === 'auto' ? (
+                    <>
+                      <span>Asientos: <strong className="text-white">{asientos}</strong></span>
+                      <span>Aire: <strong className="text-white">{aireAcondicionado ? 'Sí' : 'No'}</strong></span>
+                      <span>Baúl: <strong className="text-white">{baul ? 'Sí' : 'No'}</strong></span>
+                      <span>Mascotas: <strong className="text-white">{aceptaMascotas ? 'Sí' : 'No'}</strong></span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Casco extra: <strong className="text-white">{cascoExtra ? 'Sí' : 'No'}</strong></span>
+                      <span>Baúl/Portaequipaje: <strong className="text-white">{baul ? 'Sí' : 'No'}</strong></span>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* 3. Adjuntar Comprobante */}
+              <div className="p-3.5 rounded-2xl bg-[#101114] border-2 border-[#B7F36B]/40 space-y-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-black text-white flex items-center gap-1.5">
+                    <Upload className="w-4 h-4 text-[#B7F36B]" />
+                    <span>Adjuntar Comprobante de Transferencia</span>
+                  </span>
+                  {proofFileName && (
+                    <span className="px-2 py-0.5 rounded-md bg-[#B7F36B]/15 border border-[#B7F36B]/40 text-[#B7F36B] text-[10px] font-bold">
+                      Adjunto
+                    </span>
+                  )}
+                </div>
+
+                <label
+                  title="Seleccionar imagen o PDF del comprobante de transferencia"
+                  className="w-full min-h-[52px] px-3 py-2.5 rounded-xl bg-[#202329] hover:bg-white/10 border-2 border-dashed border-[#FFF19A]/50 hover:border-[#FFF19A] text-xs flex items-center justify-between gap-2 cursor-pointer transition-all"
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    {proofPreviewUrl ? (
+                      <img
+                        src={proofPreviewUrl}
+                        alt="Vista previa comprobante"
+                        className="w-10 h-10 rounded-lg object-cover border border-[#B7F36B] shrink-0"
+                      />
+                    ) : (
+                      <div className="w-9 h-9 rounded-lg bg-[#101114] border border-white/15 flex items-center justify-center text-[#FFF19A] shrink-0">
+                        <Upload className="w-4 h-4" />
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <span className="block font-bold text-white truncate">
+                        {proofFileName || 'Tocar para subir comprobante (Imagen o PDF)'}
+                      </span>
+                      <span className="block text-[10px] text-[#9299A5]">
+                        {proofFileName ? 'Tocar para cambiar archivo' : 'También podés enviarlo luego por WhatsApp al 3489690058'}
+                      </span>
+                    </div>
+                  </div>
+                  <span className="px-2.5 py-1 rounded-lg bg-[#FFF19A] text-[#101114] font-black text-[10.5px] shrink-0">
+                    {proofFileName ? 'Cambiar' : 'Elegir'}
+                  </span>
+                  <input type="file" accept="image/*,.pdf" onChange={handleFileChange} className="hidden" />
+                </label>
+
+                {/* 4. Acciones Finales */}
+                <div className="flex flex-col sm:flex-row gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      playMicroSound('ui_tap');
+                      setFormStep('form');
+                    }}
+                    className="sm:w-1/3 min-h-[46px] px-3 py-2.5 rounded-xl bg-[#202329] hover:bg-white/10 border border-white/20 text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                    <span>Volver</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={isSubmitting}
+                    onClick={handleConfirmFinalSubmission}
+                    title="Confirmar y enviar todos los datos cargados más el comprobante"
+                    className="sm:w-2/3 min-h-[46px] px-4 py-2.5 uppa-cta-green font-black text-xs uppercase tracking-wider rounded-xl flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
+                  >
+                    <Send className="w-4 h-4 shrink-0" />
+                    <span>
+                      {isSubmitting ? 'Enviando Datos y Comprobante...' : 'Enviar Todos los Datos + Comprobante'}
+                    </span>
+                  </button>
+                </div>
+              </div>
+            </div>
           ) : (
-            <form onSubmit={handleTransferSubmit} noValidate className="space-y-3.5">
+            <form onSubmit={handleProceedToPaymentAndReview} noValidate className="space-y-3.5">
               {/* Vehicle Type Choice */}
               <div>
                 <label className="block text-[11px] font-bold text-[#9299A5] mb-1.5 uppercase tracking-wider">
@@ -703,85 +960,27 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
                 )}
               </div>
 
-              {/* Bank Transfer Box */}
-              <div className="p-3.5 rounded-2xl bg-[#101114] border-2 border-[#FFF19A]/35 space-y-2.5">
+              {/* Botón Paso 1: Enviar Solicitud y Adjuntar Comprobante -> habilita Alias/CVU/Titular + Resumen + Comprobante */}
+              <div className="p-3.5 rounded-2xl bg-[#101114] border-2 border-[#FFF19A]/35 space-y-2">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="text-[#9299A5] font-bold">Total a transferir:</span>
+                  <span className="text-[#9299A5] font-bold">Total del turno seleccionado ({selectedHours}h):</span>
                   <span className="text-sm font-black text-[#FFF19A] font-mono">
                     ${totalAmount.toLocaleString('es-AR')} ARS
                   </span>
                 </div>
 
-                <div className="flex items-center justify-between p-2 rounded-xl bg-[#202329] border border-white/10 gap-2">
-                  <div className="text-xs truncate">
-                    <span className="text-[#9299A5] font-mono text-[11px]">Alias:</span>{' '}
-                    <strong className="text-[#B7F36B] font-mono font-black tracking-wider">luciaveronicag</strong>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleCopyAlias}
-                    title="Copiar Alias bancario luciaveronicag"
-                    className="min-h-[34px] px-3 py-1 rounded-lg bg-[#FFF19A] hover:bg-[#fff5b8] text-[#101114] text-[11px] font-black flex items-center gap-1 transition-colors cursor-pointer shrink-0"
-                  >
-                    {copiedAlias ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-                    <span>{copiedAlias ? 'Copiado' : 'Copiar Alias'}</span>
-                  </button>
-                </div>
+                <button
+                  type="submit"
+                  title="Continuar para ver Alias, CVU, resumen de tus datos y adjuntar comprobante"
+                  className="w-full min-h-[48px] flex items-center justify-center gap-2 px-4 py-3 uppa-cta-green font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer text-center leading-snug"
+                >
+                  <span>Enviar Solicitud y Adjuntar Comprobante</span>
+                  <ArrowRight className="w-4 h-4 shrink-0" />
+                </button>
 
-                <div className="flex items-center justify-between p-2 rounded-xl bg-[#202329] border border-white/10 gap-2">
-                  <div className="text-xs truncate max-w-[240px]">
-                    <span className="text-[#9299A5] font-mono text-[11px]">CVU:</span>{' '}
-                    <span className="text-white font-mono text-[11px] font-bold">0000003100020253501840</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleCopyCbu}
-                    title="Copiar CVU 0000003100020253501840"
-                    className="min-h-[34px] px-3 py-1 rounded-lg bg-[#101114] hover:bg-white/10 border border-white/15 text-white text-[11px] font-bold flex items-center gap-1 transition-colors cursor-pointer shrink-0"
-                  >
-                    {copiedCbu ? <Check className="w-3 h-3 text-[#B7F36B]" /> : <Copy className="w-3 h-3" />}
-                    <span>{copiedCbu ? 'Copiado' : 'Copiar CVU'}</span>
-                  </button>
-                </div>
-
-                <div className="text-xs text-[#9299A5] font-medium px-1">
-                  Titular: <strong className="text-white">Lucia Veronica Gimenez</strong>
-                </div>
-
-                {/* Envío de solicitud y comprobante */}
-                <div className="pt-2 space-y-2">
-                  <button
-                    type="submit"
-                    disabled={isSubmitting}
-                    title="Registrar solicitud de chofer y abrir WhatsApp 3489690058 para adjuntar comprobante"
-                    className="w-full min-h-[48px] flex items-center justify-center gap-2 px-4 py-3 uppa-cta-green font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer text-center leading-snug disabled:opacity-60"
-                  >
-                    <MessageCircle className="w-4 h-4 shrink-0" />
-                    <span>
-                      {isSubmitting
-                        ? 'Registrando solicitud...'
-                        : 'Enviar Solicitud y Adjuntar Comprobante (WhatsApp 3489690058)'}
-                    </span>
-                  </button>
-
-                  <div className="flex items-center justify-between text-[11px] text-[#9299A5] px-1 pt-0.5">
-                    <span className="truncate max-w-[210px]">
-                      {proofFileName || 'Adjuntar archivo opcional en la app'}
-                    </span>
-                    <label
-                      title="Seleccionar archivo de comprobante de transferencia"
-                      className="text-[#FFF19A] hover:underline cursor-pointer flex items-center gap-1 font-bold shrink-0"
-                    >
-                      <Upload className="w-3.5 h-3.5" />
-                      <span>{proofFileName ? 'Cambiar archivo' : 'Subir archivo'}</span>
-                      <input type="file" accept="image/*,.pdf" onChange={handleFileChange} className="hidden" />
-                    </label>
-                  </div>
-
-                  <p className="text-[10.5px] text-[#9299A5] text-center leading-relaxed pt-1">
-                    Al presionar el botón se registran tus datos en el sistema y se abre WhatsApp para adjuntar el comprobante al <strong className="text-[#B7F36B] font-mono">3489690058</strong>.
-                  </p>
-                </div>
+                <p className="text-[10.5px] text-[#9299A5] text-center leading-relaxed">
+                  Al presionar este botón se habilitarán el Alias, CVU, titular y la vista previa de tus datos para adjuntar y enviar el comprobante.
+                </p>
               </div>
             </form>
           )}
