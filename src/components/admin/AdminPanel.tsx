@@ -972,6 +972,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                               : `${hab.asientos || 4} asientos${hab.aireAcondicionado !== false ? ' · ❄️ Aire' : ''}${hab.baul !== false ? ' · 🧳 Baúl' : ''}${hab.aceptaMascotas ? ' · 🐾 Mascotas' : ''}`}
                           </span>
                         </div>
+                        {(hab.empresaAseguradora || hab.numeroPoliza) && (
+                          <div className="flex justify-between gap-2">
+                            <span className="text-[#9299A5] shrink-0">Seguro / Póliza:</span>
+                            <span className="text-white font-semibold text-right">
+                              {hab.empresaAseguradora || 'Aseguradora'}{' '}
+                              {hab.numeroPoliza && (
+                                <span className="font-mono text-[#B7F36B]">· {hab.numeroPoliza}</span>
+                              )}
+                            </span>
+                          </div>
+                        )}
                         {hab.comprobanteFileName && (
                           <div className="flex justify-between">
                             <span className="text-[#9299A5]">Comprobante:</span>
@@ -1278,6 +1289,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                               : `${hab.asientos || 4} asientos${hab.aireAcondicionado !== false ? ' · ❄️ Aire' : ''}${hab.baul !== false ? ' · 🧳 Baúl' : ''}${hab.aceptaMascotas ? ' · 🐾 Mascotas' : ''}`}
                           </span>
                         </div>
+                        {(hab.empresaAseguradora || hab.numeroPoliza) && (
+                          <div className="flex justify-between gap-2">
+                            <span className="text-[#9299A5] shrink-0">Seguro / Póliza:</span>
+                            <span className="text-white font-medium text-right">
+                              {hab.empresaAseguradora || 'Aseguradora'}{' '}
+                              {hab.numeroPoliza && (
+                                <span className="font-mono text-[#B7F36B]">· {hab.numeroPoliza}</span>
+                              )}
+                            </span>
+                          </div>
+                        )}
                       </div>
 
                       {isConfirmingRevoke ? (

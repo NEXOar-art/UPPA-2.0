@@ -719,6 +719,10 @@ export async function crearReporte(data: {
   ruta?: string;
   sentido?: 'hacia_malvinas' | 'hacia_zarate';
   velocidadKmH?: number;
+  rumboGrados?: number | null;
+  rumboCardinal?: string;
+  precisionMetros?: number;
+  lecturasGps?: number;
   expiresAtMs?: number;
 }): Promise<ReporteFirestore> {
   const path = COL_REPORTES;
@@ -754,7 +758,11 @@ export async function crearReporte(data: {
       ...(cleanCalle ? { calle: cleanCalle } : {}),
       ruta: data.ruta || 'campana-zarate',
       sentido: data.sentido || (data.ruta === 'campana-zarate' ? 'hacia_zarate' : 'hacia_malvinas'),
-      velocidadKmH: data.velocidadKmH,
+      ...(data.velocidadKmH !== undefined ? { velocidadKmH: data.velocidadKmH } : {}),
+      ...(data.rumboGrados !== undefined && data.rumboGrados !== null ? { rumboGrados: data.rumboGrados } : {}),
+      ...(data.rumboCardinal ? { rumboCardinal: data.rumboCardinal } : {}),
+      ...(data.precisionMetros !== undefined ? { precisionMetros: data.precisionMetros } : {}),
+      ...(data.lecturasGps !== undefined ? { lecturasGps: data.lecturasGps } : {}),
       creadoEnMs: now,
       ...(resolvedExpiresAtMs !== undefined ? { expiresAtMs: resolvedExpiresAtMs } : {}),
       estado: 'activo',
@@ -805,6 +813,10 @@ export async function crearReporte(data: {
       ruta: data.ruta || 'campana-zarate',
       sentido: data.sentido || (data.ruta === 'campana-zarate' ? 'hacia_zarate' : 'hacia_malvinas'),
       velocidadKmH: data.velocidadKmH,
+      rumboGrados: data.rumboGrados ?? null,
+      rumboCardinal: data.rumboCardinal,
+      precisionMetros: data.precisionMetros,
+      lecturasGps: data.lecturasGps,
       creadoEnMs: now,
       ...(resolvedExpiresAtMs !== undefined ? { expiresAtMs: resolvedExpiresAtMs } : {}),
       estado: 'activo',
@@ -2682,6 +2694,8 @@ export async function solicitarHabilitacionChofer(data: {
   comprobanteUrl?: string;
   comprobanteFileName?: string;
   patente?: string;
+  empresaAseguradora?: string;
+  numeroPoliza?: string;
   asientos?: number;
   aireAcondicionado?: boolean;
   baul?: boolean;
@@ -2714,6 +2728,8 @@ export async function solicitarHabilitacionChofer(data: {
   const safeDriverName = (data.driverName || '').trim().slice(0, 100) || 'Chofer UPPA';
   const now = Date.now();
   const cleanPatente = (data.patente || '').trim().toUpperCase();
+  const cleanAseguradora = (data.empresaAseguradora || '').trim().slice(0, 80);
+  const cleanPoliza = (data.numeroPoliza || '').trim().toUpperCase().slice(0, 60);
 
   // Calcular índice de seguridad real según ítems cargados
   const isAuto = data.vehicleType === 'auto';
@@ -2724,8 +2740,9 @@ export async function solicitarHabilitacionChofer(data: {
   const resolvedCasco = !isAuto ? (data.cascoExtra ?? true) : false;
 
   let completedCount = 0;
-  const totalCount = isAuto ? 6 : 4;
+  const totalCount = isAuto ? 7 : 5;
   if (cleanPatente) completedCount++;
+  if (cleanAseguradora && cleanPoliza) completedCount++;
   if (isAuto) {
     if (resolvedAsientos >= 1) completedCount++;
     if (resolvedAire) completedCount++;
@@ -2749,6 +2766,8 @@ export async function solicitarHabilitacionChofer(data: {
     vehicleType: data.vehicleType,
     vehicleModel: (data.vehicleModel || '').trim() || (data.vehicleType === 'moto' ? 'Moto Taxi UPPA' : 'Auto Taxi UPPA'),
     patente: cleanPatente,
+    ...(cleanAseguradora ? { empresaAseguradora: cleanAseguradora } : {}),
+    ...(cleanPoliza ? { numeroPoliza: cleanPoliza } : {}),
     whatsapp: formattedWhatsapp,
     zone: (data.zone || '').trim() || 'Zárate ↔ Campana',
     horas: data.horas || 12,

@@ -161,6 +161,8 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
   const [vehicleType, setVehicleType] = useState<'auto' | 'moto'>('auto');
   const [vehicleModel, setVehicleModel] = useState('');
   const [patente, setPatente] = useState('');
+  const [empresaAseguradora, setEmpresaAseguradora] = useState('');
+  const [numeroPoliza, setNumeroPoliza] = useState('');
   const [zone, setZone] = useState('');
   const [proofFileName, setProofFileName] = useState<string>('');
   const [copiedAlias, setCopiedAlias] = useState(false);
@@ -217,6 +219,8 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
       setVehicleType(initialVehicleType || 'auto');
       setVehicleModel('');
       setPatente('');
+      setEmpresaAseguradora('');
+      setNumeroPoliza('');
       setZone('');
       setProofFileName('');
       setAsientos(4);
@@ -236,6 +240,8 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
   const currentSafetyIndex = calculateDriverSafetyIndex({
     vehicleType,
     patente,
+    empresaAseguradora,
+    numeroPoliza,
     asientos,
     aireAcondicionado,
     baul,
@@ -299,7 +305,7 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
     const sizeInfo = proofSizeBytes ? ` (${(proofSizeBytes / 1024).toFixed(1)} KB)` : '';
     return `Hola Lucia Veronica Gimenez! Acabo de transferir $${totalAmount.toLocaleString('es-AR')} ARS a Alias: luciaveronicag (CVU: 0000003100020253501840) para prestar servicio de ${
       vehicleType === 'moto' ? 'Moto Taxi' : 'Auto Taxi'
-    } por ${selectedHours} horas.\n• Chofer: ${driverName.trim()}\n• WhatsApp: ${whatsapp.trim()}\n• Vehículo: ${vehicleModel.trim()}\n• Patente: ${patente.trim().toUpperCase()}\n• Zona: ${zone.trim() || 'Zárate ↔ Campana'}\n• Confort: ${comfortText}\n• Índice Seguridad: ${currentSafetyIndex}%\n• Comprobante: ${proofFileName ? `${proofFileName}${sizeInfo}` : 'Adjunto a continuación'}`;
+    } por ${selectedHours} horas.\n• Chofer: ${driverName.trim()}\n• WhatsApp: ${whatsapp.trim()}\n• Vehículo: ${vehicleModel.trim()}\n• Patente: ${patente.trim().toUpperCase()}\n• Aseguradora: ${empresaAseguradora.trim()}\n• N° de Póliza: ${numeroPoliza.trim().toUpperCase()}\n• Zona: ${zone.trim() || 'Zárate ↔ Campana'}\n• Confort: ${comfortText}\n• Índice Seguridad: ${currentSafetyIndex}%\n• Comprobante: ${proofFileName ? `${proofFileName}${sizeInfo}` : 'Adjunto a continuación'}`;
   };
 
   const handleShareImageAndDataToWhatsApp = async () => {
@@ -351,6 +357,14 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
       setErrorMsg('Por favor ingresá la Patente / Matrícula de tu vehículo.');
       return;
     }
+    if (!empresaAseguradora.trim()) {
+      setErrorMsg('Ingresá la Empresa Aseguradora del vehículo para el registro verificado.');
+      return;
+    }
+    if (!numeroPoliza.trim()) {
+      setErrorMsg('Ingresá el Número de Póliza del seguro del vehículo.');
+      return;
+    }
 
     playMicroSound('ui_tap');
     setFormStep('review-payment');
@@ -363,6 +377,8 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
 
     const cleanWhatsapp = whatsapp.replace(/\D/g, '');
     const cleanPatente = patente.trim().toUpperCase();
+    const cleanAseguradora = empresaAseguradora.trim();
+    const cleanPoliza = numeroPoliza.trim().toUpperCase();
     const formattedWhatsapp = cleanWhatsapp.startsWith('54') ? cleanWhatsapp : `549${cleanWhatsapp}`;
 
     setIsSubmitting(true);
@@ -383,6 +399,8 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
         vehicleType,
         vehicleModel: vehicleModel.trim(),
         patente: cleanPatente,
+        empresaAseguradora: cleanAseguradora,
+        numeroPoliza: cleanPoliza,
         whatsapp: formattedWhatsapp,
         zone: zone.trim() || 'Zárate ↔ Campana',
         horas: selectedHours,
@@ -404,6 +422,8 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
           vehicleType,
           vehicleModel: vehicleModel.trim(),
           patente: cleanPatente,
+          empresaAseguradora: cleanAseguradora,
+          numeroPoliza: cleanPoliza,
           whatsapp: formattedWhatsapp,
           zone: zone.trim() || 'Zárate ↔ Campana',
           lat: -34.175 + (Math.random() - 0.5) * 0.03,
@@ -547,6 +567,13 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
                   <span className="text-[#9299A5]">Patente / Matrícula:</span>
                   <span className="font-mono font-black text-[#101114] uppercase bg-white px-2 py-0.5 rounded border border-[#9299A5]">
                     {patente.toUpperCase()}
+                  </span>
+                </div>
+                <div className="flex justify-between text-white gap-2">
+                  <span className="text-[#9299A5] shrink-0">Seguro Vehicular:</span>
+                  <span className="font-bold text-white text-right">
+                    {empresaAseguradora.trim()} · Póliza{' '}
+                    <span className="font-mono text-[#B7F36B]">{numeroPoliza.trim().toUpperCase()}</span>
                   </span>
                 </div>
                 <div className="flex justify-between text-white">
@@ -732,10 +759,18 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
                     <strong className="font-mono uppercase text-[#FFF19A]">{patente.trim().toUpperCase()}</strong>
                   </div>
                   <div className="p-2 rounded-xl bg-[#202329] border border-white/5">
+                    <span className="text-[#9299A5] block text-[10px]">Empresa Aseguradora</span>
+                    <strong className="text-white">{empresaAseguradora.trim()}</strong>
+                  </div>
+                  <div className="p-2 rounded-xl bg-[#202329] border border-white/5">
+                    <span className="text-[#9299A5] block text-[10px]">Número de Póliza</span>
+                    <strong className="font-mono uppercase text-[#B7F36B]">{numeroPoliza.trim().toUpperCase()}</strong>
+                  </div>
+                  <div className="p-2 rounded-xl bg-[#202329] border border-white/5">
                     <span className="text-[#9299A5] block text-[10px]">Zona Habitual</span>
                     <strong className="text-white">{zone.trim() || 'Zárate ↔ Campana'}</strong>
                   </div>
-                  <div className="p-2 rounded-xl bg-[#202329] border border-white/5">
+                  <div className="p-2 rounded-xl bg-[#202329] border border-white/5 sm:col-span-2">
                     <span className="text-[#9299A5] block text-[10px]">Turno y Seguridad</span>
                     <strong className="text-white">
                       {selectedHours}h (${totalAmount.toLocaleString('es-AR')}) · Seg. {currentSafetyIndex}%
@@ -997,8 +1032,57 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
                     </span>
                   </div>
                   <span className="text-[10px] text-[#9299A5] font-medium">
-                    (Según ítems completados)
+                    (Incluye patente, seguro y confort)
                   </span>
+                </div>
+
+                {/* Seguro Vehicular Verificado (Empresa Aseguradora + Número de Póliza) — suma al porcentaje */}
+                <div className="p-2.5 rounded-xl bg-[#202329] border border-white/10 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[10.5px] font-black text-[#FFF19A] uppercase tracking-wide flex items-center gap-1.5">
+                      <ShieldCheck className="w-3.5 h-3.5 text-[#B7F36B]" />
+                      <span>Seguro del Vehículo (Suma al %)</span>
+                    </span>
+                    <span
+                      className={`px-1.5 py-0.5 rounded text-[9.5px] font-black ${
+                        empresaAseguradora.trim() && numeroPoliza.trim()
+                          ? 'bg-[#B7F36B]/20 text-[#B7F36B] border border-[#B7F36B]/40'
+                          : 'bg-[#101114] text-[#9299A5] border border-white/10'
+                      }`}
+                    >
+                      {empresaAseguradora.trim() && numeroPoliza.trim() ? 'Verificado ✓' : 'Requerido'}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                    <div>
+                      <label className="block text-[10.5px] font-bold text-white mb-1">
+                        Empresa Aseguradora *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={empresaAseguradora}
+                        onChange={(e) => setEmpresaAseguradora(e.target.value)}
+                        placeholder="Ej: La Caja / Federación Patronal"
+                        className="w-full min-h-[40px] bg-[#101114] border-2 border-[#B7F36B]/30 rounded-xl px-3 py-1.5 text-xs text-white placeholder-[#9299A5] focus:outline-none focus:border-[#B7F36B]"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10.5px] font-bold text-white mb-1">
+                        Número de Póliza *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={numeroPoliza}
+                        onChange={(e) => setNumeroPoliza(e.target.value.toUpperCase())}
+                        placeholder="Ej: POL-4589210"
+                        className="w-full min-h-[40px] bg-[#101114] border-2 border-[#B7F36B]/30 rounded-xl px-3 py-1.5 text-xs text-white placeholder-[#9299A5] uppercase font-mono font-bold tracking-wider focus:outline-none focus:border-[#B7F36B]"
+                      />
+                    </div>
+                  </div>
                 </div>
 
                 {vehicleType === 'auto' ? (

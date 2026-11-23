@@ -2,7 +2,12 @@ import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import { TransitRoute, MapEvent, LiveBus, TaxiListing, BusStop, EventType, SolicitudTransporteFirestore } from '../../types';
 import { UserLocation, getDistanceKm, isCoordinateAddress } from '../../utils/geolocation';
-import { calculateRealBusSpeed } from '../../utils/busSpeedEstimator';
+import {
+  calculateRealBusSpeed,
+  calculateRealBusHeading,
+  captureMostPreciseGpsReading,
+  formatHeadingCardinal,
+} from '../../utils/busSpeedEstimator';
 
 function escapeHtml(raw: unknown): string {
   return String(raw ?? '')
@@ -131,6 +136,7 @@ interface TeslaMapProps {
   currentUserId?: string;
   focusedStop?: BusStop | null;
   hideTopBarButtons?: boolean;
+  onOpenTrainSection?: (stationId: 'campana' | 'zarate') => void;
 }
 
 export const TRANSIT_EVENT_TYPES: {
@@ -302,9 +308,12 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
   currentUserId,
   focusedStop,
   hideTopBarButtons = false,
+  onOpenTrainSection,
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
+  const onOpenTrainSectionRef = useRef(onOpenTrainSection);
+  onOpenTrainSectionRef.current = onOpenTrainSection;
 
   // Layers
   const tileLayerRef = useRef<L.TileLayer | null>(null);
@@ -364,6 +373,10 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
   const [stopSearchQuery, setStopSearchQuery] = useState('');
   const [eventCustomNote, setEventCustomNote] = useState('');
   const [eventRegisteredToast, setEventRegisteredToast] = useState<string | null>(null);
+  const [gpsCalibrationStatus, setGpsCalibrationStatus] = useState<{
+    samples: number;
+    bestAccuracy: number;
+  } | null>(null);
   const [selectedStop, setSelectedStop] = useState<{ stop: BusStop; route: TransitRoute } | null>(null);
   const userLocationRef = useRef<UserLocation | null | undefined>(userLocation);
   userLocationRef.current = userLocation;
@@ -489,6 +502,14 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
   }, [areCardsVisible]);
 
   useEffect(() => {
+    if (hideTopBarButtons) {
+      setIsStopsPanelOpen(false);
+      setIsEventFilterPanelOpen(false);
+      setIsEventsPanelOpen(false);
+    }
+  }, [hideTopBarButtons]);
+
+  useEffect(() => {
     const handleShowControls = () => {
       resetHideTimerRef.current();
     };
@@ -551,7 +572,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
     }
   };
 
-  const handleRegisterEventFromDropdown = (
+  const handleRegisterEventFromDropdown = async (
     evOpt: {
       id: string;
       type: EventType;
@@ -564,41 +585,70 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
     },
     overrideDirection?: 'hacia_zarate' | 'hacia_malvinas'
   ) => {
-    let lat = userLocation?.lat;
-    let lng = userLocation?.lng;
+    if (gpsCalibrationStatus) return;
 
-    if (!lat || !lng) {
+    let fallbackLat = userLocation?.lat;
+    let fallbackLng = userLocation?.lng;
+
+    if (!fallbackLat || !fallbackLng) {
       if (mapInstanceRef.current) {
         const center = mapInstanceRef.current.getCenter();
-        lat = center.lat;
-        lng = center.lng;
+        fallbackLat = center.lat;
+        fallbackLng = center.lng;
       } else {
-        lat = -34.1683;
-        lng = -58.9592;
+        fallbackLat = -34.1683;
+        fallbackLng = -58.9592;
       }
     }
-
-    const directionToUse: 'hacia_zarate' | 'hacia_malvinas' =
-      overrideDirection || (evOpt.type === 'bus_location' ? busDirection : 'hacia_malvinas');
-    const dirLabel = directionToUse === 'hacia_zarate' ? 'Zárate' : 'Barrio Malvinas';
 
     // Buscar si existe un reporte previo de colectivo para deducir velocidad real entre paradas/puntos
     const previousBusReport = events.find(
       (e) => e.type === 'bus_location' && e.createdAtMs && Date.now() - e.createdAtMs < 360000
     );
 
-    // Calcular velocidad real con muestras de navigator.geolocation.watchPosition()
-    const speedResult = calculateRealBusSpeed(
-      lat,
-      lng,
-      previousBusReport
-        ? {
-            lat: previousBusReport.lat,
-            lng: previousBusReport.lng,
-            createdAtMs: previousBusReport.createdAtMs,
-          }
-        : null
-    );
+    setGpsCalibrationStatus({
+      samples: 1,
+      bestAccuracy: Math.round(userLocation?.accuracy || 20),
+    });
+
+    let preciseFix;
+    try {
+      // Solicitar 6 lecturas GPS de alta precisión, descartar las menos exactas y elegir la mejor lectura
+      preciseFix = await captureMostPreciseGpsReading({
+        fallbackLat,
+        fallbackLng,
+        fallbackAccuracy: userLocation?.accuracy || 20,
+        fallbackSpeedMps: userLocation?.speed ?? null,
+        fallbackHeadingDeg: userLocation?.heading ?? null,
+        previousReport: previousBusReport
+          ? {
+              lat: previousBusReport.lat,
+              lng: previousBusReport.lng,
+              createdAtMs: previousBusReport.createdAtMs,
+            }
+          : null,
+        maxDurationMs: 2400,
+        targetSamples: 6,
+        onProgress: ({ samplesCollected, bestAccuracyMeters }) => {
+          setGpsCalibrationStatus({
+            samples: samplesCollected,
+            bestAccuracy: bestAccuracyMeters,
+          });
+        },
+      });
+    } finally {
+      setGpsCalibrationStatus(null);
+    }
+
+    const lat = preciseFix.lat;
+    const lng = preciseFix.lng;
+
+    const directionToUse: 'hacia_zarate' | 'hacia_malvinas' =
+      overrideDirection ||
+      (evOpt.type === 'bus_location'
+        ? busDirection
+        : preciseFix.inferredDirection || 'hacia_malvinas');
+    const dirLabel = directionToUse === 'hacia_zarate' ? 'Zárate' : 'Barrio Malvinas';
 
     const now = Date.now();
     const note = eventCustomNote.trim() || evOpt.subtitle;
@@ -618,7 +668,11 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
       reportedByUserId: currentUserId || 'usr-vecino',
       direction: directionToUse,
       sentido: directionToUse,
-      velocidadKmH: speedResult.speedKmH,
+      velocidadKmH: preciseFix.speedKmH,
+      rumboGrados: preciseFix.headingDeg,
+      rumboCardinal: preciseFix.headingCardinal,
+      precisionMetros: preciseFix.accuracyMeters,
+      lecturasGps: preciseFix.samplesCollected,
       createdAtMs: now,
       expiresAtMs: computeEventExpiresAtMs(evOpt.type, now),
       isVerified: true,
@@ -639,7 +693,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
         // Si es ubicación de colectivo: NO decir problema o inconveniente
         const speechText =
           evOpt.type === 'bus_location'
-            ? `Ubicación de colectivo ahora registrada hacia ${dirLabel}. Velocidad: ${speedResult.speedKmH} kilómetros por hora.`
+            ? `Ubicación de colectivo ahora registrada hacia ${dirLabel}. Velocidad: ${preciseFix.speedKmH} kilómetros por hora.`
             : `Reporte registrado: ${evOpt.label}`;
         const utterance = new SpeechSynthesisUtterance(speechText);
         utterance.lang = 'es-AR';
@@ -648,15 +702,16 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
       }
     } catch {}
 
+    const precisionSuffix = ` · ±${preciseFix.accuracyMeters}m (${preciseFix.samplesCollected} lect.)`;
     const toastMessage =
       evOpt.type === 'bus_location'
-        ? `¡📍 Ubicación de colectivo ahora hacia ${dirLabel} (${speedResult.speedKmH} km/h) registrada en el mapa!`
-        : `¡${evOpt.icon} ${evOpt.label} registrado en el mapa!`;
+        ? `¡📍 Ubicación hacia ${dirLabel} (${preciseFix.speedKmH} km/h${precisionSuffix}) registrada!`
+        : `¡${evOpt.icon} ${evOpt.label} (${precisionSuffix.replace(' · ', '')}) registrado!`;
 
     setEventRegisteredToast(toastMessage);
     setTimeout(() => {
       setEventRegisteredToast(null);
-    }, 4000);
+    }, 4500);
 
     setEventCustomNote('');
     setIsEventsPanelOpen(false);
@@ -998,7 +1053,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
         className: 'custom-train-station-marker',
         html: `
           <div class="relative flex items-center justify-center cursor-pointer group">
-            <div class="w-8 h-8 rounded-2xl bg-gradient-to-br from-sky-500 to-blue-700 border-2 border-[#FFF19A] text-white flex items-center justify-center text-sm shadow-[0_0_16px_rgba(14,165,233,0.7)] font-bold transition-transform group-hover:scale-125">
+            <div class="w-9 h-9 rounded-full bg-gradient-to-br from-sky-500 to-blue-700 border-2 border-[#FFF19A] text-white flex items-center justify-center text-sm shadow-[0_0_16px_rgba(14,165,233,0.75)] font-bold transition-transform group-hover:scale-125">
               🚆
             </div>
             <div class="absolute -bottom-5 bg-black/95 text-sky-200 text-[9px] font-black px-1.5 py-0.2 rounded-md border border-sky-400/60 whitespace-nowrap shadow-md pointer-events-none">
@@ -1006,13 +1061,17 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
             </div>
           </div>
         `,
-        iconSize: [32, 32],
-        iconAnchor: [16, 16],
+        iconSize: [36, 36],
+        iconAnchor: [18, 18],
       });
+
+      const stationKey: 'campana' | 'zarate' =
+        station.id === 'poi-tren-zarate' ? 'zarate' : 'campana';
+      const cityDisplay = stationKey === 'zarate' ? 'Zárate' : 'Campana';
 
       const marker = L.marker([station.lat, station.lng], { icon });
       marker.bindPopup(`
-        <div style="font-family: inherit; padding: 4px; color: #0f172a; max-width: 245px;">
+        <div style="font-family: inherit; padding: 4px; color: #0f172a; max-width: 265px;">
           <div style="font-size: 13px; font-weight: 800; display: flex; align-items: center; gap: 5px; color: #0f172a;">
             <span>🚆</span> <span>${escapeHtml(station.name)}</span>
           </div>
@@ -1025,13 +1084,55 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
           <div style="font-size: 10.5px; color: #475569; margin-top: 4px; background: #f8fafc; padding: 4px 6px; border-radius: 6px; border: 1px solid #e2e8f0;">
             ${escapeHtml(station.details)}
           </div>
-          <div style="margin-top: 8px;">
+          <div style="margin-top: 8px; display: flex; flex-direction: column; gap: 6px;">
+            <button type="button" data-open-train-section="${stationKey}" style="width: 100%; border: 1.5px solid #0284c7; cursor: pointer; text-align: center; background: #101114; color: #FFF19A; font-size: 11.5px; font-weight: 900; padding: 8px 10px; border-radius: 8px; box-shadow: 0 4px 10px rgba(2,132,199,0.28);">
+              🚆 Servicio Inteligente de Trenes (${cityDisplay}) ➔
+            </button>
             <a href="https://www.google.com/maps/dir/?api=1&destination=${station.lat},${station.lng}" target="_blank" rel="noopener noreferrer" title="Abrir Google Maps" style="display: block; text-align: center; background: #FFF19A; color: #101114; font-size: 11px; font-weight: 800; padding: 6px 10px; border-radius: 8px; text-decoration: none;">
               Llevarme a esta Estación de Trenes ➔
             </a>
           </div>
         </div>
       `);
+
+      let hoverCloseTimer: number | null = null;
+      const clearHoverCloseTimer = () => {
+        if (hoverCloseTimer !== null) {
+          window.clearTimeout(hoverCloseTimer);
+          hoverCloseTimer = null;
+        }
+      };
+      const scheduleHoverClose = () => {
+        clearHoverCloseTimer();
+        hoverCloseTimer = window.setTimeout(() => {
+          marker.closePopup();
+        }, 280);
+      };
+
+      marker.on('mouseover', () => {
+        clearHoverCloseTimer();
+        marker.openPopup();
+      });
+      marker.on('mouseout', scheduleHoverClose);
+      marker.on('remove', clearHoverCloseTimer);
+
+      marker.on('popupopen', (e) => {
+        clearHoverCloseTimer();
+        const popupEl = e.popup.getElement();
+        if (!popupEl) return;
+        popupEl.onmouseenter = clearHoverCloseTimer;
+        popupEl.onmouseleave = scheduleHoverClose;
+        const btn = popupEl.querySelector('[data-open-train-section]') as HTMLElement | null;
+        if (!btn) return;
+        btn.onclick = (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          clearHoverCloseTimer();
+          marker.closePopup();
+          onOpenTrainSectionRef.current?.(stationKey);
+        };
+      });
+
       marker.addTo(layer);
     });
   }, [showTrainStations]);
@@ -1507,14 +1608,21 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
           ? escapeHtml(ev.description.trim())
           : '';
       const isZarateDirMeta = ev.direction === 'hacia_zarate' || ev.sentido === 'hacia_zarate';
+      const telemetryParts: string[] = [];
+      if (ev.velocidadKmH) telemetryParts.push(`${ev.velocidadKmH} km/h`);
+      if (ev.rumboCardinal && ev.rumboCardinal !== '—') telemetryParts.push(`Rumbo ${escapeHtml(ev.rumboCardinal)}`);
+      if (ev.precisionMetros) telemetryParts.push(`±${ev.precisionMetros}m`);
+
       const busMetaHtml =
         ev.type === 'bus_location'
-          ? `<div style="display:flex;align-items:center;gap:6px;margin-top:4px;font-size:10.5px;font-weight:800;color:${
+          ? `<div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:4px;font-size:10.5px;font-weight:800;color:${
               isZarateDirMeta ? '#fca5a5' : '#93c5fd'
             };">
               <span>${isZarateDirMeta ? '🔴 ➡️ Hacia Zárate' : '🔵 ⬅️ Hacia Malvinas'}</span>
-              ${ev.velocidadKmH ? `<span style="color:#B7F36B;">· ${ev.velocidadKmH} km/h</span>` : ''}
+              ${telemetryParts.length > 0 ? `<span style="color:#B7F36B;">· ${telemetryParts.join(' · ')}</span>` : ''}
             </div>`
+          : telemetryParts.length > 0
+          ? `<div style="font-size:10px;font-family:monospace;color:#7dd3fc;margin-top:4px;font-weight:700;">📡 ${telemetryParts.join(' · ')}</div>`
           : '';
 
       marker.bindTooltip(
@@ -1524,7 +1632,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
             <span style="background:rgba(183,243,107,0.2);color:#B7F36B;font-family:monospace;font-size:9.5px;font-weight:900;padding:1px 5px;border-radius:6px;border:1px solid rgba(183,243,107,0.45);flex-shrink:0;">+${ev.confirmations}</span>
           </div>
           <div style="background:rgba(255,241,154,0.12);border:1px solid rgba(255,241,154,0.35);border-radius:8px;padding:5px 7px;margin-bottom:4px;">
-            <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.05em;color:#9299A5;font-weight:800;">Dirección exacta (GPS)</div>
+            <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.05em;color:#9299A5;font-weight:800;">Dirección exacta (GPS${ev.precisionMetros ? ` ±${ev.precisionMetros}m` : ''})</div>
             <div style="font-size:11px;font-weight:800;color:#FFF19A;">📍 ${streetText}</div>
             <div style="font-size:9px;font-family:monospace;color:#9299A5;margin-top:2px;">${coordsLabel}</div>
           </div>
@@ -2782,17 +2890,43 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
               />
             </div>
 
-            {/* Indicador de ubicación de registro */}
-            <div className="mb-3 px-3 py-2 rounded-xl bg-[#101114] border border-white/10 text-xs text-[#9299A5] flex items-center justify-between shrink-0">
-              <span className="flex items-center gap-2 truncate">
-                <MapPin className="w-3.5 h-3.5 text-[#FFF19A] shrink-0" />
-                <span className="truncate">
-                  {userLocation?.address ? `Ubicación: ${userLocation.address}` : 'Ubicación actual en corredor Zárate ↔ Campana'}
+            {/* Indicador de ubicación de registro + Telemetría continua de velocidad, rumbo y calibración */}
+            <div className="mb-3 px-3 py-2 rounded-xl bg-[#101114] border border-white/10 text-xs text-[#9299A5] space-y-1.5 shrink-0">
+              <div className="flex items-center justify-between gap-2">
+                <span className="flex items-center gap-2 truncate">
+                  <MapPin className="w-3.5 h-3.5 text-[#FFF19A] shrink-0" />
+                  <span className="truncate">
+                    {userLocation?.address ? `Ubicación: ${userLocation.address}` : 'Ubicación actual en corredor Zárate ↔ Campana'}
+                  </span>
                 </span>
-              </span>
-              <span className="text-[10px] font-mono font-black text-[#101114] bg-[#B7F36B] px-2 py-0.5 rounded-md shrink-0">
-                GPS Activo
-              </span>
+                <span className="text-[10px] font-mono font-black text-[#101114] bg-[#B7F36B] px-2 py-0.5 rounded-md shrink-0">
+                  {gpsCalibrationStatus
+                    ? `Calibrando (${gpsCalibrationStatus.samples}/6)`
+                    : `GPS ±${Math.round(userLocation?.accuracy || 15)}m`}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between gap-2 text-[10.5px] font-mono text-slate-300 border-t border-white/10 pt-1.5">
+                {gpsCalibrationStatus ? (
+                  <span className="text-[#FFF19A] font-black animate-pulse">
+                    📡 Evaluando 6 lecturas GPS ({gpsCalibrationStatus.samples}/6) · Mejor lectura: ±{gpsCalibrationStatus.bestAccuracy}m...
+                  </span>
+                ) : (
+                  <>
+                    <span>
+                      Velocidad: <strong className="text-[#B7F36B]">{calculateRealBusSpeed(userLocation?.lat, userLocation?.lng).speedKmH} km/h</strong>
+                    </span>
+                    <span>
+                      Rumbo:{' '}
+                      <strong className="text-sky-300">
+                        {calculateRealBusHeading().cardinalLabel !== '—'
+                          ? calculateRealBusHeading().cardinalLabel
+                          : formatHeadingCardinal(userLocation?.heading)}
+                      </strong>
+                    </span>
+                  </>
+                )}
+              </div>
             </div>
 
             {/* Lista scrollable de eventos */}

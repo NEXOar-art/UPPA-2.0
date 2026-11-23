@@ -549,6 +549,8 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
           : calculateDriverSafetyIndex({
               vehicleType: normalizedType,
               patente: match.patente || match.plate,
+              empresaAseguradora: match.empresaAseguradora,
+              numeroPoliza: match.numeroPoliza,
               asientos: match.asientos,
               aireAcondicionado: match.aireAcondicionado,
               baul: match.baul,
@@ -566,6 +568,8 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
         vehicleModel:
           match.vehicleModel || (normalizedType === 'moto' ? 'Moto Taxi Habilitada' : 'Auto Taxi Habilitado'),
         plateNumber: match.patente || match.plate || (match as any).plateNumber || 'No declarada',
+        empresaAseguradora: match.empresaAseguradora || '',
+        numeroPoliza: match.numeroPoliza || '',
         rating: typeof match.rating === 'number' ? match.rating : 0,
         completedRides: match.completedRides || 0,
         whatsapp: match.whatsapp || '',
@@ -935,6 +939,8 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
         : calculateDriverSafetyIndex({
             vehicleType: isMoto ? 'moto' : 'auto',
             patente: taxi.patente || taxi.plate,
+            empresaAseguradora: taxi.empresaAseguradora,
+            numeroPoliza: taxi.numeroPoliza,
             asientos: taxi.asientos,
             aireAcondicionado: taxi.aireAcondicionado,
             baul: taxi.baul,
@@ -1055,6 +1061,15 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                     </span>
                   )}
                 </>
+              )}
+              {(taxi.empresaAseguradora || taxi.numeroPoliza) && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-[#101114] border border-[#B7F36B]/40 text-[#B7F36B]">
+                  <ShieldCheck className="w-3 h-3 shrink-0" />
+                  <span>
+                    {taxi.empresaAseguradora || 'Seguro'}
+                    {taxi.numeroPoliza ? ` · Pól. ${taxi.numeroPoliza}` : ''}
+                  </span>
+                </span>
               )}
             </div>
 
@@ -2387,6 +2402,15 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                               </span>
                             )}
                           </>
+                        )}
+                        {(activeDriverFeatured.empresaAseguradora || activeDriverFeatured.numeroPoliza) && (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9.5px] font-bold bg-[#202329] border border-[#B7F36B]/40 text-[#B7F36B]">
+                            <ShieldCheck className="w-2.5 h-2.5 shrink-0" />
+                            <span>
+                              {activeDriverFeatured.empresaAseguradora || 'Seguro'}
+                              {activeDriverFeatured.numeroPoliza ? ` · ${activeDriverFeatured.numeroPoliza}` : ''}
+                            </span>
+                          </span>
                         )}
                       </div>
                     </div>

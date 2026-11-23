@@ -5,34 +5,112 @@ export interface GpsPositionSample {
   lng: number;
   timestamp: number;
   speedMps: number | null;
+  headingDeg: number | null;
   accuracy: number;
 }
 
-// Buffer de las últimas 1 a 3 muestras GPS tomadas mediante navigator.geolocation.watchPosition()
+// Buffer continuo en segundo plano (hasta 10 muestras GPS recientes)
 let gpsSampleBuffer: GpsPositionSample[] = [];
 
 /**
- * Registra una muestra de GPS proveniente de navigator.geolocation.watchPosition()
- * Guarda únicamente las últimas 3 muestras para calcular desplazamientos y velocidad real.
+ * Calcula el rumbo geográfico (bearing 0°–360°) entre dos coordenadas.
+ */
+export function computeBearingDeg(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number
+): number {
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const toDeg = (rad: number) => (rad * 180) / Math.PI;
+  const phi1 = toRad(lat1);
+  const phi2 = toRad(lat2);
+  const dLambda = toRad(lon2 - lon1);
+
+  const y = Math.sin(dLambda) * Math.cos(phi2);
+  const x =
+    Math.cos(phi1) * Math.sin(phi2) -
+    Math.sin(phi1) * Math.cos(phi2) * Math.cos(dLambda);
+  const brng = (toDeg(Math.atan2(y, x)) + 360) % 360;
+  return Math.round(brng);
+}
+
+export function formatHeadingCardinal(headingDeg: number | null | undefined): string {
+  if (headingDeg === null || headingDeg === undefined || !Number.isFinite(headingDeg)) {
+    return '—';
+  }
+  const normalized = ((headingDeg % 360) + 360) % 360;
+  const sectors = ['N', 'NE', 'E', 'SE', 'S', 'SO', 'O', 'NO'];
+  const idx = Math.round(normalized / 45) % 8;
+  return `${sectors[idx]} (${Math.round(normalized)}°)`;
+}
+
+/**
+ * Deduce el sentido probable del corredor (Malvinas ↔ Campana ↔ Zárate)
+ * según el rumbo en grados. Zárate se ubica al NO respecto a Campana/Malvinas.
+ */
+export function inferCorridorDirectionFromHeading(
+  headingDeg: number | null | undefined
+): 'hacia_zarate' | 'hacia_malvinas' | null {
+  if (headingDeg === null || headingDeg === undefined || !Number.isFinite(headingDeg)) {
+    return null;
+  }
+  const h = ((headingDeg % 360) + 360) % 360;
+  // Rumbo Norte / Noroeste / Noreste (260°..360° o 0°..65°) -> hacia Zárate
+  if (h >= 260 || h <= 65) {
+    return 'hacia_zarate';
+  }
+  // Rumbo Sur / Sureste / Suroeste (95°..245°) -> hacia Malvinas
+  if (h >= 95 && h <= 245) {
+    return 'hacia_malvinas';
+  }
+  return null;
+}
+
+/**
+ * Registra una muestra continua de GPS (velocidad, rumbo y precisión) en segundo plano.
  */
 export function recordGpsSample(coords: {
   latitude: number;
   longitude: number;
   speed?: number | null;
+  heading?: number | null;
   accuracy?: number;
+  timestamp?: number;
 }) {
-  const now = Date.now();
+  const now = coords.timestamp || Date.now();
+  const prev = gpsSampleBuffer[gpsSampleBuffer.length - 1];
+
+  let resolvedHeading: number | null =
+    coords.heading != null && Number.isFinite(coords.heading) && coords.heading >= 0
+      ? Math.round(((coords.heading % 360) + 360) % 360)
+      : null;
+
+  if (resolvedHeading === null && prev) {
+    const movedKm = getDistanceKm(prev.lat, prev.lng, coords.latitude, coords.longitude);
+    if (movedKm >= 0.004) {
+      resolvedHeading = computeBearingDeg(
+        prev.lat,
+        prev.lng,
+        coords.latitude,
+        coords.longitude
+      );
+    } else if (prev.headingDeg !== null) {
+      resolvedHeading = prev.headingDeg;
+    }
+  }
+
   gpsSampleBuffer.push({
     lat: coords.latitude,
     lng: coords.longitude,
     timestamp: now,
-    speedMps: coords.speed != null && coords.speed >= 0 ? coords.speed : null,
-    accuracy: coords.accuracy || 15,
+    speedMps: coords.speed != null && Number.isFinite(coords.speed) && coords.speed >= 0 ? coords.speed : null,
+    headingDeg: resolvedHeading,
+    accuracy: coords.accuracy && Number.isFinite(coords.accuracy) ? Math.round(coords.accuracy) : 15,
   });
 
-  // Mantener estrictamente de 1 a 3 muestras recientes
-  if (gpsSampleBuffer.length > 3) {
-    gpsSampleBuffer = gpsSampleBuffer.slice(-3);
+  if (gpsSampleBuffer.length > 10) {
+    gpsSampleBuffer = gpsSampleBuffer.slice(-10);
   }
 }
 
@@ -43,6 +121,49 @@ export function getGpsSamples(): GpsPositionSample[] {
   return [...gpsSampleBuffer];
 }
 
+export interface HeadingCalculationResult {
+  headingDeg: number | null;
+  cardinalLabel: string;
+  inferredDirection: 'hacia_zarate' | 'hacia_malvinas' | null;
+  method: 'gps_hardware' | 'differential_bearing' | 'unavailable';
+}
+
+export function calculateRealBusHeading(): HeadingCalculationResult {
+  for (let i = gpsSampleBuffer.length - 1; i >= 0; i--) {
+    const s = gpsSampleBuffer[i];
+    if (s.headingDeg !== null && Number.isFinite(s.headingDeg)) {
+      return {
+        headingDeg: s.headingDeg,
+        cardinalLabel: formatHeadingCardinal(s.headingDeg),
+        inferredDirection: inferCorridorDirectionFromHeading(s.headingDeg),
+        method: 'gps_hardware',
+      };
+    }
+  }
+
+  if (gpsSampleBuffer.length >= 2) {
+    const oldest = gpsSampleBuffer[Math.max(0, gpsSampleBuffer.length - 4)];
+    const newest = gpsSampleBuffer[gpsSampleBuffer.length - 1];
+    const distKm = getDistanceKm(oldest.lat, oldest.lng, newest.lat, newest.lng);
+    if (distKm >= 0.005) {
+      const deg = computeBearingDeg(oldest.lat, oldest.lng, newest.lat, newest.lng);
+      return {
+        headingDeg: deg,
+        cardinalLabel: formatHeadingCardinal(deg),
+        inferredDirection: inferCorridorDirectionFromHeading(deg),
+        method: 'differential_bearing',
+      };
+    }
+  }
+
+  return {
+    headingDeg: null,
+    cardinalLabel: '—',
+    inferredDirection: null,
+    method: 'unavailable',
+  };
+}
+
 export interface SpeedCalculationResult {
   speedKmH: number;
   method: 'gps_hardware' | 'differential_samples' | 'inter_reports' | 'standard';
@@ -50,12 +171,7 @@ export interface SpeedCalculationResult {
 }
 
 /**
- * Calcula la velocidad real del transporte:
- * 1. Primero verifica la velocidad directa del hardware GPS (coords.speed) de las muestras recientes.
- * 2. Si no está disponible o el usuario viaja dentro del colectivo, toma de 1 a 3 muestras temporales
- *    y calcula la velocidad por desplazamiento (distancia / tiempo).
- * 3. Si el usuario está parado en la parada y reporta el paso, compara con el último reporte
- *    previo de ubicación de colectivo en la misma traza para deducir la velocidad de avance real.
+ * Calcula la velocidad real del transporte teniendo en cuenta velocidad GPS y muestras continuas en segundo plano.
  */
 export function calculateRealBusSpeed(
   currentLat?: number,
@@ -65,9 +181,8 @@ export function calculateRealBusSpeed(
   // 1. Detección directa por hardware GPS (m/s convertidos a km/h)
   const lastSample = gpsSampleBuffer[gpsSampleBuffer.length - 1];
   if (lastSample && lastSample.speedMps !== null && lastSample.speedMps > 1.2) {
-    // Si la velocidad supera ~4.3 km/h está en movimiento
     const kmh = Math.round(lastSample.speedMps * 3.6);
-    if (kmh >= 5 && kmh <= 90) {
+    if (kmh >= 5 && kmh <= 95) {
       return {
         speedKmH: kmh,
         method: 'gps_hardware',
@@ -76,31 +191,30 @@ export function calculateRealBusSpeed(
     }
   }
 
-  // 2. Cálculo diferencial de 1 a 3 muestras tomadas con watchPosition()
+  // 2. Cálculo diferencial usando las últimas muestras continuas en segundo plano
   if (gpsSampleBuffer.length >= 2) {
-    const oldest = gpsSampleBuffer[0];
-    const newest = gpsSampleBuffer[gpsSampleBuffer.length - 1];
+    const windowSamples = gpsSampleBuffer.slice(-4);
+    const oldest = windowSamples[0];
+    const newest = windowSamples[windowSamples.length - 1];
     const deltaMs = newest.timestamp - oldest.timestamp;
     const deltaHours = deltaMs / (1000 * 60 * 60);
 
     if (deltaHours > 0.0002) {
-      // Al menos 1 segundo de diferencia
       const distKm = getDistanceKm(oldest.lat, oldest.lng, newest.lat, newest.lng);
       if (distKm > 0.005) {
-        // Al menos 5 metros de desplazamiento medido
         const computedKmH = Math.round(distKm / deltaHours);
-        if (computedKmH >= 6 && computedKmH <= 90) {
+        if (computedKmH >= 6 && computedKmH <= 95) {
           return {
             speedKmH: computedKmH,
             method: 'differential_samples',
-            description: `Velocidad calculada con ${gpsSampleBuffer.length} muestras GPS: ${computedKmH} km/h`,
+            description: `Velocidad calculada con ${windowSamples.length} lecturas GPS: ${computedKmH} km/h`,
           };
         }
       }
     }
   }
 
-  // 3. Si el pasajero está quieto en la parada y reporta, pero existe un reporte anterior de colectivo:
+  // 3. Comparación entre reportes consecutivos en el corredor
   if (
     currentLat &&
     currentLng &&
@@ -111,7 +225,6 @@ export function calculateRealBusSpeed(
   ) {
     const elapsedMs = Date.now() - previousReport.createdAtMs;
     const elapsedHours = elapsedMs / (1000 * 60 * 60);
-    // Dentro de los últimos 1 a 8 minutos
     if (elapsedHours > 0.005 && elapsedHours < 0.15) {
       const distBetweenReports = getDistanceKm(
         previousReport.lat,
@@ -132,10 +245,189 @@ export function calculateRealBusSpeed(
     }
   }
 
-  // 4. Velocidad urbana promedio real del corredor (Ruta 6 / Colectora / Malvinas: 32 km/h)
+  // 4. Velocidad urbana promedio del corredor
   return {
     speedKmH: 32,
     method: 'standard',
     description: 'Velocidad promedio del corredor: 32 km/h',
+  };
+}
+
+export interface MultiSamplePrecisionResult {
+  lat: number;
+  lng: number;
+  accuracyMeters: number;
+  speedKmH: number;
+  headingDeg: number | null;
+  headingCardinal: string;
+  samplesCollected: number;
+  discardedCount: number;
+  inferredDirection: 'hacia_zarate' | 'hacia_malvinas' | null;
+}
+
+/**
+ * Solicita 6 lecturas GPS de alta precisión (watchPosition + ráfagas con maximumAge: 0 + muestras recientes
+ * en segundo plano), descarta las menos exactas y selecciona automáticamente LA MEJOR LECTURA (menor error en metros),
+ * preservando la velocidad y el rumbo continuo calculados en segundo plano.
+ */
+export async function captureMostPreciseGpsReading(options: {
+  fallbackLat: number;
+  fallbackLng: number;
+  fallbackAccuracy?: number;
+  fallbackSpeedMps?: number | null;
+  fallbackHeadingDeg?: number | null;
+  previousReport?: { lat: number; lng: number; createdAtMs?: number } | null;
+  maxDurationMs?: number;
+  targetSamples?: number;
+  onProgress?: (info: { samplesCollected: number; bestAccuracyMeters: number }) => void;
+}): Promise<MultiSamplePrecisionResult> {
+  const {
+    fallbackLat,
+    fallbackLng,
+    fallbackAccuracy = 25,
+    fallbackSpeedMps = null,
+    fallbackHeadingDeg = null,
+    previousReport = null,
+    maxDurationMs = 2400,
+    targetSamples = 6,
+    onProgress,
+  } = options;
+
+  const now = Date.now();
+  const candidates: GpsPositionSample[] = [];
+
+  // Incluir hasta 2 lecturas muy recientes (< 3s) del seguimiento continuo en segundo plano
+  const recentBackground = gpsSampleBuffer
+    .filter((s) => now - s.timestamp <= 3000)
+    .slice(-2);
+  candidates.push(...recentBackground);
+
+  const sortByPrecision = (list: GpsPositionSample[]) =>
+    [...list].sort((a, b) => {
+      const accDiff = a.accuracy - b.accuracy;
+      if (Math.abs(accDiff) >= 0.5) return accDiff;
+      return b.timestamp - a.timestamp;
+    });
+
+  const getBestCandidate = (): GpsPositionSample | null => {
+    if (candidates.length === 0) return null;
+    return sortByPrecision(candidates)[0];
+  };
+
+  if (typeof navigator !== 'undefined' && 'geolocation' in navigator) {
+    await new Promise<void>((resolve) => {
+      let finished = false;
+      let watchId: number | null = null;
+      let pollTimer: number | null = null;
+      let timeoutTimer: number | null = null;
+
+      const finish = () => {
+        if (finished) return;
+        finished = true;
+        if (watchId !== null) {
+          try {
+            navigator.geolocation.clearWatch(watchId);
+          } catch {}
+        }
+        if (pollTimer !== null) window.clearInterval(pollTimer);
+        if (timeoutTimer !== null) window.clearTimeout(timeoutTimer);
+        resolve();
+      };
+
+      const pushPosition = (pos: GeolocationPosition) => {
+        if (finished) return;
+        const { latitude, longitude, accuracy, speed, heading } = pos.coords;
+        const ts = pos.timestamp || Date.now();
+        recordGpsSample({
+          latitude,
+          longitude,
+          speed,
+          heading,
+          accuracy,
+          timestamp: ts,
+        });
+        const latest = gpsSampleBuffer[gpsSampleBuffer.length - 1];
+        if (latest) {
+          candidates.push(latest);
+        }
+
+        const best = getBestCandidate();
+        onProgress?.({
+          samplesCollected: Math.min(targetSamples, candidates.length),
+          bestAccuracyMeters: best
+            ? Math.round(best.accuracy)
+            : Math.round(accuracy || fallbackAccuracy),
+        });
+
+        if (candidates.length >= targetSamples) {
+          finish();
+        }
+      };
+
+      const geoOpts: PositionOptions = {
+        enableHighAccuracy: true,
+        maximumAge: 0,
+        timeout: Math.max(1200, maxDurationMs - 200),
+      };
+
+      try {
+        watchId = navigator.geolocation.watchPosition(pushPosition, () => {}, geoOpts);
+        navigator.geolocation.getCurrentPosition(pushPosition, () => {}, geoOpts);
+        pollTimer = window.setInterval(() => {
+          if (!finished && candidates.length < targetSamples) {
+            navigator.geolocation.getCurrentPosition(pushPosition, () => {}, geoOpts);
+          }
+        }, 320);
+      } catch {
+        finish();
+        return;
+      }
+
+      timeoutTimer = window.setTimeout(finish, maxDurationMs);
+    });
+  }
+
+  // Descartar explícitamente las lecturas menos exactas y seleccionar LA MEJOR LECTURA
+  const sorted = sortByPrecision(candidates);
+  let retained = sorted;
+  if (sorted.length >= 2) {
+    const minAcc = sorted[0].accuracy;
+    const accuracyCutoff = Math.max(minAcc * 1.5, minAcc + 10);
+    const filtered = sorted.filter((s) => s.accuracy <= accuracyCutoff);
+    // Quedarnos con la mitad más precisa cuando hay múltiples muestras válidas
+    const topSliceCount = Math.max(1, Math.ceil(filtered.length / 2));
+    retained = filtered.slice(0, topSliceCount);
+  }
+
+  const discardedCount = Math.max(0, candidates.length - retained.length);
+  const best = retained[0] || sorted[0] || null;
+  const chosenLat = best ? best.lat : fallbackLat;
+  const chosenLng = best ? best.lng : fallbackLng;
+  const chosenAccuracy = best ? Math.round(best.accuracy) : Math.round(fallbackAccuracy);
+
+  // Asegurar que la mejor lectura quede registrada como referencia más precisa
+  recordGpsSample({
+    latitude: chosenLat,
+    longitude: chosenLng,
+    speed: best ? best.speedMps : fallbackSpeedMps,
+    heading: best ? best.headingDeg : fallbackHeadingDeg,
+    accuracy: chosenAccuracy,
+    timestamp: Date.now(),
+  });
+
+  const speedRes = calculateRealBusSpeed(chosenLat, chosenLng, previousReport);
+  const headingRes = calculateRealBusHeading();
+  const finalHeadingDeg = headingRes.headingDeg ?? (fallbackHeadingDeg ?? null);
+
+  return {
+    lat: chosenLat,
+    lng: chosenLng,
+    accuracyMeters: chosenAccuracy,
+    speedKmH: speedRes.speedKmH,
+    headingDeg: finalHeadingDeg,
+    headingCardinal: formatHeadingCardinal(finalHeadingDeg),
+    samplesCollected: Math.max(1, candidates.length),
+    discardedCount,
+    inferredDirection: headingRes.inferredDirection,
   };
 }

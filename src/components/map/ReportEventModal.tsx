@@ -1,7 +1,13 @@
 import React, { useState } from 'react';
 import { EventType, TransitRoute, MapEvent } from '../../types';
-import { X, MapPin, Send } from 'lucide-react';
-import { calculateRealBusSpeed } from '../../utils/busSpeedEstimator';
+import { X, MapPin, Send, Navigation, Compass } from 'lucide-react';
+import {
+  calculateRealBusSpeed,
+  calculateRealBusHeading,
+  captureMostPreciseGpsReading,
+  formatHeadingCardinal,
+} from '../../utils/busSpeedEstimator';
+import { UserLocation } from '../../utils/geolocation';
 
 interface ReportEventModalProps {
   isOpen: boolean;
@@ -10,6 +16,7 @@ interface ReportEventModalProps {
   routes: TransitRoute[];
   initialLat?: number;
   initialLng?: number;
+  userLocation?: UserLocation | null;
   currentUserName: string;
   currentUserId: string;
 }
@@ -32,6 +39,7 @@ export const ReportEventModal: React.FC<ReportEventModalProps> = ({
   routes,
   initialLat = -34.1683,
   initialLng = -58.9592,
+  userLocation,
   currentUserName,
   currentUserId,
 }) => {
@@ -39,17 +47,55 @@ export const ReportEventModal: React.FC<ReportEventModalProps> = ({
   const [busDirection, setBusDirection] = useState<'hacia_zarate' | 'hacia_malvinas'>('hacia_zarate');
   const [selectedRouteId, setSelectedRouteId] = useState(routes[0]?.id || 'route-zarate-malvinas');
   const [comment, setComment] = useState('');
+  const [calibrationProgress, setCalibrationProgress] = useState<{
+    samples: number;
+    bestAccuracy: number;
+  } | null>(null);
 
   if (!isOpen) return null;
 
   const currentOption = EVENT_OPTIONS.find((o) => o.type === selectedType) || EVENT_OPTIONS[0];
   const isBusLocation = selectedType === 'bus_location';
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const liveSpeedData = calculateRealBusSpeed(userLocation?.lat || initialLat, userLocation?.lng || initialLng);
+  const liveHeadingData = calculateRealBusHeading();
+  const displayHeading =
+    liveHeadingData.cardinalLabel !== '—'
+      ? liveHeadingData.cardinalLabel
+      : formatHeadingCardinal(userLocation?.heading);
+  const displayAccuracy = Math.round(userLocation?.accuracy || 15);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (calibrationProgress) return;
+
+    setCalibrationProgress({ samples: 1, bestAccuracy: displayAccuracy });
+
+    let preciseFix;
+    try {
+      preciseFix = await captureMostPreciseGpsReading({
+        fallbackLat: userLocation?.lat || initialLat,
+        fallbackLng: userLocation?.lng || initialLng,
+        fallbackAccuracy: userLocation?.accuracy || 20,
+        fallbackSpeedMps: userLocation?.speed ?? null,
+        fallbackHeadingDeg: userLocation?.heading ?? null,
+        maxDurationMs: 2400,
+        targetSamples: 6,
+        onProgress: ({ samplesCollected, bestAccuracyMeters }) => {
+          setCalibrationProgress({
+            samples: samplesCollected,
+            bestAccuracy: bestAccuracyMeters,
+          });
+        },
+      });
+    } finally {
+      setCalibrationProgress(null);
+    }
 
     const now = Date.now();
-    const speedData = calculateRealBusSpeed(initialLat, initialLng);
+    const resolvedDirection = isBusLocation
+      ? busDirection
+      : preciseFix.inferredDirection || 'hacia_malvinas';
     const eventTitle = isBusLocation
       ? `Ubicación de colectivo ahora (${busDirection === 'hacia_zarate' ? 'Hacia Zárate' : 'Hacia Malvinas'})`
       : currentOption.defaultTitle;
@@ -59,13 +105,17 @@ export const ReportEventModal: React.FC<ReportEventModalProps> = ({
       type: selectedType,
       title: eventTitle,
       description: comment.trim(),
-      lat: initialLat,
-      lng: initialLng,
+      lat: preciseFix.lat,
+      lng: preciseFix.lng,
       reportedBy: currentUserName,
       reportedByUserId: currentUserId,
-      direction: isBusLocation ? busDirection : 'hacia_malvinas',
+      direction: resolvedDirection,
       sentido: isBusLocation ? busDirection : undefined,
-      velocidadKmH: speedData.speedKmH,
+      velocidadKmH: preciseFix.speedKmH,
+      rumboGrados: preciseFix.headingDeg,
+      rumboCardinal: preciseFix.headingCardinal,
+      precisionMetros: preciseFix.accuracyMeters,
+      lecturasGps: preciseFix.samplesCollected,
       createdAtMs: now,
       expiresAtMs: isBusLocation ? now + 60000 : undefined,
       isVerified: false,
@@ -96,8 +146,9 @@ export const ReportEventModal: React.FC<ReportEventModalProps> = ({
           </h2>
           <button
             onClick={onClose}
+            disabled={Boolean(calibrationProgress)}
             title="Cerrar ventana para reportar evento"
-            className="w-9 h-9 rounded-xl bg-[#101114] border border-white/15 hover:border-[#FFF19A] text-[#9299A5] hover:text-white flex items-center justify-center cursor-pointer"
+            className="w-9 h-9 rounded-xl bg-[#101114] border border-white/15 hover:border-[#FFF19A] text-[#9299A5] hover:text-white flex items-center justify-center cursor-pointer disabled:opacity-50"
             aria-label="Cerrar modal"
           >
             <X className="w-4 h-4" />
@@ -105,6 +156,21 @@ export const ReportEventModal: React.FC<ReportEventModalProps> = ({
         </div>
 
         <form onSubmit={handleSubmit} className="pt-3.5 space-y-3">
+          {/* Live Continuous Background Telemetry Pill */}
+          <div className="px-3 py-2 rounded-xl bg-[#101114] border border-white/10 flex items-center justify-between gap-2 text-[10.5px] font-mono">
+            <span className="flex items-center gap-1 text-[#B7F36B] font-bold">
+              <Navigation className="w-3 h-3 shrink-0" />
+              <span>{liveSpeedData.speedKmH} km/h</span>
+            </span>
+            <span className="flex items-center gap-1 text-sky-300 font-bold">
+              <Compass className="w-3 h-3 shrink-0" />
+              <span>{displayHeading}</span>
+            </span>
+            <span className="px-1.5 py-0.5 rounded bg-[#202329] border border-white/15 text-[#FFF19A] font-black">
+              ±{calibrationProgress ? calibrationProgress.bestAccuracy : displayAccuracy}m
+            </span>
+          </div>
+
           {/* Options Grid */}
           <div className="grid grid-cols-2 gap-2">
             {EVENT_OPTIONS.slice(0, 4).map((opt) => {
@@ -168,7 +234,7 @@ export const ReportEventModal: React.FC<ReportEventModalProps> = ({
                 </button>
               </div>
               <p className="text-[10px] text-[#9299A5] leading-snug">
-                El ícono 📍 quedará visible en el mapa durante 1 minuto y se avisará en el chat comunitario.
+                El ícono 📍 quedará visible en el mapa durante 1 minuto con su ubicación GPS más precisa.
               </p>
             </div>
           )}
@@ -233,22 +299,27 @@ export const ReportEventModal: React.FC<ReportEventModalProps> = ({
 
           <button
             type="submit"
-            title={isBusLocation ? 'Publicar ubicación del colectivo en el mapa y chat' : 'Publicar reporte en el mapa y chat'}
-            className={`w-full min-h-[48px] font-black text-xs rounded-xl flex items-center justify-center gap-1.5 border-2 border-[#101114] active:scale-95 transition-all cursor-pointer ${
+            disabled={Boolean(calibrationProgress)}
+            title={isBusLocation ? 'Calibrar GPS y publicar ubicación del colectivo' : 'Calibrar GPS y publicar reporte'}
+            className={`w-full min-h-[48px] font-black text-xs rounded-xl flex items-center justify-center gap-1.5 border-2 border-[#101114] active:scale-95 transition-all cursor-pointer disabled:opacity-80 ${
               isBusLocation
                 ? 'bg-[#B7F36B] hover:brightness-95 text-[#101114]'
                 : 'bg-[#FFF19A] hover:brightness-95 text-[#101114]'
             }`}
           >
-            {isBusLocation ? (
+            {calibrationProgress ? (
+              <span className="animate-pulse">
+                📡 Calibrando GPS ({calibrationProgress.samples}/6 · ±{calibrationProgress.bestAccuracy}m)...
+              </span>
+            ) : isBusLocation ? (
               <>
                 <MapPin className="w-4 h-4" />
-                <span>Publicar Ubicación Ahora (1 min)</span>
+                <span>Publicar Ubicación Más Precisa (1 min)</span>
               </>
             ) : (
               <>
                 <Send className="w-4 h-4" />
-                <span>Publicar Reporte</span>
+                <span>Publicar Reporte Preciso</span>
               </>
             )}
           </button>

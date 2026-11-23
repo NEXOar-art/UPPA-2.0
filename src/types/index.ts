@@ -86,6 +86,10 @@ export interface MapEvent {
   direction?: 'hacia_malvinas' | 'hacia_zarate' | 'ambas';
   sentido?: 'hacia_malvinas' | 'hacia_zarate';
   velocidadKmH?: number;
+  rumboGrados?: number | null;
+  rumboCardinal?: string;
+  precisionMetros?: number;
+  lecturasGps?: number;
   createdAtMs?: number;
   expiresAtMs?: number;
   isVerified?: boolean;
@@ -108,6 +112,10 @@ export interface ReporteFirestore {
   ruta: string; // 'campana-zarate' | 'zarate-campana' | 'vigalondo-mcdonalds' | 'general'
   sentido?: 'hacia_malvinas' | 'hacia_zarate';
   velocidadKmH?: number;
+  rumboGrados?: number | null;
+  rumboCardinal?: string;
+  precisionMetros?: number;
+  lecturasGps?: number;
   creadoEnMs?: number;
   expiresAtMs?: number;
   estado: 'activo' | 'resuelto' | 'oculto';
@@ -179,8 +187,10 @@ export interface HabilitacionChofer {
   createdAt?: any;
   habilitadoPor?: string;
   adminNotes?: string;
-  // Confort, Patente y Capacidad del Servicio
+  // Confort, Patente, Seguro y Capacidad del Servicio
   patente?: string;
+  empresaAseguradora?: string;
+  numeroPoliza?: string;
   asientos?: number;
   aireAcondicionado?: boolean;
   baul?: boolean;
@@ -222,7 +232,9 @@ export interface TaxiListing {
   activationCode?: string;
   isOnline?: boolean;
   disponibilidad?: 'desocupado' | 'ocupado';
-  // Confort y Capacidad del Servicio
+  // Confort, Seguro y Capacidad del Servicio
+  empresaAseguradora?: string;
+  numeroPoliza?: string;
   asientos?: number;
   aireAcondicionado?: boolean;
   baul?: boolean;

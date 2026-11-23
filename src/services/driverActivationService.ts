@@ -50,6 +50,8 @@ export interface ActiveDriverSession {
   startsAt: number;
   endsAt: number;
   isOnline: boolean;
+  empresaAseguradora?: string;
+  numeroPoliza?: string;
   asientos?: number;
   aireAcondicionado?: boolean;
   baul?: boolean;

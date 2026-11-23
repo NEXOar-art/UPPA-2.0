@@ -35,7 +35,7 @@ import {
   getDistanceKm,
   GPS_UPDATE_INTERVAL_MS,
 } from './utils/geolocation';
-import { recordGpsSample } from './utils/busSpeedEstimator';
+import { recordGpsSample, calculateRealBusHeading } from './utils/busSpeedEstimator';
 import { computeEventExpiresAtMs, isMapEventExpired } from './utils/eventExpiration';
 import { TeslaMap } from './components/map/TeslaMap';
 import { EventBottomSheet } from './components/map/EventBottomSheet';
@@ -44,6 +44,7 @@ import { TaxiMarketplace } from './components/taxi/TaxiMarketplace';
 import { PublishTaxiModal } from './components/taxi/PublishTaxiModal';
 import { CommunityChat } from './components/chat/CommunityChat';
 import { AdminPanel } from './components/admin/AdminPanel';
+import { TrainScheduleSection } from './components/train/TrainScheduleSection';
 import { AdBanner } from './components/ads/AdBanner';
 import { ContactAdModal } from './components/ads/ContactAdModal';
 import { PublicApiModal } from './components/api/PublicApiModal';
@@ -136,6 +137,7 @@ import {
   BellRing,
   Volume2,
   VolumeX,
+  TrainFront,
 } from 'lucide-react';
 
 function GlobalHoverTooltip() {
@@ -834,8 +836,9 @@ export default function App() {
     return () => window.removeEventListener('uppa-viaje-finalizado', handleViajeFinalizado);
   }, []);
 
-  // Active View / Tabs
-  const [activeTab, setActiveTab] = useState<'map' | 'taxi' | 'chat' | 'admin'>('map');
+  // Active View / Tabs ('tren' se activa únicamente al presionar Estación Campana o Zárate en el mapa)
+  const [activeTab, setActiveTab] = useState<'map' | 'taxi' | 'chat' | 'admin' | 'tren'>('map');
+  const [selectedTrainStation, setSelectedTrainStation] = useState<'campana' | 'zarate'>('campana');
   const activeTabRef = useRef(activeTab);
   activeTabRef.current = activeTab;
   const [selectedEvent, setSelectedEvent] = useState<MapEvent | null>(null);
@@ -1312,6 +1315,10 @@ export default function App() {
               direction,
               sentido: r.sentido,
               velocidadKmH: r.velocidadKmH,
+              rumboGrados: r.rumboGrados,
+              rumboCardinal: r.rumboCardinal,
+              precisionMetros: r.precisionMetros,
+              lecturasGps: r.lecturasGps,
               createdAtMs: createdMs,
               expiresAtMs: computeEventExpiresAtMs(evType, createdMs, r.expiresAtMs),
               isVerified: true,
@@ -1351,6 +1358,8 @@ export default function App() {
           vehicleType: h.vehicleType,
           vehicleModel: h.vehicleModel,
           patente: h.patente || '',
+          empresaAseguradora: h.empresaAseguradora || '',
+          numeroPoliza: h.numeroPoliza || '',
           whatsapp: h.whatsapp,
           zone: h.zone || 'Zárate ↔ Campana',
           lat: -34.195 + ((i % 7) * 0.006) - 0.015,
@@ -1629,7 +1638,19 @@ export default function App() {
   const applyFreshGpsFix = useCallback(async (pos: GeolocationPosition) => {
     const { latitude, longitude, accuracy, speed, heading } = pos.coords;
     const now = Date.now();
-    recordGpsSample({ latitude, longitude, speed, accuracy });
+    recordGpsSample({
+      latitude,
+      longitude,
+      speed,
+      heading,
+      accuracy,
+      timestamp: pos.timestamp || now,
+    });
+    const headingCalc = calculateRealBusHeading();
+    const resolvedHeading =
+      heading != null && Number.isFinite(heading) && heading >= 0
+        ? Math.round(((heading % 360) + 360) % 360)
+        : headingCalc.headingDeg;
 
     const cachedGeo = lastReverseGeocodeRef.current;
     const movedKm = cachedGeo
@@ -1646,7 +1667,7 @@ export default function App() {
       lng: longitude,
       accuracy: accuracy || 12,
       speed: speed ?? prev?.speed ?? 0,
-      heading: heading ?? prev?.heading ?? 0,
+      heading: resolvedHeading ?? prev?.heading ?? 0,
       address: cachedGeo?.address || prev?.address,
       timestamp: now,
       isSimulated: false,
@@ -1717,13 +1738,13 @@ export default function App() {
     }
   }, [isLoggedIn, currentUser.id, currentUser.uid, activateDeviceGpsOnLogin]);
 
-  // Continuous GPS Watcher + Active 3-Second Polling - Available freely for all users
+  // Continuous GPS Watcher + Active 3-Second Polling + Background Visibility Sync (Speed & Heading)
   useEffect(() => {
     if (!('geolocation' in navigator)) return;
 
     const geoOptions: PositionOptions = {
       enableHighAccuracy: true,
-      maximumAge: 2500,
+      maximumAge: 0,
       timeout: 5500,
     };
 
@@ -1739,8 +1760,16 @@ export default function App() {
       navigator.geolocation.getCurrentPosition(applyFreshGpsFix, () => {}, geoOptions);
     }, GPS_UPDATE_INTERVAL_MS);
 
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        navigator.geolocation.getCurrentPosition(applyFreshGpsFix, () => {}, geoOptions);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     return () => {
       clearInterval(gpsPollInterval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       if (watchIdRef.current !== null) {
         navigator.geolocation.clearWatch(watchIdRef.current);
       }
@@ -2006,6 +2035,10 @@ export default function App() {
       ruta: newEventData.routeId === 'route-vigalondo-mcdonalds' ? 'vigalondo-mcdonalds' : 'campana-zarate',
       sentido: newEventData.direction === 'hacia_zarate' ? 'hacia_zarate' : 'hacia_malvinas',
       velocidadKmH: newEventData.velocidadKmH,
+      rumboGrados: newEventData.rumboGrados,
+      rumboCardinal: newEventData.rumboCardinal,
+      precisionMetros: newEventData.precisionMetros,
+      lecturasGps: newEventData.lecturasGps,
       expiresAtMs: created.expiresAtMs,
     }).catch((err) => console.warn('Firestore report write notice:', err));
 
@@ -2128,6 +2161,8 @@ export default function App() {
           vehicleType: hab.vehicleType,
           vehicleModel: hab.vehicleModel,
           patente: hab.patente || '',
+          empresaAseguradora: hab.empresaAseguradora || '',
+          numeroPoliza: hab.numeroPoliza || '',
           whatsapp: hab.whatsapp,
           zone: hab.zone || 'Zárate ↔ Campana',
           lat: liveLat,
@@ -2176,6 +2211,8 @@ export default function App() {
           vehicleType: driverSession.vehicleType || 'auto',
           vehicleModel: driverSession.vehicleModel || 'Vehículo Habilitado',
           patente: (driverSession as any).patente || '',
+          empresaAseguradora: driverSession.empresaAseguradora || '',
+          numeroPoliza: driverSession.numeroPoliza || '',
           whatsapp: driverSession.whatsapp || (currentUser.phone ? currentUser.phone.replace(/\D/g, '') : '5493487552190'),
           zone: driverSession.zone || userLocation?.address || 'Zárate ↔ Campana',
           lat: userLocation ? userLocation.lat : -34.1914,
@@ -3088,7 +3125,10 @@ export default function App() {
             onMouseLeave={() => setIsHeaderMenuHovered(false)}
           >
             <button
-              onClick={() => setIsHeaderMenuOpen((prev) => !prev)}
+              onClick={() => {
+                setIsProfileDropdownOpen(false);
+                setIsHeaderMenuOpen((prev) => !prev);
+              }}
               onFocus={() => setIsHeaderMenuHovered(true)}
               onBlur={() => setIsHeaderMenuHovered(false)}
               className="h-10 w-10 sm:h-11 sm:w-11 rounded-xl bg-[#202329] border border-white/15 hover:border-[#FFF19A]/60 flex items-center justify-center text-white active:scale-95 transition-all cursor-pointer"
@@ -3127,6 +3167,19 @@ export default function App() {
                   <Zap className="w-4 h-4 fill-[#101114] text-[#101114]" />
                   <span>Pedir Transporte Alternativo</span>
                 </button>
+
+                <button
+                  onClick={() => {
+                    setIsHeaderMenuOpen(false);
+                    setIsHeaderMenuHovered(false);
+                    setActiveTab('tren');
+                  }}
+                  title="Servicio Inteligente de Trenes (Línea Mitre · Campana / Zárate / Retiro)"
+                  className="w-full min-h-[44px] text-left px-3 py-2.5 rounded-xl text-xs font-black text-[#FFF19A] bg-[#101114] hover:bg-sky-500/15 border border-sky-400/50 flex items-center gap-2.5 transition-all cursor-pointer"
+                >
+                  <TrainFront className="w-4 h-4 text-sky-400 shrink-0" />
+                  <span>Servicio Inteligente de Trenes</span>
+                </button>
               </div>
             )}
           </div>
@@ -3156,7 +3209,11 @@ export default function App() {
           {isLoggedIn ? (
             <div className="relative" ref={profileDropdownRef}>
               <button
-                onClick={() => setIsProfileDropdownOpen((prev) => !prev)}
+                onClick={() => {
+                  setIsHeaderMenuOpen(false);
+                  setIsHeaderMenuHovered(false);
+                  setIsProfileDropdownOpen((prev) => !prev);
+                }}
                 className={`relative min-h-[44px] px-3 py-1.5 rounded-xl text-xs cursor-pointer flex items-center gap-2 transition-all border ${
                   isDriverUser && isDriverHabilitado
                     ? driverDisponibilidad === 'ocupado'
@@ -3722,11 +3779,15 @@ export default function App() {
                 currentUserName={currentUser.name}
                 currentUserId={currentUser.id}
                 focusedStop={focusedStopOnMap}
-                hideTopBarButtons={isHeaderMenuOpen || isHeaderMenuHovered}
+                hideTopBarButtons={isHeaderMenuOpen || isHeaderMenuHovered || isProfileDropdownOpen}
                 activeTrackingPassenger={liveActiveTrackingPassenger}
                 onClearTrackingPassenger={() => setActiveTrackingPassenger(null)}
                 onFinalizePassengerRide={async (solicitudId) => {
                   await handleSetDriverDisponibilidad('desocupado', solicitudId);
+                }}
+                onOpenTrainSection={(stationId) => {
+                  setSelectedTrainStation(stationId);
+                  setActiveTab('tren');
                 }}
               />
             </div>
@@ -4061,6 +4122,15 @@ export default function App() {
             currentUser={currentUser}
           />
         )}
+
+        {activeTab === 'tren' && (
+          <div className="flex-1 w-full h-full overflow-y-auto">
+            <TrainScheduleSection
+              initialStationId={selectedTrainStation}
+              onBackToMap={() => setActiveTab('map')}
+            />
+          </div>
+        )}
       </main>
 
       {/* Barra Flotante de Acceso Rápido al Chat Comunitario (visible en otras pantallas excepto Chat y Taxis & Motos por 4.5s) */}
@@ -4333,6 +4403,7 @@ export default function App() {
         routes={routes}
         initialLat={userLocation?.lat || -34.1683}
         initialLng={userLocation?.lng || -58.9592}
+        userLocation={userLocation}
         currentUserName={currentUser.name}
         currentUserId={currentUser.id}
       />

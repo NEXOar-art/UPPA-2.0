@@ -8,6 +8,8 @@ export interface DriverSafetyInput {
   vehicleType: 'auto' | 'moto';
   patente?: string;
   plate?: string;
+  empresaAseguradora?: string;
+  numeroPoliza?: string;
   asientos?: number;
   aireAcondicionado?: boolean;
   baul?: boolean;
@@ -25,12 +27,18 @@ export function calculateDriverSafetyIndex(data: DriverSafetyInput): {
 } {
   const isAuto = data.vehicleType === 'auto';
   const hasPatente = Boolean((data.patente || data.plate || '').trim());
+  const hasAseguradora = Boolean((data.empresaAseguradora || '').trim());
+  const hasPoliza = Boolean((data.numeroPoliza || '').trim());
+  const hasSeguro = hasAseguradora && hasPoliza;
   const hasWhatsapp = Boolean((data.whatsapp || '').trim());
   const completedItems: string[] = [];
 
   if (isAuto) {
-    const totalItems = 6;
+    const totalItems = 7;
     if (hasPatente) completedItems.push('Patente registrada');
+    if (hasSeguro) {
+      completedItems.push(`Seguro ${data.empresaAseguradora!.trim()} (Póliza ${data.numeroPoliza!.trim()})`);
+    }
     if ((data.asientos || 0) >= 1) completedItems.push(`${data.asientos || 4} asientos`);
     if (data.aireAcondicionado !== false) completedItems.push('Aire acondicionado');
     if (data.baul !== false) completedItems.push('Baúl disponible');
@@ -48,8 +56,11 @@ export function calculateDriverSafetyIndex(data: DriverSafetyInput): {
     };
   } else {
     // Moto Taxi
-    const totalItems = 4;
+    const totalItems = 5;
     if (hasPatente) completedItems.push('Patente registrada');
+    if (hasSeguro) {
+      completedItems.push(`Seguro ${data.empresaAseguradora!.trim()} (Póliza ${data.numeroPoliza!.trim()})`);
+    }
     if (data.cascoExtra !== false) completedItems.push('Casco extra para pasajero');
     if (data.baul !== false) completedItems.push('Baúl / portaequipaje');
     if (hasWhatsapp) completedItems.push('Contacto verificado');
