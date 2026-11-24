@@ -1070,30 +1070,37 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
       const cityDisplay = stationKey === 'zarate' ? 'Zárate' : 'Campana';
 
       const marker = L.marker([station.lat, station.lng], { icon });
-      marker.bindPopup(`
-        <div style="font-family: inherit; padding: 4px; color: #0f172a; max-width: 265px;">
-          <div style="font-size: 13px; font-weight: 800; display: flex; align-items: center; gap: 5px; color: #0f172a;">
+      marker.bindPopup(
+        `
+        <div style="font-family: inherit; padding: 2px; color: #ffffff; max-width: 265px;">
+          <div style="font-size: 13px; font-weight: 900; display: flex; align-items: center; gap: 6px; color: #ffffff;">
             <span>🚆</span> <span>${escapeHtml(station.name)}</span>
           </div>
-          <div style="font-size: 10px; color: #0284c7; font-weight: 800; text-transform: uppercase; margin-top: 2px;">
+          <div style="font-size: 10px; color: #38bdf8; font-weight: 800; text-transform: uppercase; margin-top: 2px;">
             ${escapeHtml(station.categoryName)}
           </div>
-          <div style="font-size: 11px; color: #334155; margin-top: 4px; line-height: 1.3;">
-            ${escapeHtml(station.address)} <span style="color: #64748b;">(${escapeHtml(station.zone)})</span>
+          <div style="font-size: 11px; color: #cbd5e1; margin-top: 4px; line-height: 1.35;">
+            ${escapeHtml(station.address)} <span style="color: #94a3b8;">(${escapeHtml(station.zone)})</span>
           </div>
-          <div style="font-size: 10.5px; color: #475569; margin-top: 4px; background: #f8fafc; padding: 4px 6px; border-radius: 6px; border: 1px solid #e2e8f0;">
+          <div style="font-size: 10.5px; color: #e2e8f0; margin-top: 5px; background: #101114; padding: 5px 7px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.12);">
             ${escapeHtml(station.details)}
           </div>
           <div style="margin-top: 8px; display: flex; flex-direction: column; gap: 6px;">
-            <button type="button" data-open-train-section="${stationKey}" style="width: 100%; border: 1.5px solid #0284c7; cursor: pointer; text-align: center; background: #101114; color: #FFF19A; font-size: 11.5px; font-weight: 900; padding: 8px 10px; border-radius: 8px; box-shadow: 0 4px 10px rgba(2,132,199,0.28);">
-              🚆 Servicio Inteligente de Trenes (${cityDisplay}) ➔
+            <button type="button" data-open-train-section="${stationKey}" style="width: 100%; border: 1.5px solid #38bdf8; cursor: pointer; text-align: center; background: #101114; color: #FFF19A; font-size: 11.5px; font-weight: 900; padding: 9px 10px; border-radius: 8px; box-shadow: 0 4px 12px rgba(56,189,248,0.28); position: relative; z-index: 20;">
+              🚆 Servicio Inteligente de ${cityDisplay} ➔
             </button>
             <a href="https://www.google.com/maps/dir/?api=1&destination=${station.lat},${station.lng}" target="_blank" rel="noopener noreferrer" title="Abrir Google Maps" style="display: block; text-align: center; background: #FFF19A; color: #101114; font-size: 11px; font-weight: 800; padding: 6px 10px; border-radius: 8px; text-decoration: none;">
               Llevarme a esta Estación de Trenes ➔
             </a>
           </div>
         </div>
-      `);
+      `,
+        {
+          autoPan: false,
+          closeOnClick: false,
+          offset: [0, -8],
+        }
+      );
 
       let hoverCloseTimer: number | null = null;
       const clearHoverCloseTimer = () => {
@@ -1106,31 +1113,51 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
         clearHoverCloseTimer();
         hoverCloseTimer = window.setTimeout(() => {
           marker.closePopup();
-        }, 280);
+        }, 650);
       };
 
       marker.on('mouseover', () => {
         clearHoverCloseTimer();
-        marker.openPopup();
+        if (!marker.isPopupOpen()) {
+          marker.openPopup();
+        }
       });
       marker.on('mouseout', scheduleHoverClose);
+      marker.on('click', () => {
+        clearHoverCloseTimer();
+        if (!marker.isPopupOpen()) {
+          marker.openPopup();
+        }
+      });
       marker.on('remove', clearHoverCloseTimer);
 
       marker.on('popupopen', (e) => {
         clearHoverCloseTimer();
         const popupEl = e.popup.getElement();
         if (!popupEl) return;
+
+        L.DomEvent.disableClickPropagation(popupEl);
+        L.DomEvent.disableScrollPropagation(popupEl);
+
         popupEl.onmouseenter = clearHoverCloseTimer;
+        popupEl.onmousemove = clearHoverCloseTimer;
         popupEl.onmouseleave = scheduleHoverClose;
+
         const btn = popupEl.querySelector('[data-open-train-section]') as HTMLElement | null;
         if (!btn) return;
-        btn.onclick = (ev) => {
-          ev.preventDefault();
-          ev.stopPropagation();
+
+        const handleOpenTrain = (ev: Event) => {
+          L.DomEvent.stop(ev);
           clearHoverCloseTimer();
           marker.closePopup();
           onOpenTrainSectionRef.current?.(stationKey);
         };
+
+        btn.onmouseenter = clearHoverCloseTimer;
+        btn.onmousedown = (ev) => ev.stopPropagation();
+        btn.ontouchstart = (ev) => ev.stopPropagation();
+        btn.onpointerdown = (ev) => ev.stopPropagation();
+        btn.onclick = handleOpenTrain;
       });
 
       marker.addTo(layer);
