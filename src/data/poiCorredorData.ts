@@ -1,3 +1,5 @@
+import { MITRE_FULL_ROUTE_STATIONS } from './trenMitreData';
+
 export interface PointOfInterest {
   id: string;
   name: string;
@@ -261,27 +263,14 @@ export const HOSPITALS_DATA: PointOfInterest[] = [
   },
 ];
 
-export const TRAIN_STATIONS_DATA: PointOfInterest[] = [
-  {
-    id: 'poi-tren-campana',
-    name: 'Estación de Trenes de Campana',
-    type: 'train_station',
-    lat: -34.156884,
-    lng: -58.958537,
-    categoryName: 'Estación Ferroviaria · Línea Mitre',
-    address: 'Av. Leandro N. Alem y Rivadavia, Campana',
-    details: 'Ferrocarril Mitre (Ramal Villa Ballester – Zárate) · Conexión directa con Línea 228',
-    zone: 'Campana',
-  },
-  {
-    id: 'poi-tren-zarate',
-    name: 'Estación de Trenes Zárate',
-    type: 'train_station',
-    lat: -34.097031,
-    lng: -59.038489,
-    categoryName: 'Estación Ferroviaria · Línea Mitre',
-    address: 'Zárate Centro / Acceso Ferroviario',
-    details: 'Estación Terminal Zárate · Ferrocarril Mitre (Servicios hacia Campana y Retiro)',
-    zone: 'Zárate',
-  },
-];
+export const TRAIN_STATIONS_DATA: PointOfInterest[] = MITRE_FULL_ROUTE_STATIONS.map((st) => ({
+  id: `poi-tren-${st.id}`,
+  name: st.name,
+  type: 'train_station' as const,
+  lat: st.lat,
+  lng: st.lng,
+  categoryName: st.categoryName,
+  address: `${st.shortName} · Línea Mitre (${st.zone})`,
+  details: st.details,
+  zone: st.zone,
+}));

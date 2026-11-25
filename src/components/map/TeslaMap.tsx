@@ -64,9 +64,16 @@ import {
   GAS_STATIONS_DATA,
   SCHOOLS_DATA,
   HOSPITALS_DATA,
-  TRAIN_STATIONS_DATA,
   PointOfInterest,
 } from '../../data/poiCorredorData';
+import {
+  MITRE_FULL_ROUTE_STATIONS,
+  TRAIN_DAY_LABELS,
+  TrainStationProximityTier,
+  formatMinutesDelta,
+  getActiveInTransitTrainsOnTrack,
+  getStationLiveStatus,
+} from '../../data/trenMitreData';
 import { LINEA_228_STOPS, LINEA_228_COORDINATES } from '../../data/linea228Stops';
 import { computeEventExpiresAtMs, isMapEventExpired } from '../../utils/eventExpiration';
 
@@ -136,7 +143,7 @@ interface TeslaMapProps {
   currentUserId?: string;
   focusedStop?: BusStop | null;
   hideTopBarButtons?: boolean;
-  onOpenTrainSection?: (stationId: 'campana' | 'zarate') => void;
+  onOpenTrainSection?: (stationId: string) => void;
 }
 
 export const TRANSIT_EVENT_TYPES: {
@@ -351,7 +358,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
   const [showGasStations, setShowGasStations] = useState(false);
   const [showSchools, setShowSchools] = useState(false);
   const [showHospitals, setShowHospitals] = useState(false);
-  const [showTrainStations, setShowTrainStations] = useState(true);
+  const [showTrainStations, setShowTrainStations] = useState(false);
   const [showEvents, setShowEvents] = useState(true);
   const [showTaxis, setShowTaxis] = useState(true);
   const [isEventFilterPanelOpen, setIsEventFilterPanelOpen] = useState(false);
@@ -389,6 +396,9 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
     }, 1000);
     return () => clearInterval(timer);
   }, []);
+
+  const nowDateForTrain = new Date(nowTimestamp);
+  const trainMinuteBucket = `${nowDateForTrain.getFullYear()}-${nowDateForTrain.getMonth()}-${nowDateForTrain.getDate()}-${nowDateForTrain.getHours()}-${nowDateForTrain.getMinutes()}`;
 
   // Dirección seleccionada para "Ubicación de colectivo ahora"
   const [busDirection, setBusDirection] = useState<'hacia_zarate' | 'hacia_malvinas'>('hacia_zarate');
@@ -1040,7 +1050,8 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
     });
   }, [showHospitals]);
 
-  // Train Stations Markers Layer (Campana & Zárate Línea Mitre)
+  // Train Stations & Full Railway Route Layer (Zárate -> V. Ballester -> Comb. a Retiro)
+  // Se habilita únicamente al activar "Mostrar estaciones de trenes" y titila en vivo según horario Mitre
   useEffect(() => {
     if (!mapInstanceRef.current || !trainStationsLayerRef.current) return;
     const layer = trainStationsLayerRef.current;
@@ -1048,49 +1059,264 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
 
     if (!showTrainStations) return;
 
-    TRAIN_STATIONS_DATA.forEach((station) => {
+    const nowDate = new Date();
+
+    // 1. Trazado ferroviario completo desde Zárate hasta Comb. a Retiro
+    const branchZarateBallesterCoords: [number, number][] = MITRE_FULL_ROUTE_STATIONS.slice(0, 11).map(
+      (s) => [s.lat, s.lng]
+    );
+    const comboRetiroCoords: [number, number][] = MITRE_FULL_ROUTE_STATIONS.slice(10).map(
+      (s) => [s.lat, s.lng]
+    );
+
+    // Base oscura + vía celeste principal (Zárate - V. Ballester)
+    L.polyline(branchZarateBallesterCoords, {
+      color: '#101114',
+      weight: 8,
+      opacity: 0.85,
+      lineCap: 'round',
+      lineJoin: 'round',
+    }).addTo(layer);
+
+    const ramalLine = L.polyline(branchZarateBallesterCoords, {
+      color: '#38bdf8',
+      weight: 4,
+      opacity: 0.95,
+      lineCap: 'round',
+      lineJoin: 'round',
+    }).addTo(layer);
+
+    L.polyline(branchZarateBallesterCoords, {
+      color: '#e0f2fe',
+      weight: 1.5,
+      opacity: 0.7,
+      dashArray: '6, 10',
+    }).addTo(layer);
+
+    ramalLine.bindTooltip('🚆 Línea Mitre · Ramal Zárate – V. Ballester', {
+      sticky: true,
+      className: 'uppa-map-tooltip',
+    });
+
+    // Conexión V. Ballester -> Comb. a Retiro
+    L.polyline(comboRetiroCoords, {
+      color: '#101114',
+      weight: 7,
+      opacity: 0.8,
+      lineCap: 'round',
+    }).addTo(layer);
+
+    const retiroLine = L.polyline(comboRetiroCoords, {
+      color: '#FFF19A',
+      weight: 3.5,
+      opacity: 0.92,
+      dashArray: '9, 7',
+      lineCap: 'round',
+    }).addTo(layer);
+
+    retiroLine.bindTooltip('🚆 Combinación Eléctrica Mitre · V. Ballester ↔ Retiro', {
+      sticky: true,
+      className: 'uppa-map-tooltip',
+    });
+
+    // 2. Trenes actualmente en circulación sobre la traza (interpolados por horario oficial)
+    const activeTrains = getActiveInTransitTrainsOnTrack(nowDate);
+    activeTrains.forEach((tr) => {
+      L.polyline(
+        [
+          [tr.fromStation.lat, tr.fromStation.lng],
+          [tr.toStation.lat, tr.toStation.lng],
+        ],
+        {
+          color: '#10b981',
+          weight: 5.5,
+          opacity: 0.9,
+          lineCap: 'round',
+        }
+      ).addTo(layer);
+
+      const dirLabel =
+        tr.service.direction === 'hacia_zarate' ? 'Rumbo a Zárate' : 'Rumbo a V. Ballester';
+      const trainIcon = L.divIcon({
+        className: 'custom-live-train-marker',
+        html: `
+          <div class="relative flex items-center justify-center pointer-events-auto">
+            <div class="px-2 py-0.5 rounded-full bg-emerald-500 border-2 border-white text-[#101114] text-[10px] font-black shadow-[0_0_16px_rgba(16,185,129,0.95)] flex items-center gap-1 whitespace-nowrap train-blink-arrived">
+              <span>🚆</span>
+              <span>N° ${escapeHtml(tr.service.trainNo)}</span>
+            </div>
+          </div>
+        `,
+        iconSize: [74, 24],
+        iconAnchor: [37, 12],
+      });
+
+      const trainMarker = L.marker([tr.lat, tr.lng], {
+        icon: trainIcon,
+        zIndexOffset: 650,
+      }).addTo(layer);
+
+      trainMarker.bindTooltip(
+        `<div style="font-size:11px;font-weight:800;color:#ffffff;">
+          🚆 Tren N° ${escapeHtml(tr.service.trainNo)} en recorrido<br/>
+          <span style="color:#6ee7b7;">${escapeHtml(dirLabel)}</span> · ${escapeHtml(tr.fromStation.shortName)} (${escapeHtml(tr.fromTime)}) → ${escapeHtml(tr.toStation.shortName)} (${escapeHtml(tr.toTime)})
+        </div>`,
+        { direction: 'top', offset: [0, -10], className: 'uppa-map-tooltip' }
+      );
+    });
+
+    // Estilo por nivel de proximidad (idéntico a "Servicio Inteligente · Estación Campana")
+    const getTierVisual = (tier: TrainStationProximityTier, isRetiroCombo?: boolean) => {
+      switch (tier) {
+        case 'arrived_now':
+          return {
+            circleClass: 'bg-emerald-500 border-white text-[#101114] train-blink-arrived',
+            badgeClass: 'bg-emerald-950/95 text-emerald-300 border-emerald-400',
+            dotColor: '#10b981',
+            statusLabel: 'PASANDO AHORA',
+          };
+        case 'imminent':
+          return {
+            circleClass: 'bg-[#FFF19A] border-amber-400 text-[#101114] train-blink-imminent',
+            badgeClass: 'bg-amber-950/95 text-[#FFF19A] border-amber-400',
+            dotColor: '#FFF19A',
+            statusLabel: 'ARRIBO INMINENTE',
+          };
+        case 'approaching':
+          return {
+            circleClass: 'bg-orange-500 border-orange-200 text-white train-blink-approaching',
+            badgeClass: 'bg-orange-950/95 text-orange-200 border-orange-400',
+            dotColor: '#f97316',
+            statusLabel: 'ACERCÁNDOSE',
+          };
+        case 'upcoming':
+          return {
+            circleClass: 'bg-sky-500 border-sky-200 text-white train-blink-upcoming',
+            badgeClass: 'bg-sky-950/95 text-sky-200 border-sky-400',
+            dotColor: '#38bdf8',
+            statusLabel: 'PRÓXIMO TREN',
+          };
+        default:
+          return {
+            circleClass: isRetiroCombo
+              ? 'bg-gradient-to-br from-amber-500 to-yellow-600 border-[#FFF19A] text-[#101114]'
+              : 'bg-gradient-to-br from-sky-600 to-blue-800 border-sky-300/80 text-white',
+            badgeClass: isRetiroCombo
+              ? 'bg-[#101114]/95 text-[#FFF19A] border-[#FFF19A]/70'
+              : 'bg-black/95 text-sky-200 border-sky-400/60',
+            dotColor: '#94a3b8',
+            statusLabel: 'EN SERVICIO',
+          };
+      }
+    };
+
+    // 3. Marcadores circulares de las 12 estaciones con titilación en vivo
+    MITRE_FULL_ROUTE_STATIONS.forEach((station) => {
+      const live = getStationLiveStatus(station.id, nowDate);
+      const visual = getTierVisual(live.tier, station.isRetiroCombo);
+      const isActiveBlink =
+        live.tier === 'arrived_now' ||
+        live.tier === 'imminent' ||
+        live.tier === 'approaching' ||
+        live.tier === 'upcoming';
+
+      const sizeClass = station.isMainHub ? 'w-9 h-9 text-sm' : 'w-7 h-7 text-xs';
+      const iconSizePx = station.isMainHub ? 36 : 28;
+
+      const liveTimeChip = live.activeTrigger
+        ? live.tier === 'arrived_now'
+          ? `● ${live.activeTrigger.timeStr}`
+          : `${live.activeTrigger.timeStr} (${live.activeTrigger.diffMins}m)`
+        : '';
+
       const icon = L.divIcon({
         className: 'custom-train-station-marker',
         html: `
           <div class="relative flex items-center justify-center cursor-pointer group">
-            <div class="w-9 h-9 rounded-full bg-gradient-to-br from-sky-500 to-blue-700 border-2 border-[#FFF19A] text-white flex items-center justify-center text-sm shadow-[0_0_16px_rgba(14,165,233,0.75)] font-bold transition-transform group-hover:scale-125">
+            <div class="${sizeClass} rounded-full border-2 flex items-center justify-center font-bold shadow-[0_0_14px_rgba(14,165,233,0.6)] transition-transform group-hover:scale-125 ${visual.circleClass}">
               🚆
             </div>
-            <div class="absolute -bottom-5 bg-black/95 text-sky-200 text-[9px] font-black px-1.5 py-0.2 rounded-md border border-sky-400/60 whitespace-nowrap shadow-md pointer-events-none">
-              ${escapeHtml(station.name.replace('Estación de Trenes de ', 'Est. Tren ').replace('Estación de Trenes ', 'Est. Tren '))}
+            <div class="absolute -bottom-5 px-1.5 py-0.2 rounded-md border text-[9px] font-black whitespace-nowrap shadow-md pointer-events-none flex items-center gap-1 ${visual.badgeClass}">
+              <span>${escapeHtml(station.shortName)}</span>
+              ${
+                isActiveBlink && liveTimeChip
+                  ? `<span style="color:${visual.dotColor};">· ${escapeHtml(liveTimeChip)}</span>`
+                  : ''
+              }
             </div>
           </div>
         `,
-        iconSize: [36, 36],
-        iconAnchor: [18, 18],
+        iconSize: [iconSizePx, iconSizePx],
+        iconAnchor: [iconSizePx / 2, iconSizePx / 2],
       });
 
-      const stationKey: 'campana' | 'zarate' =
-        station.id === 'poi-tren-zarate' ? 'zarate' : 'campana';
-      const cityDisplay = stationKey === 'zarate' ? 'Zárate' : 'Campana';
+      const targetScheduleStationId = station.isRetiroCombo ? 'villa_ballester' : station.id;
+      const dayLabel = TRAIN_DAY_LABELS[live.dayType].shortLabel;
 
-      const marker = L.marker([station.lat, station.lng], { icon });
+      const liveBannerHtml = live.activeTrigger
+        ? `
+          <div style="margin-top:6px;padding:6px 8px;border-radius:8px;background:#101114;border:1.5px solid ${visual.dotColor};">
+            <div style="font-size:10px;font-weight:900;color:${visual.dotColor};text-transform:uppercase;letter-spacing:0.04em;">
+              ● ${visual.statusLabel} · Tren N° ${escapeHtml(live.activeTrigger.service.trainNo)}
+            </div>
+            <div style="font-size:11px;font-weight:700;color:#ffffff;margin-top:2px;">
+              ${
+                live.activeTrigger.service.direction === 'hacia_zarate'
+                  ? 'Hacia Zárate'
+                  : 'Hacia V. Ballester / Retiro'
+              }: <span style="color:${visual.dotColor};font-family:monospace;">${escapeHtml(live.activeTrigger.timeStr)} hs</span>
+              <span style="color:#cbd5e1;font-size:10px;">(${
+                live.activeTrigger.diffMins <= 0
+                  ? 'En estación ahora'
+                  : `en ${live.activeTrigger.diffMins} min`
+              })</span>
+            </div>
+          </div>
+        `
+        : '';
+
+      const nextZarateHtml = live.nextHaciaZarate
+        ? `<div style="display:flex;justify-content:space-between;gap:8px;font-size:10.5px;color:#e2e8f0;">
+            <span>${station.isRetiroCombo ? 'Sale de Retiro → Zárate' : '→ Hacia Zárate'}:</span>
+            <strong style="color:#38bdf8;font-family:monospace;">${escapeHtml(live.nextHaciaZarate.stationTime)} hs (${escapeHtml(formatMinutesDelta(live.nextHaciaZarate.minutesUntil))})</strong>
+          </div>`
+        : '';
+
+      const nextBallesterHtml = live.nextHaciaBallester
+        ? `<div style="display:flex;justify-content:space-between;gap:8px;font-size:10.5px;color:#e2e8f0;">
+            <span>${station.isRetiroCombo ? 'Comb. V. Ballester → Retiro' : '→ Hacia V. Ballester / Retiro'}:</span>
+            <strong style="color:#B7F36B;font-family:monospace;">${escapeHtml(live.nextHaciaBallester.stationTime)} hs (${escapeHtml(formatMinutesDelta(live.nextHaciaBallester.minutesUntil))})</strong>
+          </div>`
+        : '';
+
+      const marker = L.marker([station.lat, station.lng], {
+        icon,
+        zIndexOffset: isActiveBlink ? 500 : 300,
+      });
+
       marker.bindPopup(
         `
-        <div style="font-family: inherit; padding: 2px; color: #ffffff; max-width: 265px;">
+        <div style="font-family: inherit; padding: 2px; color: #ffffff; max-width: 280px;">
           <div style="font-size: 13px; font-weight: 900; display: flex; align-items: center; gap: 6px; color: #ffffff;">
             <span>🚆</span> <span>${escapeHtml(station.name)}</span>
           </div>
           <div style="font-size: 10px; color: #38bdf8; font-weight: 800; text-transform: uppercase; margin-top: 2px;">
-            ${escapeHtml(station.categoryName)}
+            ${escapeHtml(station.categoryName)} · ${escapeHtml(dayLabel)}
           </div>
-          <div style="font-size: 11px; color: #cbd5e1; margin-top: 4px; line-height: 1.35;">
-            ${escapeHtml(station.address)} <span style="color: #94a3b8;">(${escapeHtml(station.zone)})</span>
+          <div style="font-size: 10.5px; color: #cbd5e1; margin-top: 3px;">
+            ${escapeHtml(station.zone)}
           </div>
-          <div style="font-size: 10.5px; color: #e2e8f0; margin-top: 5px; background: #101114; padding: 5px 7px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.12);">
-            ${escapeHtml(station.details)}
+          ${liveBannerHtml}
+          <div style="margin-top: 6px; background: #101114; padding: 6px 8px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.12); display: flex; flex-direction: column; gap: 4px;">
+            ${nextZarateHtml}
+            ${nextBallesterHtml}
           </div>
           <div style="margin-top: 8px; display: flex; flex-direction: column; gap: 6px;">
-            <button type="button" data-open-train-section="${stationKey}" style="width: 100%; border: 1.5px solid #38bdf8; cursor: pointer; text-align: center; background: #101114; color: #FFF19A; font-size: 11.5px; font-weight: 900; padding: 9px 10px; border-radius: 8px; box-shadow: 0 4px 12px rgba(56,189,248,0.28); position: relative; z-index: 20;">
-              🚆 Servicio Inteligente de ${cityDisplay} ➔
+            <button type="button" data-open-train-section="${escapeHtml(targetScheduleStationId)}" style="width: 100%; border: 1.5px solid #38bdf8; cursor: pointer; text-align: center; background: #101114; color: #FFF19A; font-size: 11.5px; font-weight: 900; padding: 9px 10px; border-radius: 8px; box-shadow: 0 4px 12px rgba(56,189,248,0.28); position: relative; z-index: 20;">
+              🚆 Servicio Inteligente de ${escapeHtml(station.shortName)} ➔
             </button>
             <a href="https://www.google.com/maps/dir/?api=1&destination=${station.lat},${station.lng}" target="_blank" rel="noopener noreferrer" title="Abrir Google Maps" style="display: block; text-align: center; background: #FFF19A; color: #101114; font-size: 11px; font-weight: 800; padding: 6px 10px; border-radius: 8px; text-decoration: none;">
-              Llevarme a esta Estación de Trenes ➔
+              Llévame a esta Estación ➔
             </a>
           </div>
         </div>
@@ -1150,7 +1376,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
           L.DomEvent.stop(ev);
           clearHoverCloseTimer();
           marker.closePopup();
-          onOpenTrainSectionRef.current?.(stationKey);
+          onOpenTrainSectionRef.current?.(targetScheduleStationId);
         };
 
         btn.onmouseenter = clearHoverCloseTimer;
@@ -1162,7 +1388,7 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
 
       marker.addTo(layer);
     });
-  }, [showTrainStations]);
+  }, [showTrainStations, trainMinuteBucket]);
 
   // Handle map click
   useEffect(() => {
@@ -2578,14 +2804,17 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
           <span className="leading-none select-none">🏥</span>
         </button>
 
-        {/* Botón 3c: Estaciones de Trenes Campana & Zárate (solo icono 🚆) */}
+        {/* Botón 3c: Estaciones de Trenes y Trazado Línea Mitre Zárate - Retiro (solo icono 🚆) */}
         <button
           onClick={() => {
             resetHideTimer();
             const next = !showTrainStations;
             setShowTrainStations(next);
             if (next && mapInstanceRef.current) {
-              mapInstanceRef.current.panTo([-34.1270, -58.9985]);
+              const bounds = L.latLngBounds(
+                MITRE_FULL_ROUTE_STATIONS.map((s) => [s.lat, s.lng] as [number, number])
+              );
+              mapInstanceRef.current.fitBounds(bounds, { padding: [36, 36], maxZoom: 11 });
             }
           }}
           className={`w-8 h-8 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center text-sm sm:text-lg border-2 shadow-[2px_2px_0px_#101114] transition-all active:scale-95 cursor-pointer shrink-0 ${
@@ -2770,7 +2999,14 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
                 <button
                   onClick={() => {
                     resetHideTimer();
-                    setShowTrainStations(!showTrainStations);
+                    const next = !showTrainStations;
+                    setShowTrainStations(next);
+                    if (next && mapInstanceRef.current) {
+                      const bounds = L.latLngBounds(
+                        MITRE_FULL_ROUTE_STATIONS.map((s) => [s.lat, s.lng] as [number, number])
+                      );
+                      mapInstanceRef.current.fitBounds(bounds, { padding: [28, 28], maxZoom: 11 });
+                    }
                   }}
                   className={`w-10 h-10 rounded-xl flex items-center justify-center text-base border transition-all cursor-pointer active:scale-95 ${
                     showTrainStations

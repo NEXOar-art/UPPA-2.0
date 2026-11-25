@@ -420,3 +420,386 @@ export function formatMinutesDelta(minutesUntil: number): string {
   const m = minutesUntil % 60;
   return m === 0 ? `en ${h} h` : `en ${h} h ${m} min`;
 }
+
+export interface MitreRouteStationCoord {
+  id: string;
+  name: string;
+  shortName: string;
+  lat: number;
+  lng: number;
+  zone: string;
+  categoryName: string;
+  details: string;
+  isMainHub?: boolean;
+  isRetiroCombo?: boolean;
+}
+
+/**
+ * Trazado completo de 12 estaciones: Zárate -> V. Ballester -> Comb. a Retiro
+ * con coordenadas exactas.
+ */
+export const MITRE_FULL_ROUTE_STATIONS: MitreRouteStationCoord[] = [
+  {
+    id: 'zarate',
+    name: 'Estación de Trenes Zárate',
+    shortName: 'Zárate',
+    lat: -34.097614,
+    lng: -59.038284,
+    zone: 'Zárate',
+    categoryName: 'Terminal Ferroviaria · Línea Mitre',
+    details: 'Cabecera Norte · Ramal Villa Ballester – Zárate (Línea Mitre)',
+    isMainHub: true,
+  },
+  {
+    id: 'km83',
+    name: 'Estación Km. 83',
+    shortName: 'Km. 83',
+    lat: -34.160245,
+    lng: -58.977271,
+    zone: 'Zárate / Acceso',
+    categoryName: 'Estación Ferroviaria · Línea Mitre',
+    details: 'Parada intermedia Km. 83 entre Zárate y Campana',
+  },
+  {
+    id: 'campana',
+    name: 'Estación de Trenes de Campana',
+    shortName: 'Campana',
+    lat: -34.156839,
+    lng: -58.958484,
+    zone: 'Campana',
+    categoryName: 'Estación Ferroviaria · Línea Mitre',
+    details: 'Ferrocarril Mitre (Ramal Villa Ballester – Zárate) · Conexión directa con Línea 228',
+    isMainHub: true,
+  },
+  {
+    id: 'otamendi',
+    name: 'Estación Otamendi',
+    shortName: 'Otamendi',
+    lat: -34.222221,
+    lng: -58.896640,
+    zone: 'Campana Sur / Otamendi',
+    categoryName: 'Estación Ferroviaria · Línea Mitre',
+    details: 'Estación Ing. Rómulo Otamendi · Reserva Natural Ciervo de los Pantanos',
+  },
+  {
+    id: 'rio_lujan',
+    name: 'Estación Río Luján',
+    shortName: 'Río Luján',
+    lat: -34.278834,
+    lng: -58.890382,
+    zone: 'Campana / Río Luján',
+    categoryName: 'Estación Ferroviaria · Línea Mitre',
+    details: 'Parada Río Luján · Ramal Villa Ballester – Zárate',
+  },
+  {
+    id: 'escobar',
+    name: 'Estación Escobar',
+    shortName: 'Escobar',
+    lat: -34.349756,
+    lng: -58.794817,
+    zone: 'Belén de Escobar',
+    categoryName: 'Estación Ferroviaria · Línea Mitre',
+    details: 'Cabecera intermedia (servicios cortos y directos Zárate – V. Ballester)',
+    isMainHub: true,
+  },
+  {
+    id: 'maschwitz',
+    name: 'Estación Maschwitz',
+    shortName: 'Maschwitz',
+    lat: -34.383197,
+    lng: -58.736030,
+    zone: 'Ingeniero Maschwitz',
+    categoryName: 'Estación Ferroviaria · Línea Mitre',
+    details: 'Estación Ing. Maschwitz · Partido de Escobar',
+  },
+  {
+    id: 'benavidez',
+    name: 'Estación Benavídez',
+    shortName: 'Benavídez',
+    lat: -34.409506,
+    lng: -58.684462,
+    zone: 'Benavídez / Tigre',
+    categoryName: 'Estación Ferroviaria · Línea Mitre',
+    details: 'Estación Benavídez · Partido de Tigre',
+  },
+  {
+    id: 'pacheco',
+    name: 'Estación Pacheco',
+    shortName: 'Pacheco',
+    lat: -34.456271,
+    lng: -58.619559,
+    zone: 'General Pacheco',
+    categoryName: 'Estación Ferroviaria · Línea Mitre',
+    details: 'Estación General Pacheco · Partido de Tigre',
+  },
+  {
+    id: 'bancalari',
+    name: 'Estación Bancalari',
+    shortName: 'Bancalari',
+    lat: -34.479750,
+    lng: -58.603198,
+    zone: 'Bancalari / Don Torcuato',
+    categoryName: 'Estación Ferroviaria · Línea Mitre',
+    details: 'Estación Bancalari · Empalme ferroviario GBA Norte',
+  },
+  {
+    id: 'villa_ballester',
+    name: 'Estación V. Ballester',
+    shortName: 'V. Ballester',
+    lat: -34.550483,
+    lng: -58.556211,
+    zone: 'Villa Ballester',
+    categoryName: 'Estación Combinación · Línea Mitre',
+    details: 'Cabecera Sur del ramal a Zárate y nodo de combinación eléctrica hacia Retiro',
+    isMainHub: true,
+  },
+  {
+    id: 'retiro',
+    name: 'Comb. a Retiro',
+    shortName: 'Comb. a Retiro',
+    lat: -34.590522,
+    lng: -58.374638,
+    zone: 'Retiro · CABA',
+    categoryName: 'Terminal Retiro · Combinación Mitre',
+    details: 'Combinación en Villa Ballester desde/hacia Estación Terminal Retiro',
+    isMainHub: true,
+    isRetiroCombo: true,
+  },
+];
+
+export type TrainStationProximityTier =
+  | 'arrived_now'
+  | 'imminent'
+  | 'approaching'
+  | 'upcoming'
+  | 'passed'
+  | 'idle';
+
+export function getStopDiffMinutes(
+  timeStr: string | null | undefined,
+  serviceHintHour: number,
+  now: Date = new Date()
+): number | null {
+  if (!timeStr) return null;
+  const stopMins = parseTrainMinutes(timeStr, serviceHintHour);
+  if (stopMins === null) return null;
+  const rawNowMins = now.getHours() * 60 + now.getMinutes();
+  const effectiveNowMins =
+    now.getHours() < 4 && serviceHintHour >= 18 ? rawNowMins + 1440 : rawNowMins;
+  return stopMins - effectiveNowMins;
+}
+
+export function getProximityTier(
+  diffMins: number | null,
+  isLiveTodaySchedule: boolean = true
+): TrainStationProximityTier {
+  if (!isLiveTodaySchedule || diffMins === null) return 'idle';
+  if (diffMins >= -1 && diffMins <= 0) return 'arrived_now'; // Verde titilando (tren en estación)
+  if (diffMins >= 1 && diffMins <= 5) return 'imminent'; // Amarillo titilando (1-5 min)
+  if (diffMins >= 6 && diffMins <= 15) return 'approaching'; // Naranja titilando (6-15 min)
+  if (diffMins >= 16 && diffMins <= 30) return 'upcoming'; // Celeste titilando (16-30 min)
+  if (diffMins < -1 && diffMins >= -120) return 'passed';
+  return 'idle';
+}
+
+export function isServiceInTransitNow(service: TrainServiceEntry, now: Date = new Date()): boolean {
+  const hint = getServiceStartHourHint(service);
+  let minM: number | null = null;
+  let maxM: number | null = null;
+  for (const st of TRAIN_STATIONS_ORDER_ASC) {
+    const t = service.stops[st.id];
+    if (!t) continue;
+    const m = parseTrainMinutes(t, hint);
+    if (m === null) continue;
+    if (minM === null || m < minM) minM = m;
+    if (maxM === null || m > maxM) maxM = m;
+  }
+  if (minM === null || maxM === null) return false;
+  const rawNow = now.getHours() * 60 + now.getMinutes();
+  const effNow = now.getHours() < 4 && hint >= 18 ? rawNow + 1440 : rawNow;
+  return effNow >= minM - 2 && effNow <= maxM + 2;
+}
+
+export interface StationLiveTrigger {
+  service: TrainServiceEntry;
+  timeStr: string;
+  diffMins: number;
+  tier: TrainStationProximityTier;
+}
+
+export interface StationLiveStatus {
+  dayType: TrainDayType;
+  tier: TrainStationProximityTier;
+  activeTrigger: StationLiveTrigger | null;
+  nextHaciaZarate: UpcomingTrainMatch | null;
+  nextHaciaBallester: UpcomingTrainMatch | null;
+}
+
+const TIER_URGENCY_RANK: Record<TrainStationProximityTier, number> = {
+  arrived_now: 5,
+  imminent: 4,
+  approaching: 3,
+  upcoming: 2,
+  passed: 1,
+  idle: 0,
+};
+
+function findNextRetiroCombo(
+  dayType: TrainDayType,
+  direction: TrainDirection,
+  now: Date
+): UpcomingTrainMatch | null {
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  const candidates = ALL_MITRE_TRAIN_SERVICES.filter(
+    (s) => s.dayType === dayType && s.direction === direction && Boolean(s.retiroTime)
+  );
+  let best: UpcomingTrainMatch | null = null;
+  for (const s of candidates) {
+    const tStr = s.retiroTime;
+    if (!tStr) continue;
+    const hint = getServiceStartHourHint(s);
+    const tMins = parseTrainMinutes(tStr, hint);
+    if (tMins === null) continue;
+    const diff = tMins - nowMinutes;
+    if (diff >= 0 && (!best || diff < best.minutesUntil)) {
+      best = {
+        service: s,
+        stationTime: tStr,
+        minutesUntil: diff,
+        combo: getRetiroComboSuggestion(s),
+      };
+    }
+  }
+  if (!best && candidates.length > 0) {
+    const first = candidates[0];
+    const tStr = first.retiroTime!;
+    const tMins = parseTrainMinutes(tStr, getServiceStartHourHint(first)) ?? 0;
+    return {
+      service: first,
+      stationTime: tStr,
+      minutesUntil: 1440 - nowMinutes + tMins,
+      combo: getRetiroComboSuggestion(first),
+    };
+  }
+  return best;
+}
+
+export function getStationLiveStatus(
+  stationId: string,
+  now: Date = new Date()
+): StationLiveStatus {
+  const dayType = getDefaultTrainDayType(now);
+  const todaysServices = ALL_MITRE_TRAIN_SERVICES.filter((s) => s.dayType === dayType);
+
+  let bestTrigger: StationLiveTrigger | null = null;
+
+  for (const service of todaysServices) {
+    const timeStr = stationId === 'retiro' ? service.retiroTime : service.stops[stationId];
+    if (!timeStr) continue;
+    const hint = getServiceStartHourHint(service);
+    const diffMins = getStopDiffMinutes(timeStr, hint, now);
+    const tier = getProximityTier(diffMins, true);
+    if (tier === 'idle' || tier === 'passed' || diffMins === null) continue;
+
+    if (
+      !bestTrigger ||
+      TIER_URGENCY_RANK[tier] > TIER_URGENCY_RANK[bestTrigger.tier] ||
+      (TIER_URGENCY_RANK[tier] === TIER_URGENCY_RANK[bestTrigger.tier] &&
+        Math.abs(diffMins) < Math.abs(bestTrigger.diffMins))
+    ) {
+      bestTrigger = { service, timeStr, diffMins, tier };
+    }
+  }
+
+  const nextHaciaZarate =
+    stationId === 'retiro'
+      ? findNextRetiroCombo(dayType, 'hacia_zarate', now)
+      : findNextTrainForStation(dayType, 'hacia_zarate', stationId, now);
+
+  const nextHaciaBallester =
+    stationId === 'retiro'
+      ? findNextRetiroCombo(dayType, 'hacia_ballester', now)
+      : findNextTrainForStation(dayType, 'hacia_ballester', stationId, now);
+
+  return {
+    dayType,
+    tier: bestTrigger ? bestTrigger.tier : 'idle',
+    activeTrigger: bestTrigger,
+    nextHaciaZarate,
+    nextHaciaBallester,
+  };
+}
+
+export interface ActiveInTransitTrain {
+  service: TrainServiceEntry;
+  fromStation: MitreRouteStationCoord;
+  toStation: MitreRouteStationCoord;
+  lat: number;
+  lng: number;
+  progress: number;
+  fromTime: string;
+  toTime: string;
+}
+
+export function getActiveInTransitTrainsOnTrack(
+  now: Date = new Date()
+): ActiveInTransitTrain[] {
+  const dayType = getDefaultTrainDayType(now);
+  const todaysServices = ALL_MITRE_TRAIN_SERVICES.filter((s) => s.dayType === dayType);
+  const stationById = new Map(MITRE_FULL_ROUTE_STATIONS.map((st) => [st.id, st]));
+  const result: ActiveInTransitTrain[] = [];
+
+  for (const service of todaysServices) {
+    const orderedStops =
+      service.direction === 'hacia_zarate'
+        ? TRAIN_STATIONS_ORDER_ASC
+        : [...TRAIN_STATIONS_ORDER_ASC].reverse();
+    const hint = getServiceStartHourHint(service);
+    const rawNow = now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60;
+    const effNow = now.getHours() < 4 && hint >= 18 ? rawNow + 1440 : rawNow;
+
+    const scheduled: Array<{ station: MitreRouteStationCoord; mins: number; timeStr: string }> = [];
+
+    if (service.direction === 'hacia_zarate' && service.retiroTime) {
+      const retiroCoord = stationById.get('retiro');
+      const rMins = parseTrainMinutes(service.retiroTime, hint);
+      if (retiroCoord && rMins !== null) {
+        scheduled.push({ station: retiroCoord, mins: rMins, timeStr: service.retiroTime });
+      }
+    }
+
+    for (const meta of orderedStops) {
+      const tStr = service.stops[meta.id];
+      const coord = stationById.get(meta.id);
+      if (!tStr || !coord) continue;
+      const mins = parseTrainMinutes(tStr, hint);
+      if (mins === null) continue;
+      scheduled.push({ station: coord, mins, timeStr: tStr });
+    }
+
+    if (scheduled.length < 2) continue;
+
+    for (let i = 0; i < scheduled.length - 1; i++) {
+      const a = scheduled[i];
+      const b = scheduled[i + 1];
+      if (effNow >= a.mins && effNow <= b.mins) {
+        const span = Math.max(1, b.mins - a.mins);
+        const progress = Math.max(0, Math.min(1, (effNow - a.mins) / span));
+        result.push({
+          service,
+          fromStation: a.station,
+          toStation: b.station,
+          lat: a.station.lat + (b.station.lat - a.station.lat) * progress,
+          lng: a.station.lng + (b.station.lng - a.station.lng) * progress,
+          progress,
+          fromTime: a.timeStr,
+          toTime: b.timeStr,
+        });
+        break;
+      }
+    }
+  }
+
+  return result;
+}
+

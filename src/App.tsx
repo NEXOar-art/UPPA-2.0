@@ -838,7 +838,7 @@ export default function App() {
 
   // Active View / Tabs ('tren' se activa únicamente al presionar Estación Campana o Zárate en el mapa)
   const [activeTab, setActiveTab] = useState<'map' | 'taxi' | 'chat' | 'admin' | 'tren'>('map');
-  const [selectedTrainStation, setSelectedTrainStation] = useState<'campana' | 'zarate'>('campana');
+  const [selectedTrainStation, setSelectedTrainStation] = useState<string>('campana');
   const activeTabRef = useRef(activeTab);
   activeTabRef.current = activeTab;
   const [selectedEvent, setSelectedEvent] = useState<MapEvent | null>(null);

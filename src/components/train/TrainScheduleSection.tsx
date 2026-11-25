@@ -31,7 +31,7 @@ import {
 } from '../../data/trenMitreData';
 
 interface TrainScheduleSectionProps {
-  initialStationId?: 'campana' | 'zarate';
+  initialStationId?: string;
   onBackToMap: () => void;
 }
 
@@ -44,7 +44,7 @@ export const TrainScheduleSection: React.FC<TrainScheduleSectionProps> = ({
 }) => {
   const [dayType, setDayType] = useState<TrainDayType>(() => getDefaultTrainDayType());
   const [direction, setDirection] = useState<TrainDirection>(() =>
-    initialStationId === 'zarate' ? 'hacia_ballester' : 'hacia_ballester'
+    initialStationId === 'villa_ballester' ? 'hacia_zarate' : 'hacia_ballester'
   );
   const [focusedStationId, setFocusedStationId] = useState<string>(initialStationId);
   const [onlyRetiroCombo, setOnlyRetiroCombo] = useState<boolean>(false);
