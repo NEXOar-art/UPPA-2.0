@@ -1240,6 +1240,13 @@ export default function App() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isHeaderMenuOpen, isProfileDropdownOpen]);
 
+  // Al desplegar "Más opciones" (3 puntos) o "Mi Perfil", ocultar automáticamente el panel "Opciones de transporte"
+  useEffect(() => {
+    if (isHeaderMenuOpen || isProfileDropdownOpen) {
+      window.dispatchEvent(new CustomEvent('uppa-minimize-bottom-sheet'));
+    }
+  }, [isHeaderMenuOpen, isProfileDropdownOpen]);
+
   // Limpieza periódica de eventos push en pantalla al vencer su exposición (4.5s chat / 7s reportes)
   useEffect(() => {
     const cleaner = setInterval(() => {
@@ -3180,6 +3187,26 @@ export default function App() {
                   <TrainFront className="w-4 h-4 text-sky-400 shrink-0" />
                   <span>Servicio Inteligente de Trenes</span>
                 </button>
+
+                <button
+                  onClick={() => {
+                    setIsHeaderMenuOpen(false);
+                    setIsHeaderMenuHovered(false);
+                    setActiveTab('chat');
+                  }}
+                  title="Chat Comunitario en tiempo real"
+                  className="w-full min-h-[44px] text-left px-3 py-2.5 rounded-xl text-xs font-black text-white bg-[#101114] hover:border-[#FFF19A] border border-white/20 flex items-center justify-between gap-2.5 transition-all cursor-pointer"
+                >
+                  <span className="flex items-center gap-2.5">
+                    <MessageSquare className="w-4 h-4 text-[#FFF19A] shrink-0" />
+                    <span>Chat Comunitario</span>
+                  </span>
+                  {communityChatList.length > 0 && (
+                    <span className="px-1.5 py-0.5 rounded-md bg-[#B7F36B]/15 text-[#B7F36B] border border-[#B7F36B]/40 text-[10px] font-mono font-bold">
+                      {communityChatList.length}
+                    </span>
+                  )}
+                </button>
               </div>
             )}
           </div>
@@ -4050,6 +4077,12 @@ export default function App() {
                 pendingRequestsCount={activePendingTransportRequests.length}
                 userLocation={userLocation}
                 hasActivePassengerTracking={Boolean(liveActiveTrackingPassenger)}
+                isExternalMenuOpen={isHeaderMenuOpen || isProfileDropdownOpen}
+                onRequestCloseExternalMenus={() => {
+                  setIsHeaderMenuOpen(false);
+                  setIsHeaderMenuHovered(false);
+                  setIsProfileDropdownOpen(false);
+                }}
               />
             </div>
 

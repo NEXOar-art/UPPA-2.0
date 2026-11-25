@@ -51,6 +51,8 @@ interface MobilityBottomSheetProps {
   pendingRequestsCount?: number;
   userLocation?: { lat: number; lng: number } | null;
   hasActivePassengerTracking?: boolean;
+  isExternalMenuOpen?: boolean;
+  onRequestCloseExternalMenus?: () => void;
 }
 
 export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
@@ -68,6 +70,8 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
   pendingRequestsCount = 0,
   userLocation = null,
   hasActivePassengerTracking = false,
+  isExternalMenuOpen = false,
+  onRequestCloseExternalMenus,
 }) => {
   const [isMinimized, setIsMinimized] = useState(hasActivePassengerTracking);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -85,6 +89,13 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
       setIsMinimized(true);
     }
   }, [hasActivePassengerTracking]);
+
+  useEffect(() => {
+    if (isExternalMenuOpen) {
+      setIsExpanded(false);
+      setIsMinimized(true);
+    }
+  }, [isExternalMenuOpen]);
 
   useEffect(() => {
     const handleVisibility = (e: Event) => {
@@ -625,6 +636,7 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
               onClick={() => {
                 playMicroSound('ui_tap');
                 setHoveredJoystickBtn(null);
+                onRequestCloseExternalMenus?.();
                 setIsMinimized(false);
                 setDragOffsetY(0);
               }}
