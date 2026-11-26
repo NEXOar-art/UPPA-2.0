@@ -258,15 +258,18 @@ export interface MultiSamplePrecisionResult {
   lng: number;
   accuracyMeters: number;
   speedKmH: number;
+  rawSpeedMps: number | null;
   headingDeg: number | null;
   headingCardinal: string;
   samplesCollected: number;
   discardedCount: number;
   inferredDirection: 'hacia_zarate' | 'hacia_malvinas' | null;
+  usedRealGps: boolean;
+  geoErrorCode: number | null;
 }
 
 /**
- * Solicita 6 lecturas GPS de alta precisión (watchPosition + ráfagas con maximumAge: 0 + muestras recientes
+ * Solicita 6 lecturas GPS de alta precisión (watchPosition + ráfagas con maximumAge: 0 + muestras muy recientes
  * en segundo plano), descarta las menos exactas y selecciona automáticamente LA MEJOR LECTURA (menor error en metros),
  * preservando la velocidad y el rumbo continuo calculados en segundo plano.
  */
@@ -279,7 +282,12 @@ export async function captureMostPreciseGpsReading(options: {
   previousReport?: { lat: number; lng: number; createdAtMs?: number } | null;
   maxDurationMs?: number;
   targetSamples?: number;
-  onProgress?: (info: { samplesCollected: number; bestAccuracyMeters: number }) => void;
+  onProgress?: (info: {
+    samplesCollected: number;
+    bestAccuracyMeters: number;
+    speedKmH: number;
+    headingCardinal: string;
+  }) => void;
 }): Promise<MultiSamplePrecisionResult> {
   const {
     fallbackLat,
@@ -288,17 +296,18 @@ export async function captureMostPreciseGpsReading(options: {
     fallbackSpeedMps = null,
     fallbackHeadingDeg = null,
     previousReport = null,
-    maxDurationMs = 2400,
+    maxDurationMs = 2800,
     targetSamples = 6,
     onProgress,
   } = options;
 
   const now = Date.now();
   const candidates: GpsPositionSample[] = [];
+  let geoErrorCode: number | null = null;
 
-  // Incluir hasta 2 lecturas muy recientes (< 3s) del seguimiento continuo en segundo plano
+  // Incluir hasta 2 lecturas reales muy recientes (< 5s y <= 200m) del seguimiento continuo en segundo plano
   const recentBackground = gpsSampleBuffer
-    .filter((s) => now - s.timestamp <= 3000)
+    .filter((s) => now - s.timestamp <= 5000 && s.accuracy <= 200)
     .slice(-2);
   candidates.push(...recentBackground);
 
@@ -337,6 +346,8 @@ export async function captureMostPreciseGpsReading(options: {
       const pushPosition = (pos: GeolocationPosition) => {
         if (finished) return;
         const { latitude, longitude, accuracy, speed, heading } = pos.coords;
+        if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
+
         const ts = pos.timestamp || Date.now();
         recordGpsSample({
           latitude,
@@ -352,11 +363,19 @@ export async function captureMostPreciseGpsReading(options: {
         }
 
         const best = getBestCandidate();
+        const liveSpeed = calculateRealBusSpeed(
+          best?.lat ?? latitude,
+          best?.lng ?? longitude,
+          previousReport
+        );
+        const liveHeading = calculateRealBusHeading();
         onProgress?.({
           samplesCollected: Math.min(targetSamples, candidates.length),
           bestAccuracyMeters: best
             ? Math.round(best.accuracy)
             : Math.round(accuracy || fallbackAccuracy),
+          speedKmH: liveSpeed.speedKmH,
+          headingCardinal: liveHeading.cardinalLabel,
         });
 
         if (candidates.length >= targetSamples) {
@@ -364,20 +383,29 @@ export async function captureMostPreciseGpsReading(options: {
         }
       };
 
+      const handleGeoError = (err: GeolocationPositionError) => {
+        if (err && typeof err.code === 'number') {
+          geoErrorCode = err.code;
+          if (err.code === 1 && candidates.length === 0) {
+            finish();
+          }
+        }
+      };
+
       const geoOpts: PositionOptions = {
         enableHighAccuracy: true,
         maximumAge: 0,
-        timeout: Math.max(1200, maxDurationMs - 200),
+        timeout: Math.max(1500, maxDurationMs - 200),
       };
 
       try {
-        watchId = navigator.geolocation.watchPosition(pushPosition, () => {}, geoOpts);
-        navigator.geolocation.getCurrentPosition(pushPosition, () => {}, geoOpts);
+        watchId = navigator.geolocation.watchPosition(pushPosition, handleGeoError, geoOpts);
+        navigator.geolocation.getCurrentPosition(pushPosition, handleGeoError, geoOpts);
         pollTimer = window.setInterval(() => {
           if (!finished && candidates.length < targetSamples) {
-            navigator.geolocation.getCurrentPosition(pushPosition, () => {}, geoOpts);
+            navigator.geolocation.getCurrentPosition(pushPosition, handleGeoError, geoOpts);
           }
-        }, 320);
+        }, 350);
       } catch {
         finish();
         return;
@@ -394,26 +422,29 @@ export async function captureMostPreciseGpsReading(options: {
     const minAcc = sorted[0].accuracy;
     const accuracyCutoff = Math.max(minAcc * 1.5, minAcc + 10);
     const filtered = sorted.filter((s) => s.accuracy <= accuracyCutoff);
-    // Quedarnos con la mitad más precisa cuando hay múltiples muestras válidas
     const topSliceCount = Math.max(1, Math.ceil(filtered.length / 2));
     retained = filtered.slice(0, topSliceCount);
   }
 
+  const usedRealGps = candidates.length > 0;
   const discardedCount = Math.max(0, candidates.length - retained.length);
   const best = retained[0] || sorted[0] || null;
   const chosenLat = best ? best.lat : fallbackLat;
   const chosenLng = best ? best.lng : fallbackLng;
   const chosenAccuracy = best ? Math.round(best.accuracy) : Math.round(fallbackAccuracy);
+  const chosenSpeedMps = best ? best.speedMps : fallbackSpeedMps;
 
-  // Asegurar que la mejor lectura quede registrada como referencia más precisa
-  recordGpsSample({
-    latitude: chosenLat,
-    longitude: chosenLng,
-    speed: best ? best.speedMps : fallbackSpeedMps,
-    heading: best ? best.headingDeg : fallbackHeadingDeg,
-    accuracy: chosenAccuracy,
-    timestamp: Date.now(),
-  });
+  // Solo registrar en el buffer continuo cuando proviene de una lectura GPS real del dispositivo
+  if (best) {
+    recordGpsSample({
+      latitude: chosenLat,
+      longitude: chosenLng,
+      speed: best.speedMps,
+      heading: best.headingDeg,
+      accuracy: chosenAccuracy,
+      timestamp: Date.now(),
+    });
+  }
 
   const speedRes = calculateRealBusSpeed(chosenLat, chosenLng, previousReport);
   const headingRes = calculateRealBusHeading();
@@ -424,10 +455,13 @@ export async function captureMostPreciseGpsReading(options: {
     lng: chosenLng,
     accuracyMeters: chosenAccuracy,
     speedKmH: speedRes.speedKmH,
+    rawSpeedMps: chosenSpeedMps,
     headingDeg: finalHeadingDeg,
     headingCardinal: formatHeadingCardinal(finalHeadingDeg),
-    samplesCollected: Math.max(1, candidates.length),
+    samplesCollected: candidates.length,
     discardedCount,
     inferredDirection: headingRes.inferredDirection,
+    usedRealGps,
+    geoErrorCode,
   };
 }

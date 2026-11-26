@@ -89,7 +89,7 @@ export const EventBottomSheet: React.FC<EventBottomSheetProps> = ({
 
         {/* Bloque especial para Ubicación de Colectivo Ahora */}
         {isBusLocation && (
-          <div className="p-3 rounded-xl bg-[#101114] border border-[#FFF19A]/45 text-xs space-y-1.5">
+          <div className="p-3 rounded-xl bg-[#101114] border border-[#FFF19A]/45 text-xs space-y-2">
             <div className="flex items-center justify-between flex-wrap gap-1.5">
               <span className="font-bold text-white flex items-center gap-1.5">
                 <span>Dirección:</span>
@@ -97,9 +97,21 @@ export const EventBottomSheet: React.FC<EventBottomSheetProps> = ({
                   {event.direction === 'hacia_zarate' ? '➡️ Hacia Zárate' : '⬅️ Hacia Malvinas'}
                 </span>
               </span>
-              {event.velocidadKmH && (
+              {event.velocidadKmH !== undefined && (
                 <span className="font-mono text-[#101114] font-black bg-[#B7F36B] px-2 py-0.5 rounded-md">
                   {event.velocidadKmH} km/h
+                </span>
+              )}
+            </div>
+            <div className="flex items-center flex-wrap gap-1.5 text-[10.5px] font-mono">
+              {event.precisionMetros !== undefined && (
+                <span className="px-2 py-0.5 rounded-md bg-[#202329] border border-white/15 text-[#FFF19A] font-bold">
+                  📡 Precisión ±{event.precisionMetros}m{event.lecturasGps ? ` (${event.lecturasGps} lect.)` : ''}
+                </span>
+              )}
+              {event.rumboCardinal && event.rumboCardinal !== '—' && (
+                <span className="px-2 py-0.5 rounded-md bg-[#202329] border border-sky-400/35 text-sky-300 font-bold">
+                  🧭 Rumbo {event.rumboCardinal}
                 </span>
               )}
             </div>

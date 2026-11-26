@@ -82,6 +82,7 @@ import {
   onPushNotification,
   triggerInAppPushNotification,
   crearReporte,
+  actualizarCalleReporte,
   subscribeToDriversDisponibilidad,
   getDriversDisponibilidadMap,
   setDriverDisponibilidad,
@@ -1338,11 +1339,12 @@ export default function App() {
           })
           .filter((ev) => !isMapEventExpired(ev, now));
 
-        // Deduplicación de eventos en mapa: si se repiten en la misma zona/tipo, se toma 1
+        // Deduplicación de eventos en mapa: preservar ambos sentidos y conservar siempre el reporte más reciente
         const uniqueReportsMap = new Map<string, MapEvent>();
         mapped.forEach((ev) => {
-          const key = `${ev.type}_${ev.lat.toFixed(3)}_${ev.lng.toFixed(3)}`;
-          if (!uniqueReportsMap.has(key)) {
+          const key = `${ev.type}_${ev.direction || ''}_${ev.lat.toFixed(4)}_${ev.lng.toFixed(4)}`;
+          const existing = uniqueReportsMap.get(key);
+          if (!existing || (ev.createdAtMs || 0) > (existing.createdAtMs || 0)) {
             uniqueReportsMap.set(key, ev);
           }
         });
@@ -1995,26 +1997,6 @@ export default function App() {
       showToast(`✅ ${created.title} registrado en el mapa`);
     }
 
-    // Obtener la dirección exacta mediante geocodificación inversa (Nominatim / Photon) para hover, reporte y chat
-    let resolvedStreet = quickStreetCandidate;
-    if (!resolvedStreet || isFallbackZoneAddress(resolvedStreet)) {
-      try {
-        resolvedStreet = await reverseGeocode(newEventData.lat, newEventData.lng);
-      } catch {
-        resolvedStreet = `${newEventData.lat.toFixed(4)}, ${newEventData.lng.toFixed(4)}`;
-      }
-    }
-
-    if (resolvedStreet && !isCoordinateAddress(resolvedStreet)) {
-      setResolvedEventStreets((prev) => ({ ...prev, [created.id]: resolvedStreet! }));
-      setEvents((prev) =>
-        prev.map((ev) => (ev.id === created.id ? { ...ev, streetAddress: resolvedStreet } : ev))
-      );
-      setSelectedEvent((prev) =>
-        prev && prev.id === created.id ? { ...prev, streetAddress: resolvedStreet } : prev
-      );
-    }
-
     const firestoreType: any =
       newEventData.type === 'bus_location'
         ? 'ubicacion_colectivo'
@@ -2032,13 +2014,14 @@ export default function App() {
         ? 'corte'
         : 'alerta';
 
-    crearReporte({
+    // Guardar en Firebase Firestore inmediatamente para distribuir en vivo al mapa de todos los pasajeros
+    const firestoreReportPromise = crearReporte({
       usuarioId: currentUser.id || 'usr-anon',
       nombreUsuario: currentUser.name || 'Vecino UPPA',
       tipo: firestoreType,
       descripcion: newEventData.description || newEventData.title,
       ubicacion: { lat: newEventData.lat, lng: newEventData.lng },
-      calle: resolvedStreet,
+      calle: quickStreetCandidate,
       ruta: newEventData.routeId === 'route-vigalondo-mcdonalds' ? 'vigalondo-mcdonalds' : 'campana-zarate',
       sentido: newEventData.direction === 'hacia_zarate' ? 'hacia_zarate' : 'hacia_malvinas',
       velocidadKmH: newEventData.velocidadKmH,
@@ -2047,7 +2030,35 @@ export default function App() {
       precisionMetros: newEventData.precisionMetros,
       lecturasGps: newEventData.lecturasGps,
       expiresAtMs: created.expiresAtMs,
-    }).catch((err) => console.warn('Firestore report write notice:', err));
+    }).catch((err) => {
+      console.warn('Firestore report write notice:', err);
+      return null;
+    });
+
+    // Obtener la dirección exacta mediante geocodificación inversa (Nominatim / Photon) en paralelo y actualizar Firestore + UI
+    let resolvedStreet = quickStreetCandidate;
+    if (!resolvedStreet || isFallbackZoneAddress(resolvedStreet)) {
+      try {
+        resolvedStreet = await reverseGeocode(newEventData.lat, newEventData.lng);
+      } catch {
+        resolvedStreet = `${newEventData.lat.toFixed(4)}, ${newEventData.lng.toFixed(4)}`;
+      }
+    }
+
+    if (resolvedStreet && !isCoordinateAddress(resolvedStreet)) {
+      setResolvedEventStreets((prev) => ({ ...prev, [created.id]: resolvedStreet! }));
+      setEvents((prev) =>
+        prev.map((ev) => (ev.id === created.id ? { ...ev, streetAddress: resolvedStreet } : ev))
+      );
+      setSelectedEvent((prev) =>
+        prev && prev.id === created.id ? { ...prev, streetAddress: resolvedStreet } : prev
+      );
+      firestoreReportPromise.then((savedReport) => {
+        if (savedReport?.id && resolvedStreet) {
+          actualizarCalleReporte(savedReport.id, resolvedStreet);
+        }
+      });
+    }
 
     // Publicar automáticamente el evento en el chat comunitario con la dirección exacta obtenida por geocodificación inversa
     const streetChatPart = resolvedStreet
@@ -3816,6 +3827,8 @@ export default function App() {
                   setSelectedTrainStation(stationId);
                   setActiveTab('tren');
                 }}
+                onUpdateUserLocation={(loc) => setUserLocation(loc)}
+                onRequestActivateGps={() => setIsLocationModalOpen(true)}
               />
             </div>
 

@@ -144,6 +144,8 @@ interface TeslaMapProps {
   focusedStop?: BusStop | null;
   hideTopBarButtons?: boolean;
   onOpenTrainSection?: (stationId: string) => void;
+  onUpdateUserLocation?: (loc: UserLocation) => void;
+  onRequestActivateGps?: () => void;
 }
 
 export const TRANSIT_EVENT_TYPES: {
@@ -316,6 +318,8 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
   focusedStop,
   hideTopBarButtons = false,
   onOpenTrainSection,
+  onUpdateUserLocation,
+  onRequestActivateGps,
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
@@ -383,6 +387,8 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
   const [gpsCalibrationStatus, setGpsCalibrationStatus] = useState<{
     samples: number;
     bestAccuracy: number;
+    speedKmH?: number;
+    headingCardinal?: string;
   } | null>(null);
   const [selectedStop, setSelectedStop] = useState<{ stop: BusStop; route: TransitRoute } | null>(null);
   const userLocationRef = useRef<UserLocation | null | undefined>(userLocation);
@@ -597,39 +603,57 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
   ) => {
     if (gpsCalibrationStatus) return;
 
-    let fallbackLat = userLocation?.lat;
-    let fallbackLng = userLocation?.lng;
-
-    if (!fallbackLat || !fallbackLng) {
-      if (mapInstanceRef.current) {
-        const center = mapInstanceRef.current.getCenter();
-        fallbackLat = center.lat;
-        fallbackLng = center.lng;
-      } else {
-        fallbackLat = -34.1683;
-        fallbackLng = -58.9592;
-      }
-    }
-
-    // Buscar si existe un reporte previo de colectivo para deducir velocidad real entre paradas/puntos
-    const previousBusReport = events.find(
-      (e) => e.type === 'bus_location' && e.createdAtMs && Date.now() - e.createdAtMs < 360000
+    const currentLoc = userLocationRef.current;
+    const hasRealUserGps = Boolean(
+      currentLoc &&
+        !currentLoc.isSimulated &&
+        typeof currentLoc.lat === 'number' &&
+        typeof currentLoc.lng === 'number'
+    );
+    const hasRecentRealUserGps = Boolean(
+      hasRealUserGps &&
+        (!currentLoc?.timestamp || Date.now() - currentLoc.timestamp <= 45000) &&
+        (currentLoc?.accuracy ?? 9999) <= 1500
     );
 
+    const fallbackLat = hasRealUserGps ? currentLoc!.lat : 0;
+    const fallbackLng = hasRealUserGps ? currentLoc!.lng : 0;
+    const fallbackAccuracy = hasRealUserGps ? currentLoc!.accuracy || 25 : 9999;
+
+    // Buscar si existe un reporte previo de colectivo del mismo sentido para deducir velocidad real entre puntos
+    const targetDir = overrideDirection || (evOpt.type === 'bus_location' ? busDirection : undefined);
+    const previousBusReport = events.find(
+      (e) =>
+        e.type === 'bus_location' &&
+        e.createdAtMs &&
+        Date.now() - e.createdAtMs < 360000 &&
+        (!targetDir || e.direction === targetDir || e.sentido === targetDir)
+    );
+
+    const initialSpeed = hasRealUserGps
+      ? calculateRealBusSpeed(fallbackLat, fallbackLng, previousBusReport || null).speedKmH
+      : 0;
+    const initialHeading =
+      calculateRealBusHeading().cardinalLabel !== '—'
+        ? calculateRealBusHeading().cardinalLabel
+        : formatHeadingCardinal(hasRealUserGps ? currentLoc?.heading : null);
+
     setGpsCalibrationStatus({
-      samples: 1,
-      bestAccuracy: Math.round(userLocation?.accuracy || 20),
+      samples: hasRecentRealUserGps ? 1 : 0,
+      bestAccuracy: hasRealUserGps ? Math.round(fallbackAccuracy) : 999,
+      speedKmH: initialSpeed,
+      headingCardinal: initialHeading,
     });
 
     let preciseFix;
     try {
-      // Solicitar 6 lecturas GPS de alta precisión, descartar las menos exactas y elegir la mejor lectura
+      // Solicitar 6 lecturas GPS reales de alta precisión, descartar las menos exactas y elegir la mejor lectura
       preciseFix = await captureMostPreciseGpsReading({
         fallbackLat,
         fallbackLng,
-        fallbackAccuracy: userLocation?.accuracy || 20,
-        fallbackSpeedMps: userLocation?.speed ?? null,
-        fallbackHeadingDeg: userLocation?.heading ?? null,
+        fallbackAccuracy,
+        fallbackSpeedMps: hasRealUserGps ? (currentLoc?.speed ?? null) : null,
+        fallbackHeadingDeg: hasRealUserGps ? (currentLoc?.heading ?? null) : null,
         previousReport: previousBusReport
           ? {
               lat: previousBusReport.lat,
@@ -637,12 +661,14 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
               createdAtMs: previousBusReport.createdAtMs,
             }
           : null,
-        maxDurationMs: 2400,
+        maxDurationMs: 2800,
         targetSamples: 6,
-        onProgress: ({ samplesCollected, bestAccuracyMeters }) => {
+        onProgress: ({ samplesCollected, bestAccuracyMeters, speedKmH, headingCardinal }) => {
           setGpsCalibrationStatus({
             samples: samplesCollected,
             bestAccuracy: bestAccuracyMeters,
+            speedKmH,
+            headingCardinal,
           });
         },
       });
@@ -650,8 +676,44 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
       setGpsCalibrationStatus(null);
     }
 
+    const hasValidGpsFix =
+      (preciseFix.usedRealGps || hasRecentRealUserGps) &&
+      Number.isFinite(preciseFix.lat) &&
+      Number.isFinite(preciseFix.lng) &&
+      !(preciseFix.lat === 0 && preciseFix.lng === 0) &&
+      preciseFix.accuracyMeters <= 1500;
+
+    if (!hasValidGpsFix) {
+      const errorMsg =
+        preciseFix.geoErrorCode === 1
+          ? '📡 Permiso de GPS denegado. Activá la ubicación del teléfono para publicar coordenadas reales.'
+          : preciseFix.accuracyMeters > 1500 && preciseFix.usedRealGps
+          ? `📡 Señal GPS muy imprecisa (±${preciseFix.accuracyMeters}m). Activá el GPS de alta precisión para no desorientar a la comunidad.`
+          : '📡 No se detectó GPS real del teléfono. Activá la geolocalización antes de marcar el punto.';
+      setEventRegisteredToast(errorMsg);
+      setTimeout(() => {
+        setEventRegisteredToast(null);
+      }, 5200);
+      onRequestActivateGps?.();
+      return;
+    }
+
     const lat = preciseFix.lat;
     const lng = preciseFix.lng;
+
+    // Sincronizar la posición real del usuario en la app para que el punto propio coincida exacto con el pin publicado
+    if (preciseFix.usedRealGps) {
+      onUpdateUserLocation?.({
+        lat,
+        lng,
+        accuracy: preciseFix.accuracyMeters,
+        speed: preciseFix.rawSpeedMps,
+        heading: preciseFix.headingDeg,
+        address: currentLoc?.address,
+        timestamp: Date.now(),
+        isSimulated: false,
+      });
+    }
 
     const directionToUse: 'hacia_zarate' | 'hacia_malvinas' =
       overrideDirection ||
@@ -712,16 +774,20 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
       }
     } catch {}
 
+    const headingSuffix =
+      preciseFix.headingCardinal && preciseFix.headingCardinal !== '—'
+        ? ` · Rumbo ${preciseFix.headingCardinal}`
+        : '';
     const precisionSuffix = ` · ±${preciseFix.accuracyMeters}m (${preciseFix.samplesCollected} lect.)`;
     const toastMessage =
       evOpt.type === 'bus_location'
-        ? `¡📍 Ubicación hacia ${dirLabel} (${preciseFix.speedKmH} km/h${precisionSuffix}) registrada!`
+        ? `¡📍 Colectivo hacia ${dirLabel} · ${preciseFix.speedKmH} km/h${headingSuffix}${precisionSuffix}!`
         : `¡${evOpt.icon} ${evOpt.label} (${precisionSuffix.replace(' · ', '')}) registrado!`;
 
     setEventRegisteredToast(toastMessage);
     setTimeout(() => {
       setEventRegisteredToast(null);
-    }, 4500);
+    }, 4800);
 
     setEventCustomNote('');
     setIsEventsPanelOpen(false);
@@ -1457,12 +1523,31 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
     });
 
     const userMarker = L.marker([userLocation.lat, userLocation.lng], { icon: beaconIcon }).addTo(layer);
-    if (isDriverMode) {
-      userMarker.bindTooltip(
-        isDriverOcupado ? 'Tu móvil · OCUPADO' : 'Tu móvil · DISPONIBLE',
-        { direction: 'top', offset: [0, -10], className: 'uppa-map-tooltip' }
-      );
-    }
+    const speedKmH =
+      userLocation.speed != null && Number.isFinite(userLocation.speed) && userLocation.speed > 0
+        ? Math.round(userLocation.speed * 3.6)
+        : 0;
+    const headingText = formatHeadingCardinal(userLocation.heading);
+    const accText = userLocation.accuracy ? `±${Math.round(userLocation.accuracy)}m` : '±15m';
+    const baseRoleLabel = isDriverMode
+      ? isDriverOcupado
+        ? 'Tu móvil · OCUPADO'
+        : 'Tu móvil · DISPONIBLE'
+      : userLocation.isSimulated
+      ? 'Ubicación de referencia (Activá GPS)'
+      : 'Tu ubicación GPS en vivo';
+    const telemetryLine = `${accText}${speedKmH > 0 ? ` · ${speedKmH} km/h` : ''}${
+      headingText && headingText !== '—' ? ` · Rumbo ${headingText}` : ''
+    }`;
+    userMarker.bindTooltip(
+      `<div style="font-size:11px;line-height:1.3;">
+        <div style="font-weight:900;color:#FFFFFF;">${baseRoleLabel}</div>
+        <div style="font-size:9.5px;font-family:monospace;color:${
+          userLocation.isSimulated ? '#FFF19A' : '#B7F36B'
+        };margin-top:2px;">📡 ${telemetryLine}</div>
+      </div>`,
+      { direction: 'top', offset: [0, -10], className: 'uppa-map-tooltip' }
+    );
   }, [userLocation, isDriverMode, isDriverOnline, driverDisponibilidad]);
 
   const handleClearStopTrajectory = () => {
@@ -1803,11 +1888,23 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
         const badgeBorder = isZarateDir ? 'border-red-400/80' : 'border-blue-400/80';
         const badgeText = isZarateDir ? 'text-red-200' : 'text-blue-200';
 
+        if (ev.precisionMetros && ev.precisionMetros <= 120) {
+          L.circle([ev.lat, ev.lng], {
+            radius: ev.precisionMetros,
+            color: isZarateDir ? '#f87171' : '#60a5fa',
+            fillColor: isZarateDir ? '#ef4444' : '#3b82f6',
+            fillOpacity: isSelected ? 0.14 : 0.06,
+            weight: 1,
+            dashArray: '3 3',
+            interactive: false,
+          }).addTo(layer);
+        }
+
         eventIcon = L.divIcon({
           className: 'custom-bus-location-marker',
           html: `
-            <div class="relative flex flex-col items-center justify-center cursor-pointer group" style="transform: translate(-50%, -50%);">
-              <div class="relative w-9 h-9 rounded-2xl ${pinBg} text-white ${pinShadow} flex items-center justify-center text-lg font-black ring-2 ${pinRing} hover:scale-115 transition-transform">
+            <div class="w-[140px] flex flex-col items-center cursor-pointer group">
+              <div class="relative w-9 h-9 rounded-2xl ${pinBg} text-white ${pinShadow} flex items-center justify-center text-lg font-black ring-2 ${pinRing} hover:scale-110 transition-transform">
                 📍
                 <span class="absolute -bottom-1 -right-1 flex h-3 w-3">
                   <span class="animate-ping absolute inline-flex h-full w-full rounded-full ${pingBg} opacity-80"></span>
@@ -1822,8 +1919,8 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
               </div>
             </div>
           `,
-          iconSize: [110, 48],
-          iconAnchor: [55, 24],
+          iconSize: [140, 58],
+          iconAnchor: [70, 18],
         });
       } else {
         const badge = getEventBadge(ev.type);
@@ -2503,6 +2600,9 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
   };
 
   const handleLocateMe = () => {
+    if (!userLocation || userLocation.isSimulated) {
+      onRequestActivateGps?.();
+    }
     if (!mapInstanceRef.current || !userLocation) return;
     mapInstanceRef.current.flyTo([userLocation.lat, userLocation.lng], 15, { duration: 1.2 });
   };
@@ -2549,11 +2649,40 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
       {/* Map Container Element */}
       <div ref={mapContainerRef} className="w-full h-full z-0" />
 
+      {/* HUD flotante de calibración GPS y telemetría en vivo (visible también al usar joysticks inferiores) */}
+      {gpsCalibrationStatus && (
+        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-[68] pointer-events-none w-[calc(100vw-2rem)] max-w-sm animate-in fade-in slide-in-from-top-3 duration-150">
+          <div className="px-3.5 py-2.5 rounded-2xl bg-[#101114]/95 backdrop-blur-md border-2 border-[#B7F36B] shadow-[0_6px_22px_rgba(0,0,0,0.7)] space-y-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[11px] font-black text-[#FFF19A] flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#B7F36B] animate-ping shrink-0" />
+                <span>Calibrando GPS del teléfono ({gpsCalibrationStatus.samples}/6)</span>
+              </span>
+              <span className="text-[10px] font-mono font-black bg-[#B7F36B] text-[#101114] px-1.5 py-0.5 rounded">
+                ±{gpsCalibrationStatus.bestAccuracy}m
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-2 text-[10px] font-mono text-slate-300 border-t border-white/10 pt-1">
+              <span>
+                Velocidad:{' '}
+                <strong className="text-[#B7F36B]">{gpsCalibrationStatus.speedKmH ?? 0} km/h</strong>
+              </span>
+              <span>
+                Rumbo:{' '}
+                <strong className="text-sky-300">
+                  {gpsCalibrationStatus.headingCardinal || '—'}
+                </strong>
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Toast de confirmación de evento registrado en el mapa */}
-      {eventRegisteredToast && (
-        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-[65] pointer-events-none animate-in fade-in slide-in-from-top-3 duration-200">
+      {eventRegisteredToast && !gpsCalibrationStatus && (
+        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-[65] pointer-events-none max-w-[calc(100vw-2rem)] animate-in fade-in slide-in-from-top-3 duration-200">
           <div className="px-4 py-2.5 rounded-xl bg-[#202329] border-2 border-[#FFF19A] shadow-[3px_3px_0px_#101114] flex items-center gap-2.5 text-xs font-extrabold text-white">
-            <span className="w-2.5 h-2.5 rounded-full bg-[#B7F36B] animate-ping" />
+            <span className="w-2.5 h-2.5 rounded-full bg-[#B7F36B] animate-ping shrink-0" />
             <span>{eventRegisteredToast}</span>
           </div>
         </div>
@@ -3159,20 +3288,34 @@ export const TeslaMap: React.FC<TeslaMapProps> = ({
                 <span className="flex items-center gap-2 truncate">
                   <MapPin className="w-3.5 h-3.5 text-[#FFF19A] shrink-0" />
                   <span className="truncate">
-                    {userLocation?.address ? `Ubicación: ${userLocation.address}` : 'Ubicación actual en corredor Zárate ↔ Campana'}
+                    {!userLocation || userLocation.isSimulated
+                      ? 'GPS real del teléfono pendiente de activar'
+                      : userLocation.address
+                      ? `Ubicación: ${userLocation.address}`
+                      : 'GPS del teléfono conectado'}
                   </span>
                 </span>
-                <span className="text-[10px] font-mono font-black text-[#101114] bg-[#B7F36B] px-2 py-0.5 rounded-md shrink-0">
-                  {gpsCalibrationStatus
-                    ? `Calibrando (${gpsCalibrationStatus.samples}/6)`
-                    : `GPS ±${Math.round(userLocation?.accuracy || 15)}m`}
-                </span>
+                {(!userLocation || userLocation.isSimulated) && !gpsCalibrationStatus && onRequestActivateGps ? (
+                  <button
+                    type="button"
+                    onClick={() => onRequestActivateGps()}
+                    className="text-[10px] font-mono font-black text-[#101114] bg-[#FFF19A] hover:brightness-95 px-2 py-0.5 rounded-md shrink-0 cursor-pointer"
+                  >
+                    Activar GPS
+                  </button>
+                ) : (
+                  <span className="text-[10px] font-mono font-black text-[#101114] bg-[#B7F36B] px-2 py-0.5 rounded-md shrink-0">
+                    {gpsCalibrationStatus
+                      ? `Calibrando (${gpsCalibrationStatus.samples}/6)`
+                      : `GPS ±${Math.round(userLocation?.accuracy || 15)}m`}
+                  </span>
+                )}
               </div>
 
               <div className="flex items-center justify-between gap-2 text-[10.5px] font-mono text-slate-300 border-t border-white/10 pt-1.5">
                 {gpsCalibrationStatus ? (
                   <span className="text-[#FFF19A] font-black animate-pulse">
-                    📡 Evaluando 6 lecturas GPS ({gpsCalibrationStatus.samples}/6) · Mejor lectura: ±{gpsCalibrationStatus.bestAccuracy}m...
+                    📡 Evaluando 6 lecturas ({gpsCalibrationStatus.samples}/6) · ±{gpsCalibrationStatus.bestAccuracy}m · {gpsCalibrationStatus.speedKmH ?? 0} km/h · Rumbo {gpsCalibrationStatus.headingCardinal || '—'}
                   </span>
                 ) : (
                   <>

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { UserLocation, reverseGeocode } from '../../utils/geolocation';
+import { recordGpsSample } from '../../utils/busSpeedEstimator';
 import { Navigation, CheckCircle2, AlertCircle, RefreshCw, Smartphone } from 'lucide-react';
 import { UserRole } from '../../types';
 
@@ -27,36 +28,55 @@ export const LocationPermissionModal: React.FC<LocationPermissionModalProps> = (
     setError(null);
 
     if (!('geolocation' in navigator)) {
-      applyFallbackLocation();
+      setIsDetecting(false);
+      setError('Tu navegador o dispositivo no soporta geolocalización GPS.');
       return;
     }
 
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         const { latitude, longitude, accuracy, speed, heading } = position.coords;
+        const ts = position.timestamp || Date.now();
+        recordGpsSample({
+          latitude,
+          longitude,
+          speed,
+          heading,
+          accuracy,
+          timestamp: ts,
+        });
         const address = await reverseGeocode(latitude, longitude);
 
         const location: UserLocation = {
           lat: latitude,
           lng: longitude,
           accuracy: accuracy || 15,
-          speed: speed || 0,
-          heading: heading || 0,
+          speed: speed ?? 0,
+          heading: heading ?? 0,
           address,
-          timestamp: Date.now(),
+          timestamp: ts,
           isSimulated: false,
         };
 
         setIsDetecting(false);
         onLocationGranted(location);
       },
-      () => {
-        applyFallbackLocation();
+      (geoErr) => {
+        setIsDetecting(false);
+        if (geoErr?.code === 1) {
+          setError(
+            'Permiso de ubicación denegado. Habilitá el GPS en los ajustes del navegador para ubicar tu teléfono con exactitud.'
+          );
+        } else if (geoErr?.code === 2) {
+          setError('No se pudo obtener la señal GPS. Verificá que el GPS del teléfono esté encendido.');
+        } else {
+          setError('Tiempo de espera agotado al buscar satélites GPS. Intentá nuevamente o usá referencia.');
+        }
       },
       {
         enableHighAccuracy: true,
-        timeout: 5500,
-        maximumAge: 2500,
+        timeout: 8000,
+        maximumAge: 0,
       }
     );
   };

@@ -867,6 +867,19 @@ export async function actualizarEstadoReporte(
   }
 }
 
+export async function actualizarCalleReporte(
+  reporteId: string,
+  calle: string
+): Promise<void> {
+  if (!reporteId || reporteId.startsWith('rep-local-') || !calle.trim()) return;
+  try {
+    const docRef = doc(db, COL_REPORTES, reporteId);
+    await updateDoc(docRef, { calle: calle.trim() });
+  } catch {
+    // No bloquear la UX si falla la actualización secundaria de calle
+  }
+}
+
 export async function confirmarReporte(reporteId: string): Promise<void> {
   const path = `${COL_REPORTES}/${reporteId}`;
   try {
