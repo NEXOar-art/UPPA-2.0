@@ -181,6 +181,8 @@ export interface HabilitacionChofer {
   endsAt?: number;
   comprobanteUrl?: string;
   comprobanteFileName?: string;
+  comprobanteSizeBytes?: number;
+  comprobanteSubidoEn?: number;
   alias?: string; // 'luciaveronicag'
   cvu?: string; // '0000003100020253501840'
   titular?: string; // 'Lucia Veronica Gimenez'

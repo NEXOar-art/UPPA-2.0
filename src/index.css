@@ -379,7 +379,11 @@
   flex-shrink: 0;
   width: max-content;
   will-change: transform;
-  animation: marquee-scroll 12s linear infinite;
+  animation: marquee-scroll 18s linear infinite;
+}
+
+.animate-ai-micro-banner:hover {
+  animation-play-state: paused !important;
 }
 
 /* Custom scrollbars matching Graphite & Gray */

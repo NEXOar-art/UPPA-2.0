@@ -2,15 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { TaxiListing, PaymentProof } from '../../types';
 import {
   generateActivationCode,
-  validateAndActivateCode,
-  getAllActivationCodes,
-  getActiveDriverSession,
   ActiveDriverSession,
 } from '../../services/driverActivationService';
-import {
-  solicitarHabilitacionChofer,
-  marcarSolicitudWhatsappEnviada,
-} from '../../services/realtimeFirebaseService';
+import { solicitarHabilitacionChofer } from '../../services/realtimeFirebaseService';
 import { calculateDriverSafetyIndex } from '../../utils/driverSafety';
 import { playMicroSound } from '../../utils/soundEffects';
 import {
@@ -18,8 +12,6 @@ import {
   Copy,
   Check,
   Upload,
-  Clock,
-  Phone,
   Car,
   Bike,
   ShieldCheck,
@@ -30,9 +22,10 @@ import {
   Sparkles,
   CheckCircle2,
   Send,
-  MessageCircle,
   FileCheck2,
   Edit3,
+  Database,
+  Clock,
 } from 'lucide-react';
 
 interface PublishTaxiModalProps {
@@ -48,18 +41,20 @@ interface PublishTaxiModalProps {
   currentUserId: string;
   currentUserName: string;
   currentUserPhone?: string;
+  activePaidEndsAt?: number;
+  hasPendingHabilitacion?: boolean;
 }
 
-const MAX_PROOF_IMAGE_BYTES = 60 * 1024; // 60 KB máximo
+const MAX_PROOF_IMAGE_BYTES = 80 * 1024; // 80 KB máximo para guardar en base de datos
 
-async function processReceiptImageUnder60Kb(file: File): Promise<{
+async function processReceiptImageUnderLimit(file: File): Promise<{
   dataUrl: string;
   finalFile: File;
   sizeBytes: number;
   wasOptimized: boolean;
 }> {
   if (!file.type.startsWith('image/')) {
-    throw new Error('Por favor seleccioná una imagen (JPG, PNG o WebP) que no supere los 60 KB.');
+    throw new Error('Por favor seleccioná una imagen válida (JPG, PNG o WebP) del comprobante.');
   }
 
   const readAsDataUrl = (blob: Blob): Promise<string> =>
@@ -91,11 +86,11 @@ async function processReceiptImageUnder60Kb(file: File): Promise<{
     });
 
     const attempts: Array<{ maxDim: number; quality: number }> = [
-      { maxDim: 960, quality: 0.78 },
-      { maxDim: 800, quality: 0.65 },
-      { maxDim: 640, quality: 0.55 },
-      { maxDim: 520, quality: 0.45 },
-      { maxDim: 420, quality: 0.36 },
+      { maxDim: 1080, quality: 0.8 },
+      { maxDim: 920, quality: 0.7 },
+      { maxDim: 760, quality: 0.6 },
+      { maxDim: 620, quality: 0.5 },
+      { maxDim: 480, quality: 0.38 },
     ];
 
     for (const { maxDim, quality } of attempts) {
@@ -127,7 +122,7 @@ async function processReceiptImageUnder60Kb(file: File): Promise<{
     }
 
     throw new Error(
-      'La imagen seleccionada supera los 60 KB permitidos. Probá con una captura o foto más liviana (máx. 60 KB).'
+      'La imagen seleccionada supera los 80 KB permitidos tras optimizar. Probá con una captura o foto más liviana.'
     );
   } finally {
     try {
@@ -153,6 +148,8 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
   currentUserId,
   currentUserName,
   currentUserPhone = '',
+  activePaidEndsAt = 0,
+  hasPendingHabilitacion = false,
 }) => {
   // Transfer Step Form
   const [selectedHours, setSelectedHours] = useState<number>(12);
@@ -180,7 +177,6 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
   const [formStep, setFormStep] = useState<'form' | 'review-payment' | 'submitted'>('form');
   const [proofPreviewUrl, setProofPreviewUrl] = useState<string | null>(null);
   const [proofDataUrl, setProofDataUrl] = useState<string | null>(null);
-  const [proofFileObj, setProofFileObj] = useState<File | null>(null);
   const [proofSizeBytes, setProofSizeBytes] = useState<number | null>(null);
   const [proofStatusNote, setProofStatusNote] = useState<string | null>(null);
   const [isProcessingProof, setIsProcessingProof] = useState(false);
@@ -189,6 +185,16 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
   const [createdHabId, setCreatedHabId] = useState<string | null>(null);
   const [codeSuccessMsg, setCodeSuccessMsg] = useState<string | null>(null);
   const scrollBodyRef = useRef<HTMLDivElement | null>(null);
+  const [nowTs, setNowTs] = useState<number>(() => Date.now());
+
+  useEffect(() => {
+    if (!isOpen || !activePaidEndsAt || activePaidEndsAt <= Date.now()) return;
+    setNowTs(Date.now());
+    const timer = setInterval(() => {
+      setNowTs(Date.now());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [isOpen, activePaidEndsAt]);
 
   useEffect(() => {
     scrollBodyRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
@@ -196,10 +202,10 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
 
   useEffect(() => {
     if (isOpen) {
+      setNowTs(Date.now());
       setFormStep('form');
       setProofPreviewUrl(null);
       setProofDataUrl(null);
-      setProofFileObj(null);
       setProofSizeBytes(null);
       setProofStatusNote(null);
       setIsProcessingProof(false);
@@ -232,6 +238,18 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
   }, [isOpen, initialVehicleType, currentUserName, currentUserPhone]);
 
   if (!isOpen) return null;
+
+  const remainingActiveMs = activePaidEndsAt > nowTs ? activePaidEndsAt - nowTs : 0;
+  const isTimerActiveLock = remainingActiveMs > 0;
+  const isBlockedFromNewPayment = (isTimerActiveLock || hasPendingHabilitacion) && formStep !== 'submitted';
+
+  const formatTimerRemaining = (ms: number) => {
+    const totalSec = Math.max(0, Math.floor(ms / 1000));
+    const hrs = Math.floor(totalSec / 3600);
+    const mins = Math.floor((totalSec % 3600) / 60);
+    const secs = totalSec % 60;
+    return `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  };
 
   const currentTier = PRESET_TIERS.find((t) => t.hours === selectedHours) || PRESET_TIERS[2];
   const totalAmount = currentTier.price;
@@ -272,73 +290,41 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
     setProofStatusNote(null);
     setIsProcessingProof(true);
     try {
-      const processed = await processReceiptImageUnder60Kb(file);
+      const processed = await processReceiptImageUnderLimit(file);
       setProofFileName(processed.finalFile.name);
-      setProofFileObj(processed.finalFile);
       setProofDataUrl(processed.dataUrl);
       setProofPreviewUrl(processed.dataUrl);
       setProofSizeBytes(processed.sizeBytes);
       const kbStr = (processed.sizeBytes / 1024).toFixed(1);
       setProofStatusNote(
         processed.wasOptimized
-          ? `Imagen optimizada a ${kbStr} KB (≤ 60 KB) lista para enviar.`
-          : `Imagen cargada: ${kbStr} KB (≤ 60 KB) lista para enviar.`
+          ? `Comprobante optimizado (${kbStr} KB) listo para guardar en la base de datos.`
+          : `Comprobante cargado (${kbStr} KB) listo para guardar en la base de datos.`
       );
       playMicroSound('ui_tap');
     } catch (err: any) {
       setProofFileName('');
-      setProofFileObj(null);
       setProofDataUrl(null);
       setProofPreviewUrl(null);
       setProofSizeBytes(null);
-      setErrorMsg(err?.message || 'La imagen del comprobante no debe superar los 60 KB.');
+      setErrorMsg(err?.message || 'La imagen del comprobante no pudo procesarse.');
     } finally {
       setIsProcessingProof(false);
     }
-  };
-
-  const buildWhatsappSummaryText = () => {
-    const comfortText =
-      vehicleType === 'auto'
-        ? `Asientos: ${asientos}, Aire: ${aireAcondicionado ? 'Sí' : 'No'}, Baúl: ${baul ? 'Sí' : 'No'}, Mascotas: ${aceptaMascotas ? 'Sí' : 'No'}`
-        : `Casco extra: ${cascoExtra ? 'Sí' : 'No'}, Baúl/Portaequipaje: ${baul ? 'Sí' : 'No'}`;
-    const sizeInfo = proofSizeBytes ? ` (${(proofSizeBytes / 1024).toFixed(1)} KB)` : '';
-    return `Hola Lucia Veronica Gimenez! Acabo de transferir $${totalAmount.toLocaleString('es-AR')} ARS a Alias: luciaveronicag (CVU: 0000003100020253501840) para prestar servicio de ${
-      vehicleType === 'moto' ? 'Moto Taxi' : 'Auto Taxi'
-    } por ${selectedHours} horas.\n• Chofer: ${driverName.trim()}\n• WhatsApp: ${whatsapp.trim()}\n• Vehículo: ${vehicleModel.trim()}\n• Patente: ${patente.trim().toUpperCase()}\n• Aseguradora: ${empresaAseguradora.trim()}\n• N° de Póliza: ${numeroPoliza.trim().toUpperCase()}\n• Zona: ${zone.trim() || 'Zárate ↔ Campana'}\n• Confort: ${comfortText}\n• Índice Seguridad: ${currentSafetyIndex}%\n• Comprobante: ${proofFileName ? `${proofFileName}${sizeInfo}` : 'Adjunto a continuación'}`;
-  };
-
-  const handleShareImageAndDataToWhatsApp = async () => {
-    const text = buildWhatsappSummaryText();
-    if (createdHabId) {
-      marcarSolicitudWhatsappEnviada(createdHabId);
-    }
-    if (
-      proofFileObj &&
-      typeof navigator !== 'undefined' &&
-      typeof navigator.share === 'function' &&
-      typeof navigator.canShare === 'function' &&
-      navigator.canShare({ files: [proofFileObj] })
-    ) {
-      try {
-        await navigator.share({
-          title: 'Habilitación de Chofer UPPA',
-          text,
-          files: [proofFileObj],
-        });
-        return;
-      } catch (err: any) {
-        if (err?.name === 'AbortError') return;
-      }
-    }
-    const url = `https://wa.me/5493489690058?text=${encodeURIComponent(text)}`;
-    window.location.assign(url);
   };
 
   // Paso 1 -> Paso 2: Validar datos personales y del vehículo, y habilitar Alias/CVU + Resumen + Adjuntar Comprobante
   const handleProceedToPaymentAndReview = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setErrorMsg('');
+    if (isBlockedFromNewPayment) {
+      setErrorMsg(
+        isTimerActiveLock
+          ? 'Ya tenés un servicio abonado activo. Debés esperar a que finalice el temporizador antes de volver a abonar.'
+          : 'Ya enviaste una solicitud con comprobante pendiente de habilitación.'
+      );
+      return;
+    }
 
     const cleanWhatsapp = whatsapp.replace(/\D/g, '');
     if (!driverName.trim()) {
@@ -370,10 +356,26 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
     setFormStep('review-payment');
   };
 
-  // Paso 2 -> Final: Registrar en Firestore & Administración UPPA todos los datos + comprobante
+  // Paso 2 -> Final: Guardar datos + imagen del comprobante directamente en Firestore & Administración UPPA
   const handleConfirmFinalSubmission = async () => {
     if (isSubmitting) return;
     setErrorMsg('');
+    if (isBlockedFromNewPayment) {
+      setErrorMsg(
+        isTimerActiveLock
+          ? 'Ya tenés un servicio abonado activo. Esperá a que termine el temporizador para volver a abonar.'
+          : 'Ya existe una solicitud con comprobante pendiente de aprobación.'
+      );
+      return;
+    }
+
+    if (!proofDataUrl) {
+      setErrorMsg(
+        'Por favor adjuntá la imagen del comprobante de transferencia para enviarla a la base de datos.'
+      );
+      scrollBodyRef.current?.scrollTo({ top: scrollBodyRef.current.scrollHeight, behavior: 'smooth' });
+      return;
+    }
 
     const cleanWhatsapp = whatsapp.replace(/\D/g, '');
     const cleanPatente = patente.trim().toUpperCase();
@@ -392,7 +394,8 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
         hours: selectedHours,
       });
 
-      // 2. Register driver request in Firestore and notify Administración UPPA immediately
+      // 2. Register driver request + receipt image in Firestore for Administración UPPA
+      const finalProofName = proofFileName || 'comprobante_transferencia.jpg';
       const createdHab = await solicitarHabilitacionChofer({
         driverId: currentUserId || `usr-driver-${Date.now()}`,
         driverName: driverName.trim(),
@@ -404,7 +407,9 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
         whatsapp: formattedWhatsapp,
         zone: zone.trim() || 'Zárate ↔ Campana',
         horas: selectedHours,
-        comprobanteFileName: proofFileName || 'Comprobante WhatsApp 3489690058',
+        comprobanteUrl: proofDataUrl,
+        comprobanteFileName: finalProofName,
+        comprobanteSizeBytes: proofSizeBytes || undefined,
         asientos: vehicleType === 'auto' ? asientos : 1,
         aireAcondicionado: vehicleType === 'auto' ? aireAcondicionado : false,
         baul,
@@ -446,10 +451,8 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
           zone: zone.trim() || 'Zárate ↔ Campana',
           amount: totalAmount,
           hours: selectedHours,
-          proofUrl:
-            proofDataUrl ||
-            'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?auto=format&fit=crop&w=600&q=80',
-          proofFileName: proofFileName || 'comprobante_luciaveronicag.jpg',
+          proofUrl: proofDataUrl,
+          proofFileName: finalProofName,
           alias: 'luciaveronicag',
           activationCode: generatedCodeObj.code,
         }
@@ -498,7 +501,7 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
         </div>
 
         {/* Título dinámico según paso */}
-        {formStep === 'form' && (
+        {!isBlockedFromNewPayment && formStep === 'form' && (
           <div className="py-2.5 px-3 rounded-xl bg-[#101114] border-2 border-[#FFF19A]/40 text-center my-3 shrink-0 space-y-0.5">
             <h3 className="text-xs sm:text-sm font-black text-[#FFF19A] tracking-wider uppercase font-display flex items-center justify-center gap-2">
               <Sparkles className="w-4 h-4 text-[#FFF19A]" />
@@ -509,7 +512,7 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
             </p>
           </div>
         )}
-        {formStep === 'review-payment' && (
+        {!isBlockedFromNewPayment && formStep === 'review-payment' && (
           <div className="py-2.5 px-3 rounded-xl bg-[#101114] border-2 border-[#B7F36B]/55 text-center my-3 shrink-0 space-y-0.5">
             <h3 className="text-xs sm:text-sm font-black text-[#B7F36B] tracking-wider uppercase font-display flex items-center justify-center gap-2">
               <ShieldCheck className="w-4 h-4 text-[#B7F36B]" />
@@ -538,16 +541,58 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
 
         {/* Scrollable Form Content */}
         <div ref={scrollBodyRef} className="flex-1 overflow-y-auto pr-1">
-          {formStep === 'submitted' && generatedCodeResult ? (
+          {isBlockedFromNewPayment ? (
+            <div className="py-5 space-y-4 text-center animate-in fade-in duration-200">
+              <div className="w-14 h-14 rounded-2xl bg-[#FFF19A]/15 border-2 border-[#FFF19A] text-[#FFF19A] mx-auto flex items-center justify-center">
+                <Clock className="w-7 h-7" />
+              </div>
+
+              <div className="space-y-1.5">
+                <h3 className="text-base font-black text-white">
+                  {isTimerActiveLock
+                    ? 'Ya Tenés un Servicio Abonado Activo'
+                    : 'Solicitud y Comprobante Ya Enviados'}
+                </h3>
+                <p className="text-xs text-[#9299A5] max-w-sm mx-auto leading-relaxed">
+                  {isTimerActiveLock
+                    ? 'Actualmente estás prestando servicio con tu temporizador en curso. No podés volver a abonar ni superponer peticiones hasta que finalice la duración actual.'
+                    : 'Ya enviaste tus datos y la imagen del comprobante a la base de datos. Tu solicitud está pendiente de habilitación por el Administrador y no se pueden superponer peticiones.'}
+                </p>
+              </div>
+
+              {isTimerActiveLock && (
+                <div className="p-3.5 rounded-2xl bg-[#101114] border-2 border-[#B7F36B]/55 max-w-xs mx-auto space-y-1">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-[#9299A5] block">
+                    Tiempo Restante del Temporizador
+                  </span>
+                  <span className="text-2xl font-mono font-black text-[#B7F36B] tracking-widest">
+                    {formatTimerRemaining(remainingActiveMs)}
+                  </span>
+                </div>
+              )}
+
+              <div className="pt-1 max-w-sm mx-auto">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="w-full min-h-[44px] py-2.5 px-5 rounded-xl bg-[#101114] hover:bg-white/5 text-white border-2 border-white/20 text-xs font-black transition-all cursor-pointer active:scale-95"
+                >
+                  Entendido / Cerrar
+                </button>
+              </div>
+            </div>
+          ) : formStep === 'submitted' && generatedCodeResult ? (
             <div className="py-3 space-y-3.5 animate-in fade-in duration-200 text-center">
               <div className="w-14 h-14 rounded-2xl bg-[#B7F36B]/15 border-2 border-[#B7F36B] text-[#B7F36B] mx-auto flex items-center justify-center">
                 <CheckCircle2 className="w-7 h-7" />
               </div>
 
               <div>
-                <h3 className="text-base font-black text-white">¡Solicitud de Chofer Enviada!</h3>
+                <h3 className="text-base font-black text-white">
+                  ¡Datos y Comprobante Guardados en Base de Datos!
+                </h3>
                 <p className="text-xs text-[#9299A5] mt-1 max-w-sm mx-auto leading-relaxed">
-                  Tus datos y comprobante se registraron en el sistema. El Administrador verifica tu transferencia y te habilita directamente para comenzar a prestar servicio:
+                  Tu solicitud y la imagen del comprobante ya quedaron registrados en la base de datos. No hace falta enviarlo por WhatsApp: el Administrador verá tu comprobante adjunto y te habilitará desde el panel.
                 </p>
               </div>
 
@@ -589,9 +634,9 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
                   <span className="font-mono text-white">+{whatsapp.replace(/\D/g, '')}</span>
                 </div>
                 <div className="flex justify-between text-white">
-                  <span className="text-[#9299A5]">Comprobante:</span>
+                  <span className="text-[#9299A5]">Comprobante en BD:</span>
                   <span className="font-semibold text-[#B7F36B] truncate max-w-[180px]">
-                    {proofFileName || 'Vía WhatsApp 3489690058'}
+                    {proofFileName || 'comprobante_transferencia.jpg'}
                   </span>
                 </div>
                 <div className="flex justify-between text-white pt-1.5 border-t border-white/10 gap-2">
@@ -602,49 +647,26 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
                 </div>
               </div>
 
-              {/* Botón de WhatsApp para comunicarse con el Administrador */}
+              {/* Comprobante Guardado en Base de Datos */}
               <div className="max-w-sm mx-auto space-y-2">
                 {proofPreviewUrl && (
-                  <div className="p-2.5 rounded-xl bg-[#101114] border border-[#B7F36B]/40 flex items-center gap-2.5 text-left">
+                  <div className="p-2.5 rounded-xl bg-[#101114] border-2 border-[#B7F36B]/55 flex items-center gap-3 text-left">
                     <img
                       src={proofPreviewUrl}
-                      alt="Comprobante cargado"
-                      className="w-12 h-12 rounded-lg object-cover border border-[#B7F36B] shrink-0"
+                      alt="Comprobante guardado en base de datos"
+                      className="w-14 h-14 rounded-lg object-cover border border-[#B7F36B] shrink-0"
                     />
                     <div className="min-w-0 flex-1 text-[11px]">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[#B7F36B]/15 border border-[#B7F36B]/40 text-[#B7F36B] font-black text-[9.5px] mb-1">
+                        <Database className="w-3 h-3" />
+                        <span>✓ Guardado en Base de Datos UPPA</span>
+                      </span>
                       <span className="font-bold text-white block truncate">{proofFileName}</span>
-                      <span className="text-[#B7F36B] font-mono">
-                        {proofSizeBytes ? `${(proofSizeBytes / 1024).toFixed(1)} KB (≤ 60 KB)` : 'Imagen lista'}
+                      <span className="text-[#9299A5] font-mono text-[10px]">
+                        {proofSizeBytes ? `${(proofSizeBytes / 1024).toFixed(1)} KB` : 'Imagen adjunta'}
                       </span>
                     </div>
                   </div>
-                )}
-
-                <a
-                  href={`https://wa.me/5493489690058?text=${encodeURIComponent(buildWhatsappSummaryText())}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={() => {
-                    if (createdHabId) {
-                      marcarSolicitudWhatsappEnviada(createdHabId);
-                    }
-                  }}
-                  title="Enviar todos los datos y comprobante al WhatsApp 3489690058"
-                  className="w-full min-h-[46px] py-3 px-3 rounded-xl uppa-cta-green text-xs font-black flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  <MessageCircle className="w-4 h-4 shrink-0" />
-                  <span>Enviar Toda la Info al WhatsApp 3489690058</span>
-                </a>
-
-                {proofFileObj && (
-                  <button
-                    type="button"
-                    onClick={handleShareImageAndDataToWhatsApp}
-                    className="w-full min-h-[42px] py-2 px-3 rounded-xl bg-[#202329] hover:bg-white/10 border border-[#FFF19A]/45 text-[#FFF19A] text-[11px] font-black flex items-center justify-center gap-2 cursor-pointer"
-                  >
-                    <Upload className="w-3.5 h-3.5 shrink-0" />
-                    <span>Adjuntar / Compartir Imagen + Datos por WhatsApp</span>
-                  </button>
                 )}
               </div>
 
@@ -654,7 +676,7 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
                   <span>Visible en Administración UPPA · Solicitudes Pendientes</span>
                 </div>
                 <p className="text-[#9299A5] text-[11px] leading-relaxed">
-                  Tu solicitud ya figura como <strong className="text-[#FFF19A]">Pendiente</strong> en <strong className="text-white">Administración UPPA</strong>. El Administrador verifica tu transferencia a <strong className="text-white">luciaveronicag</strong> (WhatsApp <strong className="text-[#B7F36B]">3489690058</strong>) e inicia tu temporizador en vivo.
+                  Tu solicitud y la imagen del comprobante ya aparecen como <strong className="text-[#FFF19A]">Pendiente</strong> en <strong className="text-white">Administración UPPA</strong>. El Administrador verifica el comprobante adjunto de tu transferencia a <strong className="text-white">luciaveronicag</strong> e inicia tu temporizador en vivo.
                 </p>
               </div>
 
@@ -795,30 +817,32 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
                 </div>
               </div>
 
-              {/* 3. Adjuntar Comprobante (Imagen máx. 60 KB) */}
-              <div className="p-3.5 rounded-2xl bg-[#101114] border-2 border-[#B7F36B]/40 space-y-2.5">
+              {/* 3. Adjuntar Comprobante (Se envía directo a la Base de Datos) */}
+              <div className="p-3.5 rounded-2xl bg-[#101114] border-2 border-[#B7F36B]/50 space-y-2.5">
                 <div className="flex items-center justify-between gap-2 flex-wrap">
                   <span className="text-xs font-black text-white flex items-center gap-1.5">
-                    <Upload className="w-4 h-4 text-[#B7F36B]" />
-                    <span>Adjuntar Imagen del Comprobante</span>
+                    <Database className="w-4 h-4 text-[#B7F36B]" />
+                    <span>Adjuntar Comprobante (Base de Datos) *</span>
                   </span>
                   <span className="px-2 py-0.5 rounded-md bg-[#FFF19A]/15 border border-[#FFF19A]/40 text-[#FFF19A] text-[10px] font-mono font-bold">
                     {proofSizeBytes
-                      ? `${(proofSizeBytes / 1024).toFixed(1)} KB / 60 KB ✓`
-                      : 'Imagen máx. 60 KB'}
+                      ? `${(proofSizeBytes / 1024).toFixed(1)} KB · En BD ✓`
+                      : 'Obligatorio · máx. 80 KB'}
                   </span>
                 </div>
 
                 <label
-                  title="Seleccionar imagen del comprobante de transferencia (hasta 60 KB)"
-                  className="w-full min-h-[56px] px-3 py-2.5 rounded-xl bg-[#202329] hover:bg-white/10 border-2 border-dashed border-[#FFF19A]/50 hover:border-[#FFF19A] text-xs flex items-center justify-between gap-2 cursor-pointer transition-all"
+                  title="Seleccionar imagen del comprobante de transferencia para guardar en la base de datos"
+                  className={`w-full min-h-[60px] px-3 py-2.5 rounded-xl bg-[#202329] hover:bg-white/10 border-2 border-dashed ${
+                    proofPreviewUrl ? 'border-[#B7F36B]' : 'border-[#FFF19A]/60 hover:border-[#FFF19A]'
+                  } text-xs flex items-center justify-between gap-2 cursor-pointer transition-all`}
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
                     {proofPreviewUrl ? (
                       <img
                         src={proofPreviewUrl}
                         alt="Vista previa comprobante"
-                        className="w-11 h-11 rounded-lg object-cover border border-[#B7F36B] shrink-0"
+                        className="w-12 h-12 rounded-lg object-cover border border-[#B7F36B] shrink-0"
                       />
                     ) : (
                       <div className="w-10 h-10 rounded-lg bg-[#101114] border border-white/15 flex items-center justify-center text-[#FFF19A] shrink-0">
@@ -828,30 +852,27 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
                     <div className="min-w-0">
                       <span className="block font-bold text-white truncate">
                         {isProcessingProof
-                          ? 'Optimizando imagen a ≤ 60 KB...'
-                          : proofFileName || 'Tocar para cargar imagen (hasta 60 KB)'}
+                          ? 'Optimizando imagen para base de datos...'
+                          : proofFileName || 'Tocar para subir imagen del comprobante'}
                       </span>
                       <span className="block text-[10px] text-[#9299A5]">
-                        {proofStatusNote || 'JPG, PNG o WebP hasta 60 KB (optimización automática) para enviar por WhatsApp'}
+                        {proofStatusNote ||
+                          'Se guarda directo en la base de datos para el Administrador (sin enviarlo por WhatsApp)'}
                       </span>
                     </div>
                   </div>
                   <span className="px-2.5 py-1 rounded-lg bg-[#FFF19A] text-[#101114] font-black text-[10.5px] shrink-0">
-                    {proofFileName ? 'Cambiar' : 'Elegir'}
+                    {proofFileName ? 'Cambiar' : 'Subir'}
                   </span>
                   <input type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
                 </label>
 
-                <a
-                  href={`https://wa.me/5493489690058?text=${encodeURIComponent(buildWhatsappSummaryText())}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-full min-h-[40px] px-3 py-2 rounded-xl bg-[#202329] hover:bg-white/10 border border-[#B7F36B]/45 text-[#B7F36B] text-[11px] font-black flex items-center justify-center gap-2 transition-all"
-                  title="Enviar toda la información cargada al WhatsApp 3489690058"
-                >
-                  <MessageCircle className="w-3.5 h-3.5 shrink-0" />
-                  <span>Enviar toda la información al WhatsApp 3489690058</span>
-                </a>
+                <div className="px-2.5 py-2 rounded-xl bg-[#202329]/80 border border-[#B7F36B]/25 text-[10.5px] text-[#9299A5] flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-[#B7F36B] shrink-0" />
+                  <span>
+                    Al confirmar, la imagen y todos tus datos se envían a <strong className="text-white">Administración UPPA</strong> para que puedan ver tu comprobante y habilitarte.
+                  </span>
+                </div>
 
                 {/* 4. Acciones Finales */}
                 <div className="flex flex-col sm:flex-row gap-2 pt-1">
@@ -869,14 +890,16 @@ export const PublishTaxiModal: React.FC<PublishTaxiModalProps> = ({
 
                   <button
                     type="button"
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || isProcessingProof}
                     onClick={handleConfirmFinalSubmission}
-                    title="Confirmar y enviar todos los datos cargados más el comprobante"
+                    title="Enviar todos los datos y la imagen del comprobante a la base de datos de Administración UPPA"
                     className="sm:w-2/3 min-h-[46px] px-4 py-2.5 uppa-cta-green font-black text-xs uppercase tracking-wider rounded-xl flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
                   >
                     <Send className="w-4 h-4 shrink-0" />
                     <span>
-                      {isSubmitting ? 'Enviando Datos y Comprobante...' : 'Enviar Todos los Datos + Comprobante'}
+                      {isSubmitting
+                        ? 'Enviando Datos + Comprobante...'
+                        : 'Enviar Todos los Datos + Comprobante'}
                     </span>
                   </button>
                 </div>

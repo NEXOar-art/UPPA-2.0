@@ -21,6 +21,7 @@ import { playMicroSound } from '../../utils/soundEffects';
 import { MapEvent, MensajeChatFirestore } from '../../types';
 import { calculateRealBusSpeed } from '../../utils/busSpeedEstimator';
 import { getDistanceKm } from '../../utils/geolocation';
+import { analyzeLiveCommunityChat } from '../../utils/sentiment';
 import {
   searchLinea228Stops,
   getPredictiveStopSuggestions,
@@ -81,6 +82,7 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
   const [selectedZone, setSelectedZone] = useState<string>('all');
   const [isMapFreeMode, setIsMapFreeMode] = useState(false);
   const [hoveredJoystickBtn, setHoveredJoystickBtn] = useState<'zarate' | 'malvinas' | null>(null);
+  const [isAiDetailsOpen, setIsAiDetailsOpen] = useState(false);
   const [nowTs, setNowTs] = useState<number>(() => Date.now());
 
   useEffect(() => {
@@ -155,18 +157,18 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
     [busEvents, nowTs]
   );
 
-  // IA Comunitaria en tiempo real: transforma reportes, GPS y chat en 5 KPIs amigables
+  // Análisis de Sentimiento EN VIVO sobre mensajes REALES del chat comunitario y eventos GPS reales (Cero simulación)
   const corridorAiMetrics = useMemo(() => {
     const recentWindowMs = 35 * 60 * 1000;
     const recentEvents = allEvents.filter(
       (ev) => !ev.createdAtMs || nowTs - ev.createdAtMs <= recentWindowMs
     );
-    const recentChat = recentChatMessages.slice(-20);
 
-    // 1. Demora estimada actual
+    const liveChat = analyzeLiveCommunityChat(recentChatMessages, allEvents, nowTs);
+
+    // 1. Demora estimada únicamente si hay reportes reales en eventos o chat
     let delayMinutes = 0;
     let incidentCount = 0;
-    let positiveMovingCount = 0;
 
     recentEvents.forEach((ev) => {
       const weight = 1 + Math.min(ev.confirmations || 0, 5) * 0.18;
@@ -183,58 +185,29 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
         incidentCount++;
       } else if (ev.type === 'traffic' || ev.type === 'control') {
         delayMinutes += Math.round(6 * weight);
-      } else if (ev.type === 'moving' || ev.type === 'bus_location') {
-        positiveMovingCount++;
       }
     });
 
-    const delayKeywords = ['tarde', 'demora', 'no pasó', 'no pasa', 'esperando', 'cortado', 'averiado', 'lento', 'trancado'];
-    const smoothKeywords = ['pasó', 'llegó', 'rápido', 'libre', 'circula', 'normal', 'buen ritmo'];
-    let chatDelayHits = 0;
-    let chatSmoothHits = 0;
-    let chatFullHits = 0;
-    let chatEmptyHits = 0;
-
-    const fullKeywords = ['lleno', 'hasta las manos', 'repleto', 'mucha gente', 'no para', 'parado', 'cargado'];
-    const emptyKeywords = ['vacío', 'vacio', 'asientos', 'tranquilo', 'lugar', 'libre'];
-
-    recentChat.forEach((msg) => {
-      const txt = (msg.texto || '').toLowerCase();
-      if (delayKeywords.some((k) => txt.includes(k))) chatDelayHits++;
-      if (smoothKeywords.some((k) => txt.includes(k))) chatSmoothHits++;
-      if (fullKeywords.some((k) => txt.includes(k))) chatFullHits++;
-      if (emptyKeywords.some((k) => txt.includes(k))) chatEmptyHits++;
-    });
-
-    delayMinutes = Math.max(0, Math.min(45, delayMinutes + chatDelayHits * 4 - Math.min(positiveMovingCount + chatSmoothHits, 4) * 2));
-    if (delayMinutes === 0 && incidentCount === 0 && chatDelayHits === 0) {
-      delayMinutes = 0;
+    if (liveChat.estimatedDelayMinutes && liveChat.estimatedDelayMinutes > 0) {
+      delayMinutes = Math.max(delayMinutes, liveChat.estimatedDelayMinutes);
     }
+    delayMinutes = Math.min(60, delayMinutes);
 
-    const delayLabel = delayMinutes === 0 ? 'Sin demora' : `+${delayMinutes}m`;
-    const delayHover =
-      delayMinutes === 0
-        ? 'Demora: 0 min (sin atrasos)'
-        : `Demora: +${delayMinutes} min (${incidentCount} alerta/s)`;
-
-    // 2. Velocidad promedio real
+    // 2. Velocidad real únicamente cuando existen reportes GPS reales recientes (sin inventar valores estándar)
     const recentBusEvents = busEvents
       .filter((b) => !b.createdAtMs || nowTs - b.createdAtMs <= 25 * 60 * 1000)
       .sort((a, b) => (b.createdAtMs || 0) - (a.createdAtMs || 0));
 
     const speedWithExplicitValues = recentBusEvents
       .map((b) => b.velocidadKmH)
-      .filter((v): v is number => typeof v === 'number' && v >= 8 && v <= 90);
+      .filter((v): v is number => typeof v === 'number' && v >= 5 && v <= 95);
 
-    let avgSpeedKmH: number;
-    let speedMethodDesc: string;
-
+    let avgSpeedKmH: number | null = null;
     if (speedWithExplicitValues.length > 0) {
       avgSpeedKmH = Math.round(
         speedWithExplicitValues.reduce((acc, v) => acc + v, 0) / speedWithExplicitValues.length
       );
-      speedMethodDesc = `promedio de ${speedWithExplicitValues.length} unidad(es) reportada(s) en vivo`;
-    } else {
+    } else if (recentBusEvents.length > 0) {
       const newestBus = recentBusEvents[0];
       const prevBus = recentBusEvents[1];
       const realCalc = calculateRealBusSpeed(
@@ -244,165 +217,145 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
           ? { lat: prevBus.lat, lng: prevBus.lng, createdAtMs: prevBus.createdAtMs }
           : null
       );
-      avgSpeedKmH = realCalc.speedKmH;
-      speedMethodDesc = realCalc.description;
+      if (realCalc.method !== 'standard') {
+        avgSpeedKmH = realCalc.speedKmH;
+      }
     }
 
-    if (delayMinutes >= 20) {
-      avgSpeedKmH = Math.max(16, Math.round(avgSpeedKmH * 0.72));
-    } else if (delayMinutes >= 8) {
-      avgSpeedKmH = Math.max(22, Math.round(avgSpeedKmH * 0.86));
-    }
-
-    const speedHover = `Velocidad promedio: ${avgSpeedKmH} km/h`;
-
-    // 3. Próximo arribo (ETA)
-    let etaMinutes = 8;
-    let etaPrefix = 'ETA ~';
-    let etaSourceNote = 'estimado por frecuencia habitual del corredor';
-
+    // 3. Próximo arribo (ETA) únicamente si existe unidad real geolocalizada por GPS en el corredor
+    let etaMinutes: number | null = null;
     const latestBusWithCoords = recentBusEvents.find(
       (b) => typeof b.lat === 'number' && typeof b.lng === 'number'
     );
 
-    if (latestBusWithCoords && typeof latestBusWithCoords.lat === 'number' && typeof latestBusWithCoords.lng === 'number') {
+    if (
+      latestBusWithCoords &&
+      typeof latestBusWithCoords.lat === 'number' &&
+      typeof latestBusWithCoords.lng === 'number'
+    ) {
       const refLat = userLocation?.lat ?? -34.185;
       const refLng = userLocation?.lng ?? -58.952;
       const distKm = getDistanceKm(refLat, refLng, latestBusWithCoords.lat, latestBusWithCoords.lng);
       const elapsedMins = latestBusWithCoords.createdAtMs
         ? Math.max(0, (nowTs - latestBusWithCoords.createdAtMs) / 60000)
         : 1;
-      const travelMins = (distKm / Math.max(15, avgSpeedKmH)) * 60;
+      const effectiveSpeed = avgSpeedKmH ?? 28;
+      const travelMins = (distKm / Math.max(12, effectiveSpeed)) * 60;
       const remaining = Math.max(1, Math.round(travelMins - elapsedMins * 0.55));
-      etaMinutes = Math.min(35, remaining);
-      etaPrefix = 'ETA ';
-      etaSourceNote = latestBusWithCoords.streetAddress
-        ? `unidad avistada cerca de ${latestBusWithCoords.streetAddress} (${distKm.toFixed(1)} km)`
-        : `unidad geolocalizada por la comunidad a ${distKm.toFixed(1)} km`;
-    } else {
-      const hour = new Date(nowTs).getHours();
-      const baseHeadway = (hour >= 6 && hour <= 9) || (hour >= 17 && hour <= 20) ? 7 : 12;
-      etaMinutes = Math.max(2, Math.min(30, Math.round(baseHeadway * 0.6 + delayMinutes * 0.35)));
+      etaMinutes = Math.min(45, remaining);
     }
 
-    const etaLabel = `${etaPrefix}${etaMinutes}m`;
-    const etaHover = `Próximo arribo: ~${etaMinutes} min`;
+    const communitySignalsCount =
+      liveChat.evaluatedChatCount + recentEvents.length + pendingRequestsCount;
 
-    // 4. Nivel de ocupación
-    const currentDate = new Date(nowTs);
-    const hourFloat = currentDate.getHours() + currentDate.getMinutes() / 60;
-    const isWeekday = currentDate.getDay() >= 1 && currentDate.getDay() <= 5;
-    const isPeakHour =
-      (hourFloat >= 6.5 && hourFloat <= 9.0) ||
-      (hourFloat >= 12.0 && hourFloat <= 14.0) ||
-      (hourFloat >= 17.0 && hourFloat <= 20.0);
+    const marqueeParts: string[] = [];
+    if (liveChat.hasRealData) {
+      if (liveChat.userChatCount > 0) {
+        marqueeParts.push(
+          `Sentimiento chat: ${liveChat.statusBadge} (${liveChat.userChatCount} msg${
+            liveChat.userChatCount === 1 ? '' : 's'
+          })`
+        );
+      } else {
+        marqueeParts.push(`Estado en vivo: ${liveChat.statusBadge}`);
+      }
 
-    let occupancyScore = isPeakHour ? (isWeekday ? 62 : 48) : 30;
-    occupancyScore += chatFullHits * 15 - chatEmptyHits * 14;
-    occupancyScore += Math.min(delayMinutes, 25);
-    occupancyScore += Math.min(pendingRequestsCount * 4, 16);
-    occupancyScore = Math.max(10, Math.min(98, occupancyScore));
-
-    let occupancyLabel: 'Baja' | 'Media' | 'Alta' | 'Muy alta' = 'Media';
-    let occupancyTone = 'border-[#FFF19A]/40 hover:border-[#FFF19A]';
-    let occupancyIconTone = 'bg-[#FFF19A]/15 text-[#FFF19A] border border-[#FFF19A]/45';
-    let occupancyTextTone = 'text-[#FFF19A]';
-    if (occupancyScore < 36) {
-      occupancyLabel = 'Baja';
-      occupancyTone = 'border-[#B7F36B]/45 hover:border-[#B7F36B]';
-      occupancyIconTone = 'bg-[#B7F36B]/20 text-[#B7F36B] border border-[#B7F36B]/45';
-      occupancyTextTone = 'text-[#B7F36B]';
-    } else if (occupancyScore < 64) {
-      occupancyLabel = 'Media';
-      occupancyTone = 'border-[#FFF19A]/40 hover:border-[#FFF19A]';
-      occupancyIconTone = 'bg-[#FFF19A]/15 text-[#FFF19A] border border-[#FFF19A]/45';
-      occupancyTextTone = 'text-[#FFF19A]';
-    } else if (occupancyScore < 82) {
-      occupancyLabel = 'Alta';
-      occupancyTone = 'border-amber-400/50 hover:border-amber-400';
-      occupancyIconTone = 'bg-amber-500/20 text-amber-300 border border-amber-400/50';
-      occupancyTextTone = 'text-amber-300';
+      if (liveChat.latestTransportNews) {
+        marqueeParts.push(
+          `${liveChat.latestTransportNews.badge}: "${liveChat.latestTransportNews.excerpt}" (${liveChat.latestTransportNews.ageLabel})`
+        );
+      }
+      if (liveChat.delaysByDirection.haciaZarate) {
+        marqueeParts.push(
+          `⏱️ Retraso → Zárate: "${liveChat.delaysByDirection.haciaZarate.excerpt}" (${liveChat.delaysByDirection.haciaZarate.ageLabel})`
+        );
+      }
+      if (liveChat.delaysByDirection.haciaMalvinas) {
+        marqueeParts.push(
+          `⏱️ Retraso → Malvinas: "${liveChat.delaysByDirection.haciaMalvinas.excerpt}" (${liveChat.delaysByDirection.haciaMalvinas.ageLabel})`
+        );
+      }
+      if (
+        !liveChat.delaysByDirection.haciaZarate &&
+        !liveChat.delaysByDirection.haciaMalvinas &&
+        liveChat.delaysByDirection.general
+      ) {
+        marqueeParts.push(
+          `⏱️ Demora: "${liveChat.delaysByDirection.general.excerpt}" (${liveChat.delaysByDirection.general.ageLabel})`
+        );
+      }
+      if (liveChat.latestPassingLocation) {
+        marqueeParts.push(
+          `📍 Por dónde pasa: "${liveChat.latestPassingLocation.excerpt}" (${liveChat.latestPassingLocation.ageLabel})`
+        );
+      }
+      if (liveChat.subeStatus.state !== 'none' && liveChat.subeStatus.insight) {
+        marqueeParts.push(
+          `💳 SUBE (${liveChat.subeStatus.label}): "${liveChat.subeStatus.insight.excerpt}"`
+        );
+      }
+      if (liveChat.latestFareInfo) {
+        marqueeParts.push(
+          `💵 Pasaje${
+            liveChat.latestFareInfo.detectedAmount
+              ? ` ${liveChat.latestFareInfo.detectedAmount}`
+              : ''
+          }: "${liveChat.latestFareInfo.insight.excerpt}"`
+        );
+      }
+      if (liveChat.latestTransportIssue) {
+        marqueeParts.push(`⚠️ ${liveChat.latestTransportIssue.excerpt}`);
+      }
+      if (marqueeParts.length <= 1) {
+        marqueeParts.push(liveChat.bannerHeadline);
+      }
     } else {
-      occupancyLabel = 'Muy alta';
-      occupancyTone = 'border-rose-400/55 hover:border-rose-400';
-      occupancyIconTone = 'bg-rose-500/20 text-rose-300 border border-rose-400/50';
-      occupancyTextTone = 'text-rose-300';
+      marqueeParts.push(
+        'Sin reportes recientes en el chat comunitario ni unidades GPS activas (sin datos simulados).'
+      );
     }
 
-    const occupancyHover = `Ocupación: ${occupancyLabel} (${occupancyScore}%)`;
-
-    // 5. Predicción de demanda
-    let demandScore = isPeakHour ? (isWeekday ? 65 : 50) : 28;
-    demandScore += pendingRequestsCount * 10;
-    demandScore += recentChat.length >= 6 ? 12 : recentChat.length * 2;
-    demandScore += incidentCount * 8;
-    demandScore = Math.max(12, Math.min(99, demandScore));
-
-    let demandLabel: 'Tranquila' | 'Moderada' | 'Alta' | 'Pico' = 'Moderada';
-    let demandCompact: string = 'Mod.';
-    let demandTone = 'border-[#FFF19A]/40 hover:border-[#FFF19A]';
-    let demandIconTone = 'bg-[#FFF19A]/15 text-[#FFF19A] border border-[#FFF19A]/45';
-    let demandTextTone = 'text-[#FFF19A]';
-    if (demandScore < 35) {
-      demandLabel = 'Tranquila';
-      demandCompact = 'Baja';
-      demandTone = 'border-[#B7F36B]/45 hover:border-[#B7F36B]';
-      demandIconTone = 'bg-[#B7F36B]/20 text-[#B7F36B] border border-[#B7F36B]/45';
-      demandTextTone = 'text-[#B7F36B]';
-    } else if (demandScore < 62) {
-      demandLabel = 'Moderada';
-      demandCompact = 'Mod.';
-      demandTone = 'border-[#FFF19A]/40 hover:border-[#FFF19A]';
-      demandIconTone = 'bg-[#FFF19A]/15 text-[#FFF19A] border border-[#FFF19A]/45';
-      demandTextTone = 'text-[#FFF19A]';
-    } else if (demandScore < 82) {
-      demandLabel = 'Alta';
-      demandCompact = 'Alta';
-      demandTone = 'border-amber-400/50 hover:border-amber-400';
-      demandIconTone = 'bg-amber-500/20 text-amber-300 border border-amber-400/50';
-      demandTextTone = 'text-amber-300';
-    } else {
-      demandLabel = 'Pico';
-      demandCompact = 'Pico';
-      demandTone = 'border-rose-400/55 hover:border-rose-400';
-      demandIconTone = 'bg-rose-500/20 text-rose-300 border border-rose-400/50';
-      demandTextTone = 'text-rose-300';
+    if (avgSpeedKmH !== null) {
+      marqueeParts.push(`GPS real: ${avgSpeedKmH} km/h`);
+    }
+    if (etaMinutes !== null) {
+      marqueeParts.push(`Arribo unidad GPS ~${etaMinutes} min`);
     }
 
-    const demandHover = `Demanda: ${demandLabel} (${demandScore}%)`;
+    const marqueeLine = marqueeParts.join(' · ');
 
-    const communitySignalsCount = recentEvents.length + recentChat.length + pendingRequestsCount;
-    const friendlySummary =
-      delayMinutes >= 15
-        ? `Corredor con demoras (+${delayMinutes}m) y ocupación ${occupancyLabel.toLowerCase()}.`
-        : occupancyLabel === 'Alta' || occupancyLabel === 'Muy alta'
-        ? `Unidades a ${avgSpeedKmH} km/h · Ocupación ${occupancyLabel.toLowerCase()} y demanda ${demandLabel.toLowerCase()}.`
-        : `Corredor estable a ${avgSpeedKmH} km/h · Demanda ${demandLabel.toLowerCase()} y ocupación ${occupancyLabel.toLowerCase()}.`;
+    const borderToneClass =
+      liveChat.tone === 'critico'
+        ? 'border-rose-400/55 bg-rose-500/[0.06]'
+        : liveChat.tone === 'alerta'
+        ? 'border-amber-400/50 bg-amber-500/[0.05]'
+        : liveChat.tone === 'positivo'
+        ? 'border-[#B7F36B]/45 bg-[#181B20]'
+        : liveChat.tone === 'neutro'
+        ? 'border-sky-400/35 bg-[#181B20]'
+        : 'border-white/10 bg-[#181B20]';
+
+    const badgeToneClass =
+      liveChat.tone === 'critico'
+        ? 'border-rose-400/55 text-rose-300 bg-rose-500/15'
+        : liveChat.tone === 'alerta'
+        ? 'border-amber-400/55 text-amber-300 bg-amber-500/15'
+        : liveChat.tone === 'positivo'
+        ? 'border-[#B7F36B]/50 text-[#B7F36B] bg-[#B7F36B]/15'
+        : liveChat.tone === 'neutro'
+        ? 'border-sky-400/45 text-sky-300 bg-sky-500/15'
+        : 'border-white/15 text-[#9299A5] bg-[#202329]';
 
     return {
-      delayLabel,
-      delayCompact: delayMinutes === 0 ? '0 min' : `+${delayMinutes} min`,
-      delayHover,
+      liveChat,
       delayMinutes,
+      incidentCount,
       avgSpeedKmH,
-      speedHover,
-      etaLabel,
-      etaCompact: etaPrefix === 'ETA ' ? `${etaMinutes} min` : `~${etaMinutes} min`,
-      etaHover,
-      occupancyLabel,
-      occupancyCompact: occupancyLabel === 'Muy alta' ? 'Máx.' : occupancyLabel,
-      occupancyTone,
-      occupancyIconTone,
-      occupancyTextTone,
-      occupancyHover,
-      demandLabel,
-      demandCompact,
-      demandTone,
-      demandIconTone,
-      demandTextTone,
-      demandHover,
+      etaMinutes,
       communitySignalsCount,
-      friendlySummary,
+      marqueeLine,
+      borderToneClass,
+      badgeToneClass,
     };
   }, [allEvents, busEvents, recentChatMessages, pendingRequestsCount, userLocation, nowTs]);
 
@@ -999,59 +952,227 @@ export const MobilityBottomSheet: React.FC<MobilityBottomSheetProps> = ({
             {/* Micrográfico Analítico Dark FinTech: Actividad de viajes en colectivo 24 hs (Hacia Zárate vs Hacia Malvinas) */}
             <BusActivityMicroChart events={combinedBusActivity24h} nowTs={nowTs} />
 
-            {/* Micro-Banner en movimiento infinito con Lectura IA y métricas en tiempo real */}
+            {/* Banner en vivo: Lectura IA con análisis de sentimiento real del Chat Comunitario */}
             <div
-              className="px-2.5 py-2 rounded-xl bg-[#181B20] border border-white/10 flex items-center gap-2 overflow-hidden cursor-help group"
-              title={`Lectura IA: ${corridorAiMetrics.delayCompact} · ${corridorAiMetrics.avgSpeedKmH} km/h · Arribo ${corridorAiMetrics.etaCompact}`}
+              className={`rounded-xl border transition-colors ${corridorAiMetrics.borderToneClass}`}
             >
-              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-[#202329] border border-[#B7F36B]/40 text-[9.5px] font-black text-[#B7F36B] shrink-0">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#B7F36B] animate-pulse" />
-                <Sparkles className="w-2.5 h-2.5 text-[#FFF19A]" />
-                <span>IA</span>
-              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  if (corridorAiMetrics.liveChat.hasRealData) {
+                    playMicroSound('ui_tap');
+                    setIsAiDetailsOpen((prev) => !prev);
+                  } else {
+                    playMicroSound('ui_tap');
+                    onOpenChat();
+                  }
+                }}
+                className="w-full px-2.5 py-2 flex items-center gap-2 overflow-hidden cursor-pointer group text-left"
+                title={
+                  corridorAiMetrics.liveChat.hasRealData
+                    ? `Lectura IA en vivo: ${corridorAiMetrics.marqueeLine} · Tocá para ver detalles del chat`
+                    : 'Sin reportes recientes en el chat · Tocá para abrir el Chat Comunitario'
+                }
+              >
+                <span
+                  className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md border text-[9.5px] font-black shrink-0 ${corridorAiMetrics.badgeToneClass}`}
+                >
+                  <Sparkles className="w-2.5 h-2.5 shrink-0" />
+                  <span>IA</span>
+                  <span className="hidden sm:inline font-bold">
+                    · {corridorAiMetrics.liveChat.statusBadge}
+                  </span>
+                </span>
 
-              <div className="flex-1 min-w-0 overflow-hidden [mask-image:linear-gradient(to_right,transparent,black_4%,black_96%,transparent)]">
-                <div className="animate-ai-micro-banner text-[10.5px] font-semibold text-white/95 whitespace-nowrap">
-                  <span className="inline-flex items-center shrink-0 pr-10">
-                    <strong className="text-[#B7F36B] mr-1">Lectura IA:</strong>
-                    <span>{corridorAiMetrics.friendlySummary}</span>
-                    <span className="mx-1.5 text-white/40">·</span>
-                    <span className="text-[#FFF19A] font-bold">
-                      Demora {corridorAiMetrics.delayCompact}
+                <div className="flex-1 min-w-0 overflow-hidden [mask-image:linear-gradient(to_right,transparent,black_4%,black_96%,transparent)]">
+                  <div className="animate-ai-micro-banner text-[10.5px] font-semibold text-white/95 whitespace-nowrap">
+                    <span className="inline-flex items-center shrink-0 pr-12">
+                      <strong className="text-[#B7F36B] mr-1">Lectura IA:</strong>
+                      <span>{corridorAiMetrics.marqueeLine}</span>
+                      <span className="mx-2 text-[#FFF19A]/60">•</span>
                     </span>
-                    <span className="mx-1.5 text-white/40">·</span>
-                    <span>{corridorAiMetrics.avgSpeedKmH} km/h</span>
-                    <span className="mx-1.5 text-white/40">·</span>
-                    <span className="text-[#B7F36B] font-bold">
-                      Arribo {corridorAiMetrics.etaCompact}
+                    <span className="inline-flex items-center shrink-0 pr-12" aria-hidden="true">
+                      <strong className="text-[#B7F36B] mr-1">Lectura IA:</strong>
+                      <span>{corridorAiMetrics.marqueeLine}</span>
+                      <span className="mx-2 text-[#FFF19A]/60">•</span>
                     </span>
-                    <span className="mx-1.5 text-white/40">·</span>
-                    <span>Ocupación {corridorAiMetrics.occupancyLabel}</span>
-                    <span className="mx-1.5 text-white/40">·</span>
-                    <span>Demanda {corridorAiMetrics.demandLabel}</span>
-                    <span className="mx-2 text-[#FFF19A]/60">•</span>
-                  </span>
-                  <span className="inline-flex items-center shrink-0 pr-10" aria-hidden="true">
-                    <strong className="text-[#B7F36B] mr-1">Lectura IA:</strong>
-                    <span>{corridorAiMetrics.friendlySummary}</span>
-                    <span className="mx-1.5 text-white/40">·</span>
-                    <span className="text-[#FFF19A] font-bold">
-                      Demora {corridorAiMetrics.delayCompact}
-                    </span>
-                    <span className="mx-1.5 text-white/40">·</span>
-                    <span>{corridorAiMetrics.avgSpeedKmH} km/h</span>
-                    <span className="mx-1.5 text-white/40">·</span>
-                    <span className="text-[#B7F36B] font-bold">
-                      Arribo {corridorAiMetrics.etaCompact}
-                    </span>
-                    <span className="mx-1.5 text-white/40">·</span>
-                    <span>Ocupación {corridorAiMetrics.occupancyLabel}</span>
-                    <span className="mx-1.5 text-white/40">·</span>
-                    <span>Demanda {corridorAiMetrics.demandLabel}</span>
-                    <span className="mx-2 text-[#FFF19A]/60">•</span>
-                  </span>
+                  </div>
                 </div>
-              </div>
+
+                {corridorAiMetrics.liveChat.hasRealData && (
+                  <span className="shrink-0 text-[#9299A5] group-hover:text-white transition-colors">
+                    {isAiDetailsOpen ? (
+                      <ChevronUp className="w-3.5 h-3.5" />
+                    ) : (
+                      <ChevronDown className="w-3.5 h-3.5" />
+                    )}
+                  </span>
+                )}
+              </button>
+
+              {/* Chips de lectura rápida (solo se muestran categorías detectadas en mensajes reales) */}
+              {corridorAiMetrics.liveChat.hasRealData && (
+                <div className="px-2.5 pb-2 flex items-center gap-1.5 flex-wrap">
+                  {corridorAiMetrics.liveChat.latestTransportNews && (
+                    <button
+                      type="button"
+                      onClick={() => setIsAiDetailsOpen(true)}
+                      className="px-2 py-0.5 rounded-md bg-rose-500/15 border border-rose-400/40 text-rose-200 text-[9.5px] font-bold hover:border-rose-300 cursor-pointer truncate max-w-full"
+                    >
+                      {corridorAiMetrics.liveChat.latestTransportNews.badge}
+                    </button>
+                  )}
+                  {corridorAiMetrics.liveChat.delaysByDirection.haciaZarate && (
+                    <button
+                      type="button"
+                      onClick={() => setIsAiDetailsOpen(true)}
+                      className="px-2 py-0.5 rounded-md bg-amber-500/15 border border-amber-400/40 text-amber-200 text-[9.5px] font-bold hover:border-amber-300 cursor-pointer"
+                    >
+                      ⏱️ Demora → Zárate
+                    </button>
+                  )}
+                  {corridorAiMetrics.liveChat.delaysByDirection.haciaMalvinas && (
+                    <button
+                      type="button"
+                      onClick={() => setIsAiDetailsOpen(true)}
+                      className="px-2 py-0.5 rounded-md bg-amber-500/15 border border-amber-400/40 text-amber-200 text-[9.5px] font-bold hover:border-amber-300 cursor-pointer"
+                    >
+                      ⏱️ Demora → Malvinas
+                    </button>
+                  )}
+                  {!corridorAiMetrics.liveChat.delaysByDirection.haciaZarate &&
+                    !corridorAiMetrics.liveChat.delaysByDirection.haciaMalvinas &&
+                    corridorAiMetrics.liveChat.delaysByDirection.general && (
+                      <button
+                        type="button"
+                        onClick={() => setIsAiDetailsOpen(true)}
+                        className="px-2 py-0.5 rounded-md bg-amber-500/15 border border-amber-400/40 text-amber-200 text-[9.5px] font-bold hover:border-amber-300 cursor-pointer"
+                      >
+                        ⏱️ Demora reportada
+                      </button>
+                    )}
+                  {corridorAiMetrics.liveChat.latestPassingLocation && (
+                    <button
+                      type="button"
+                      onClick={() => setIsAiDetailsOpen(true)}
+                      className="px-2 py-0.5 rounded-md bg-[#B7F36B]/15 border border-[#B7F36B]/40 text-[#B7F36B] text-[9.5px] font-bold hover:border-[#B7F36B] cursor-pointer truncate max-w-[200px]"
+                    >
+                      📍 {corridorAiMetrics.liveChat.latestPassingLocation.excerpt}
+                    </button>
+                  )}
+                  {corridorAiMetrics.liveChat.subeStatus.state !== 'none' && (
+                    <button
+                      type="button"
+                      onClick={() => setIsAiDetailsOpen(true)}
+                      className={`px-2 py-0.5 rounded-md border text-[9.5px] font-bold cursor-pointer ${
+                        corridorAiMetrics.liveChat.subeStatus.state === 'failing'
+                          ? 'bg-rose-500/15 border-rose-400/45 text-rose-200'
+                          : corridorAiMetrics.liveChat.subeStatus.state === 'working'
+                          ? 'bg-[#B7F36B]/15 border-[#B7F36B]/45 text-[#B7F36B]'
+                          : 'bg-sky-500/15 border-sky-400/40 text-sky-200'
+                      }`}
+                    >
+                      💳 SUBE: {corridorAiMetrics.liveChat.subeStatus.label}
+                    </button>
+                  )}
+                  {corridorAiMetrics.liveChat.latestFareInfo && (
+                    <button
+                      type="button"
+                      onClick={() => setIsAiDetailsOpen(true)}
+                      className="px-2 py-0.5 rounded-md bg-[#FFF19A]/15 border border-[#FFF19A]/40 text-[#FFF19A] text-[9.5px] font-bold hover:border-[#FFF19A] cursor-pointer"
+                    >
+                      💵 Pasaje{' '}
+                      {corridorAiMetrics.liveChat.latestFareInfo.detectedAmount || 'comentado'}
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* Desglose completo en vivo de mensajes reales detectados */}
+              <AnimatePresence>
+                {isAiDetailsOpen && corridorAiMetrics.liveChat.hasRealData && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    transition={{ duration: 0.18 }}
+                    className="overflow-hidden border-t border-white/10"
+                  >
+                    <div className="px-2.5 py-2 space-y-1.5 bg-[#101114]/70 rounded-b-xl">
+                      <div className="flex items-center justify-between gap-2 text-[9.5px]">
+                        <span className="font-bold text-[#9299A5]">
+                          Sentimiento en vivo · {corridorAiMetrics.liveChat.evaluatedChatCount}{' '}
+                          mensaje(s) real(es)
+                          {corridorAiMetrics.liveChat.activeEventsCount > 0
+                            ? ` + ${corridorAiMetrics.liveChat.activeEventsCount} alerta(s) mapa`
+                            : ''}
+                        </span>
+                        {corridorAiMetrics.liveChat.score !== null && (
+                          <span className="font-mono font-bold text-white/85">
+                            Índice {corridorAiMetrics.liveChat.score}/100
+                          </span>
+                        )}
+                      </div>
+
+                      {corridorAiMetrics.liveChat.detailedInsights.length > 0 ? (
+                        <div className="space-y-1 max-h-36 overflow-y-auto pr-0.5">
+                          {corridorAiMetrics.liveChat.detailedInsights.map((item) => (
+                            <div
+                              key={`${item.category}_${item.id}`}
+                              className="p-1.5 rounded-lg bg-[#181B20] border border-white/10 text-[10px] leading-snug"
+                            >
+                              <div className="flex items-center justify-between gap-1.5 mb-0.5">
+                                <span
+                                  className={`font-black ${
+                                    item.severity === 'critical'
+                                      ? 'text-rose-300'
+                                      : item.severity === 'warning'
+                                      ? 'text-amber-300'
+                                      : item.severity === 'positive'
+                                      ? 'text-[#B7F36B]'
+                                      : 'text-[#FFF19A]'
+                                  }`}
+                                >
+                                  {item.badge}
+                                </span>
+                                <span className="text-[9px] text-[#9299A5] font-mono shrink-0">
+                                  {item.author} · {item.ageLabel}
+                                </span>
+                              </div>
+                              <p className="text-white/90 break-words">"{item.excerpt}"</p>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-[10px] text-white/80">
+                          {corridorAiMetrics.liveChat.bannerHeadline}
+                        </p>
+                      )}
+
+                      <div className="pt-1 flex items-center justify-between gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setIsAiDetailsOpen(false)}
+                          className="text-[9.5px] font-bold text-[#9299A5] hover:text-white cursor-pointer"
+                        >
+                          Ocultar detalle
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            playMicroSound('ui_tap');
+                            onOpenChat();
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-[#FFF19A] text-[#101114] font-black text-[10px] flex items-center gap-1 cursor-pointer hover:brightness-95"
+                        >
+                          <MessageSquare className="w-3 h-3" />
+                          <span>Ir al Chat Comunitario</span>
+                        </button>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           </div>
         </div>

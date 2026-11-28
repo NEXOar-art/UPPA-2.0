@@ -24,7 +24,6 @@ import {
   Car,
   LogOut,
   Zap,
-  MessageCircle,
   ChevronDown,
   ChevronUp,
 } from 'lucide-react';
@@ -236,8 +235,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     const isChofer = nextRol === 'chofer_moto' || nextRol === 'chofer_auto';
 
     // Si está en rol Pasajero y quiere pasar a Auto Taxi o Moto Taxi,
-    // enviarlo directamente a la sección "Habilitación de Chofer" para completar el formulario.
-    if (isChofer && currentlyPasajero && onOpenPublishTaxi) {
+    // enviarlo directamente a "Habilitación de Chofer" solo si no tiene un abono vigente activo.
+    if (isChofer && currentlyPasajero && !isHabilitado && onOpenPublishTaxi) {
       onClose();
       onOpenPublishTaxi(nextRol === 'chofer_moto' ? 'moto' : 'auto');
       return;
@@ -1357,19 +1356,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                             <span>Completar Abono / Solicitud de Turno</span>
                           </button>
                         )}
-
-                        <a
-                          href={`https://wa.me/5493489690058?text=${encodeURIComponent(
-                            `Hola Lucia Veronica Gimenez! Te contacto por la habilitación de mi servicio de chofer (${authUser?.nombre || currentUser?.name || currentUser?.nombre || 'Prestador UPPA'}). Ya envié mis datos.`
-                          )}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          title="Enviar mensaje de WhatsApp al Administrador UPPA (3489690058)"
-                          className="w-full min-h-[44px] px-3 rounded-xl uppa-cta-green font-black text-xs flex items-center justify-center gap-2 cursor-pointer"
-                        >
-                          <MessageCircle className="w-4 h-4 shrink-0" />
-                          <span>Contactar al Administrador (3489690058)</span>
-                        </a>
                       </div>
                     )}
                   </div>

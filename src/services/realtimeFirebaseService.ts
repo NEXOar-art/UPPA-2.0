@@ -93,6 +93,17 @@ function setCached<T>(key: string, data: T) {
   try {
     localStorage.setItem(`${STORAGE_PREFIX}${key}`, JSON.stringify(data));
   } catch (e) {
+    if (key === 'habilitaciones' && Array.isArray(data)) {
+      try {
+        const compacted = data.map((item: any) =>
+          item?.estado === 'pendiente'
+            ? item
+            : { ...item, comprobanteUrl: item?.comprobanteUrl ? '' : undefined }
+        );
+        localStorage.setItem(`${STORAGE_PREFIX}${key}`, JSON.stringify(compacted));
+        return;
+      } catch {}
+    }
     console.warn('LocalStorage cache write error:', e);
   }
 }
@@ -2706,6 +2717,7 @@ export async function solicitarHabilitacionChofer(data: {
   horas: number;
   comprobanteUrl?: string;
   comprobanteFileName?: string;
+  comprobanteSizeBytes?: number;
   patente?: string;
   empresaAseguradora?: string;
   numeroPoliza?: string;
@@ -2719,6 +2731,23 @@ export async function solicitarHabilitacionChofer(data: {
   const effectiveDriverId = (data.driverId || '').trim() || `drv-${Date.now()}`;
   const isInitialPlaceholder = Boolean(data.comprobanteFileName?.startsWith('Registro inicial'));
   const current = getCached<HabilitacionChofer[]>('habilitaciones', MOCK_INITIAL_HABILITACIONES);
+  const cleanInputPhone = (data.whatsapp || '').replace(/\D/g, '').slice(-8);
+  const cleanInputName = (data.driverName || '').trim().toLowerCase();
+
+  const matchesSameDriver = (h: HabilitacionChofer) => {
+    if (h.driverId && h.driverId === effectiveDriverId) return true;
+    const hPhone = (h.whatsapp || '').replace(/\D/g, '').slice(-8);
+    if (cleanInputPhone.length >= 8 && hPhone.length >= 8 && hPhone === cleanInputPhone) return true;
+    if (
+      cleanInputName &&
+      cleanInputName !== 'chofer uppa' &&
+      h.driverName &&
+      h.driverName.trim().toLowerCase() === cleanInputName
+    ) {
+      return true;
+    }
+    return false;
+  };
 
   // Si es un placeholder automático de registro y ya existe una solicitud pendiente/activa del mismo chofer, no duplicar
   if (isInitialPlaceholder) {
@@ -2729,6 +2758,33 @@ export async function solicitarHabilitacionChofer(data: {
     );
     if (existingForDriver) {
       return existingForDriver;
+    }
+  } else {
+    // No permitir superponer peticiones si ya abonó y tiene el temporizador activo,
+    // o si ya envió un comprobante real pendiente de aprobación.
+    const activeHab = current.find(
+      (h) =>
+        matchesSameDriver(h) &&
+        h.estado === 'activo' &&
+        Boolean(h.endsAt && h.endsAt > Date.now())
+    );
+    if (activeHab) {
+      throw new Error(
+        'Ya abonaste y estás prestando servicio con el temporizador activo. Debés esperar a que finalice el tiempo antes de volver a abonar.'
+      );
+    }
+
+    const pendingPaidHab = current.find(
+      (h) =>
+        matchesSameDriver(h) &&
+        h.estado === 'pendiente' &&
+        Boolean(h.comprobanteUrl) &&
+        !h.comprobanteFileName?.startsWith('Registro inicial')
+    );
+    if (pendingPaidHab) {
+      throw new Error(
+        'Ya enviaste tus datos y comprobante de pago. Tu solicitud está pendiente de habilitación por el Administrador.'
+      );
     }
   }
 
@@ -2790,9 +2846,17 @@ export async function solicitarHabilitacionChofer(data: {
     cvu: '0000003100020253501840',
     titular: 'Lucia Veronica Gimenez',
     comprobanteUrl: data.comprobanteUrl || '',
-    comprobanteFileName: data.comprobanteFileName || 'comprobante_luciaveronicag_whatsapp.pdf',
+    comprobanteFileName:
+      data.comprobanteFileName ||
+      (data.comprobanteUrl ? 'comprobante_transferencia.jpg' : 'Sin comprobante adjunto'),
+    ...(typeof data.comprobanteSizeBytes === 'number'
+      ? { comprobanteSizeBytes: data.comprobanteSizeBytes }
+      : {}),
+    ...(data.comprobanteUrl ? { comprobanteSubidoEn: now } : {}),
     createdAt: now,
-    adminNotes: 'Solicitud para prestar servicio recibida. En espera de habilitación con clave 0608 en Administración UPPA.',
+    adminNotes: data.comprobanteUrl
+      ? 'Solicitud y comprobante de pago guardados en base de datos. Listo para verificar y habilitar en Administración UPPA.'
+      : 'Solicitud recibida en espera de comprobante / verificación en Administración UPPA.',
     asientos: resolvedAsientos,
     aireAcondicionado: resolvedAire,
     baul: resolvedBaul,

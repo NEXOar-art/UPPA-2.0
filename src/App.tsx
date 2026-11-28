@@ -585,6 +585,27 @@ export default function App() {
     tab: 'transfer' | 'enter-code' = 'transfer',
     preferredVehicle?: 'auto' | 'moto'
   ) => {
+    const now = Date.now();
+    if (hasActivePaidDriverHabilitacion && driverPaidEndsAt > now) {
+      const remSec = Math.max(0, Math.floor((driverPaidEndsAt - now) / 1000));
+      const h = Math.floor(remSec / 3600);
+      const m = Math.floor((remSec % 3600) / 60);
+      const s = remSec % 60;
+      const remFmt = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+      showToast(
+        `Ya abonaste y estás prestando servicio (restan ${remFmt}). Esperá a que finalice tu temporizador antes de volver a abonar.`
+      );
+      setActiveTab('taxi');
+      return;
+    }
+
+    if (hasPendingPaidHabilitacion) {
+      showToast(
+        'Ya enviaste todos tus datos y comprobante a la base de datos. Tu habilitación está pendiente de aprobación; no se pueden superponer peticiones.'
+      );
+      return;
+    }
+
     if (!isDriverRoleProfile) {
       showToast(
         'Para prestar servicio de transporte tu perfil debe estar en "Auto Taxi" o "Moto Taxi". Elegí un rol en tu perfil para ir a Habilitación de Chofer.'
@@ -616,9 +637,9 @@ export default function App() {
     const tipoVehiculo: 'moto' | 'auto' | null =
       nextRol === 'chofer_moto' ? 'moto' : nextRol === 'chofer_auto' ? 'auto' : null;
 
-    // Si el perfil está en Pasajero y quiere pasar a Auto Taxi o Moto Taxi,
-    // debe ir directamente a Habilitación de Chofer para llenar el formulario correspondiente.
-    if (isChofer && isPasajeroProfile) {
+    // Si el perfil está en Pasajero y quiere pasar a Auto Taxi o Moto Taxi:
+    // solo abrir Habilitación de Chofer si no tiene ya un abono vigente activo o solicitud paga pendiente.
+    if (isChofer && isPasajeroProfile && !hasActivePaidDriverHabilitacion && !hasPendingPaidHabilitacion) {
       const label = nextRol === 'chofer_moto' ? 'Moto Taxi' : 'Auto Taxi';
       setPublishTaxiInitialTab('transfer');
       setPublishTaxiInitialVehicle(nextRol === 'chofer_moto' ? 'moto' : 'auto');
@@ -658,7 +679,7 @@ export default function App() {
       if (isChofer) {
         const label = nextRol === 'chofer_moto' ? 'Moto Taxi' : 'Auto Taxi';
         setIsHabilitacionCardExpanded(true);
-        if (!hasActivePaidDriverHabilitacion) {
+        if (!hasActivePaidDriverHabilitacion && !hasPendingPaidHabilitacion) {
           setPublishTaxiInitialTab('transfer');
           setPublishTaxiInitialVehicle(nextRol === 'chofer_moto' ? 'moto' : 'auto');
           setIsProfileDropdownOpen(false);
@@ -666,6 +687,8 @@ export default function App() {
           showToast(
             `Completá el formulario de Habilitación de Chofer para ${label}.`
           );
+        } else if (hasPendingPaidHabilitacion) {
+          showToast(`Rol cambiado a ${label} · Tu solicitud con comprobante ya fue enviada y está pendiente.`);
         } else {
           showToast(`Rol cambiado a Prestador Habilitado (${label}) sin cerrar sesión`);
         }
@@ -711,6 +734,19 @@ export default function App() {
     }
     return 0;
   }, [userHabilitacionRecord, driverSession]);
+
+  // Verifica si el prestador ya envió una solicitud con comprobante real que aún está pendiente de aprobación
+  const hasPendingPaidHabilitacion = useMemo(() => {
+    if (currentUser.role === 'admin' || currentUser.rol === 'administrador') {
+      return false;
+    }
+    if (!userHabilitacionRecord) return false;
+    return (
+      userHabilitacionRecord.estado === 'pendiente' &&
+      Boolean(userHabilitacionRecord.comprobanteUrl) &&
+      !userHabilitacionRecord.comprobanteFileName?.startsWith('Registro inicial')
+    );
+  }, [currentUser.role, currentUser.rol, userHabilitacionRecord]);
 
   // Disponibilidad de prestador (Desocupado / Ocupado) gestionada únicamente por el titular y sincronizada entre Mapa y Taxis & Motos
   const [driversDisponibilidadMap, setDriversDisponibilidadMap] = useState<
@@ -1614,7 +1650,18 @@ export default function App() {
     return () => clearTimeout(hideChatTimer);
   }, [latestCommunityMessage?.id, dismissedChatMsgId, activeTab]);
 
-  const sentiment = computeLineSentiment(messages, events);
+  const sentiment = computeLineSentiment(
+    communityChatList.map((m) => ({
+      id: m.id,
+      channel: 'general',
+      userId: m.usuarioId,
+      userName: m.nombreUsuario,
+      content: m.texto,
+      timestamp: '',
+      sentiment: 'neutral',
+    })),
+    events
+  );
 
   // Simulated live buses movement
   useEffect(() => {
@@ -3463,35 +3510,28 @@ export default function App() {
                           <p className="text-[10.5px] text-[#9299A5] leading-relaxed">
                             Para figurar como Habilitado en la plataforma, completá tu solicitud de turno y el Administrador validará tu comprobante para iniciar tu temporizador en vivo.
                           </p>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setPublishTaxiInitialTab('transfer');
-                              setPublishTaxiInitialVehicle(
-                                currentUser.rol === 'chofer_moto' || currentUser.tipoVehiculo === 'moto'
-                                  ? 'moto'
-                                  : 'auto'
-                              );
-                              setIsPublishTaxiOpen(true);
-                              setIsProfileDropdownOpen(false);
-                            }}
-                            className="w-full min-h-[42px] py-2 px-3 rounded-xl uppa-cta-yellow font-black text-xs flex items-center justify-center gap-1.5 cursor-pointer"
-                          >
-                            <KeyRound className="w-4 h-4" />
-                            <span>Abonar y Solicitar Habilitación de Turno</span>
-                          </button>
-                          <a
-                            href={`https://wa.me/5493489690058?text=${encodeURIComponent(
-                              `Hola Lucia Veronica Gimenez! Te contacto por la habilitación de mi servicio de chofer (${currentUser.name || 'Prestador UPPA'}).`
-                            )}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            title="WhatsApp Admin UPPA"
-                            className="w-full min-h-[44px] py-2 px-3 rounded-xl bg-[#B7F36B] hover:brightness-95 text-[#101114] border border-[#101114] font-black text-xs flex items-center justify-center gap-1.5 transition-all"
-                          >
-                            <MessageSquare className="w-4 h-4" />
-                            <span>Contactar Administrador (3489690058)</span>
-                          </a>
+                          {hasPendingPaidHabilitacion ? (
+                            <div className="w-full py-2.5 px-3 rounded-xl bg-[#B7F36B]/15 border border-[#B7F36B]/50 text-[#B7F36B] font-bold text-[11px] text-center">
+                              ✓ Datos y comprobante enviados · Pendiente de habilitación
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsProfileDropdownOpen(false);
+                                handleRequestPrestarServicio(
+                                  'transfer',
+                                  currentUser.rol === 'chofer_moto' || currentUser.tipoVehiculo === 'moto'
+                                    ? 'moto'
+                                    : 'auto'
+                                );
+                              }}
+                              className="w-full min-h-[42px] py-2 px-3 rounded-xl uppa-cta-yellow font-black text-xs flex items-center justify-center gap-1.5 cursor-pointer"
+                            >
+                              <KeyRound className="w-4 h-4" />
+                              <span>Abonar y Solicitar Habilitación de Turno</span>
+                            </button>
+                          )}
                         </div>
                       )}
                     </div>
@@ -3741,7 +3781,7 @@ export default function App() {
           hasUnvalidatedRide={myUnvalidatedDriverRide}
           onToggleDisponibilidad={handleToggleDriverDisponibilidad}
           onCenterMap={() => setActiveTab('map')}
-          onOpenRenewModal={() => setIsPublishTaxiOpen(true)}
+          onOpenRenewModal={() => handleRequestPrestarServicio('transfer')}
         />
       )}
 
@@ -4497,6 +4537,8 @@ export default function App() {
         currentUserId={currentUser.id}
         currentUserName={currentUser.name}
         currentUserPhone={currentUser.phone}
+        activePaidEndsAt={hasActivePaidDriverHabilitacion ? driverPaidEndsAt : 0}
+        hasPendingHabilitacion={hasPendingPaidHabilitacion}
       />
 
       <ContactAdModal
@@ -4571,15 +4613,7 @@ export default function App() {
         focusEmailVerificationTick={emailVerificationFocusTick}
         isHabilitado={hasActivePaidDriverHabilitacion}
         onOpenPublishTaxi={(vehicleType) => {
-          setPublishTaxiInitialTab('transfer');
-          if (vehicleType) {
-            setPublishTaxiInitialVehicle(vehicleType);
-          } else if (currentUser.rol === 'chofer_moto' || currentUser.tipoVehiculo === 'moto') {
-            setPublishTaxiInitialVehicle('moto');
-          } else {
-            setPublishTaxiInitialVehicle('auto');
-          }
-          setIsPublishTaxiOpen(true);
+          handleRequestPrestarServicio('transfer', vehicleType);
         }}
         onUpdateUser={(updated) => {
           const roleChanged =

@@ -2447,14 +2447,16 @@ export const TaxiMarketplace: React.FC<TaxiMarketplaceProps> = ({
                         {consoleVehicleType === 'moto' ? 'Moto Taxi' : 'Auto Taxi'} con turno vigente en este momento.
                       </p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => onOpenPublishModal('transfer')}
-                      className="min-h-[38px] px-3 py-1.5 rounded-xl uppa-cta-green font-black text-[11px] inline-flex items-center justify-center gap-1.5 cursor-pointer"
-                    >
-                      <KeyRound className="w-3.5 h-3.5" />
-                      <span>Prestar Servicio</span>
-                    </button>
+                    {!isPrestadorLogueado && (
+                      <button
+                        type="button"
+                        onClick={() => onOpenPublishModal('transfer')}
+                        className="min-h-[38px] px-3 py-1.5 rounded-xl uppa-cta-green font-black text-[11px] inline-flex items-center justify-center gap-1.5 cursor-pointer"
+                      >
+                        <KeyRound className="w-3.5 h-3.5" />
+                        <span>Prestar Servicio</span>
+                      </button>
+                    )}
                   </div>
                 )}
               </div>

@@ -68,6 +68,9 @@ import {
   ChevronLeft,
   ChevronRight,
   Plus,
+  FileImage,
+  Download,
+  X,
 } from 'lucide-react';
 
 interface AdminPanelProps {
@@ -131,6 +134,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [confirmDeleteUid, setConfirmDeleteUid] = useState<string | null>(null);
   const [confirmDeleteReportId, setConfirmDeleteReportId] = useState<string | null>(null);
   const [confirmDeleteChatId, setConfirmDeleteChatId] = useState<string | null>(null);
+  const [selectedComprobanteHab, setSelectedComprobanteHab] = useState<HabilitacionChofer | null>(null);
 
   // Manual pending request creation inside Admin
   const [isManualHabOpen, setIsManualHabOpen] = useState(false);
@@ -707,16 +711,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   Habilitación de Chofer (Moto / Auto Taxi)
                 </h3>
               </div>
-              <a
-                href="https://wa.me/5493489690058"
-                target="_blank"
-                rel="noopener noreferrer"
-                title="Abrir WhatsApp oficial de verificación 3489690058"
-                className="px-3.5 min-h-[42px] rounded-xl uppa-cta-green font-black text-xs flex items-center gap-1.5 transition-all"
-              >
-                <span>WhatsApp de Verificación: 3489690058</span>
-                <ExternalLink className="w-3.5 h-3.5" />
-              </a>
+              <div className="px-3.5 min-h-[42px] rounded-xl bg-[#101114] border-2 border-[#B7F36B]/50 text-[#B7F36B] font-black text-xs flex items-center gap-2">
+                <Database className="w-4 h-4 shrink-0" />
+                <span>Comprobantes Guardados en Base de Datos</span>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs bg-[#101114] p-3 rounded-xl border border-white/10">
@@ -762,7 +760,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             </div>
 
             <p className="text-[11px] text-[#9299A5] mt-2.5">
-              💡 <strong className="text-white">Regla del sistema:</strong> El código no lo pone el conductor. Cuando el chofer envía el comprobante de transferencia al WhatsApp <strong className="text-white">3489690058</strong>, el administrador habilita el tiempo pagado una vez verificado y comienza el temporizador en vivo.
+              💡 <strong className="text-white">Regla del sistema:</strong> Cuando el chofer completa el formulario <strong className="text-white">&quot;Habilitación de Chofer&quot;</strong>, sus datos y la imagen del comprobante se envían directamente a la base de datos. Verificá el comprobante adjunto en cada tarjeta pendiente y habilitá el tiempo pagado para iniciar el temporizador en vivo.
             </p>
           </div>
 
@@ -983,14 +981,64 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                             </span>
                           </div>
                         )}
-                        {hab.comprobanteFileName && (
-                          <div className="flex justify-between">
-                            <span className="text-[#9299A5]">Comprobante:</span>
-                            <span className="font-mono text-[11px] text-[#FFF19A] truncate max-w-[180px]">
-                              {hab.comprobanteFileName}
-                            </span>
-                          </div>
-                        )}
+                        {(() => {
+                          const hasReceiptImg = Boolean(
+                            hab.comprobanteUrl &&
+                              (hab.comprobanteUrl.startsWith('data:image/') ||
+                                hab.comprobanteUrl.startsWith('http'))
+                          );
+                          return hasReceiptImg ? (
+                            <div className="mt-2 pt-2 border-t border-white/10 flex items-center justify-between gap-2.5">
+                              <button
+                                type="button"
+                                onClick={() => setSelectedComprobanteHab(hab)}
+                                className="flex items-center gap-2.5 min-w-0 text-left group cursor-pointer"
+                                title="Tocar para ampliar la imagen del comprobante"
+                              >
+                                <img
+                                  src={hab.comprobanteUrl}
+                                  alt={`Comprobante de ${hab.driverName}`}
+                                  className="w-12 h-12 rounded-lg object-cover border-2 border-[#B7F36B] group-hover:scale-105 transition-transform shrink-0"
+                                />
+                                <div className="min-w-0">
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-black text-[#B7F36B]">
+                                    <CheckCircle className="w-3 h-3 shrink-0" />
+                                    <span>Comprobante enviado en BD</span>
+                                  </span>
+                                  <span className="block font-mono text-[10.5px] text-white truncate max-w-[160px]">
+                                    {hab.comprobanteFileName || 'comprobante_transferencia.jpg'}
+                                  </span>
+                                  {typeof hab.comprobanteSizeBytes === 'number' && (
+                                    <span className="block text-[9.5px] font-mono text-[#9299A5]">
+                                      {(hab.comprobanteSizeBytes / 1024).toFixed(1)} KB
+                                    </span>
+                                  )}
+                                </div>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setSelectedComprobanteHab(hab)}
+                                className="px-2.5 py-1.5 rounded-lg bg-[#B7F36B]/15 hover:bg-[#B7F36B]/25 border border-[#B7F36B]/50 text-[#B7F36B] text-[10.5px] font-black flex items-center gap-1 shrink-0 cursor-pointer"
+                                title="Ver imagen completa del comprobante"
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                                <span>Ver</span>
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="mt-2 pt-2 border-t border-white/10 flex items-center justify-between gap-2 text-[10.5px]">
+                              <span className="text-amber-300 font-bold flex items-center gap-1">
+                                <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                                <span>Sin imagen de comprobante en BD</span>
+                              </span>
+                              {hab.comprobanteFileName && (
+                                <span className="font-mono text-[10px] text-[#9299A5] truncate max-w-[140px]">
+                                  {hab.comprobanteFileName}
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </div>
 
                       {selectedHabIdForActivation === hab.id ? (
@@ -1300,6 +1348,24 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                             </span>
                           </div>
                         )}
+                        {hab.comprobanteUrl &&
+                          (hab.comprobanteUrl.startsWith('data:image/') ||
+                            hab.comprobanteUrl.startsWith('http')) && (
+                            <div className="pt-1.5 mt-1 border-t border-white/10 flex items-center justify-between gap-2">
+                              <span className="text-[#B7F36B] font-bold flex items-center gap-1">
+                                <FileImage className="w-3.5 h-3.5" />
+                                <span>Comprobante guardado en BD</span>
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => setSelectedComprobanteHab(hab)}
+                                className="px-2 py-1 rounded-lg bg-[#202329] hover:bg-white/10 border border-[#B7F36B]/45 text-[#B7F36B] text-[10px] font-black flex items-center gap-1 cursor-pointer"
+                              >
+                                <Eye className="w-3 h-3" />
+                                <span>Ver Comprobante</span>
+                              </button>
+                            </div>
+                          )}
                       </div>
 
                       {isConfirmingRevoke ? (
@@ -1955,6 +2021,108 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               <Send className="w-4 h-4" />
               <span>Emitir Alerta a Todos los Pasajeros y Choferes</span>
             </button>
+          </div>
+        </div>
+      )}
+      {/* Modal Visor de Comprobante Adjunto en Base de Datos */}
+      {selectedComprobanteHab && (
+        <div
+          className="fixed inset-0 z-[80] flex items-center justify-center p-3 sm:p-5 bg-black/85 backdrop-blur-sm animate-in fade-in duration-150"
+          onClick={() => setSelectedComprobanteHab(null)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-lg bg-[#202329] border-2 border-[#B7F36B]/60 rounded-3xl shadow-[6px_6px_0px_#000000] overflow-hidden flex flex-col max-h-[92vh]"
+          >
+            <div className="px-4 py-3 border-b border-white/10 bg-[#101114] flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-9 h-9 rounded-xl bg-[#B7F36B]/15 border border-[#B7F36B]/50 flex items-center justify-center text-[#B7F36B] shrink-0">
+                  <FileImage className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <h4 className="text-sm font-black text-white truncate">
+                    Comprobante de {selectedComprobanteHab.driverName}
+                  </h4>
+                  <p className="text-[11px] text-[#9299A5] truncate">
+                    {selectedComprobanteHab.vehicleModel} · {selectedComprobanteHab.horas}h · Patente{' '}
+                    {selectedComprobanteHab.patente || 'S/D'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedComprobanteHab(null)}
+                className="w-9 h-9 rounded-xl bg-[#202329] hover:bg-white/10 border border-white/15 text-[#9299A5] hover:text-white flex items-center justify-center cursor-pointer shrink-0"
+                title="Cerrar visor de comprobante"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-4 overflow-y-auto space-y-3 flex-1">
+              <div className="grid grid-cols-2 gap-2 text-[11px] bg-[#101114] p-2.5 rounded-xl border border-white/10">
+                <div>
+                  <span className="text-[#9299A5] block text-[10px]">Archivo en BD</span>
+                  <span className="font-mono text-white font-bold block truncate">
+                    {selectedComprobanteHab.comprobanteFileName || 'comprobante_transferencia.jpg'}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[#9299A5] block text-[10px]">Turnos / WhatsApp</span>
+                  <span className="font-mono text-[#B7F36B] font-bold block truncate">
+                    {selectedComprobanteHab.horas}h · +{selectedComprobanteHab.whatsapp}
+                  </span>
+                </div>
+              </div>
+
+              <div className="rounded-2xl bg-[#101114] border border-white/15 p-2 flex items-center justify-center">
+                {selectedComprobanteHab.comprobanteUrl ? (
+                  <img
+                    src={selectedComprobanteHab.comprobanteUrl}
+                    alt={`Comprobante de transferencia de ${selectedComprobanteHab.driverName}`}
+                    className="max-h-[54vh] w-auto object-contain rounded-xl"
+                  />
+                ) : (
+                  <p className="text-xs text-[#9299A5] py-8">No hay imagen disponible.</p>
+                )}
+              </div>
+            </div>
+
+            <div className="px-4 py-3 border-t border-white/10 bg-[#101114] flex flex-wrap items-center justify-end gap-2">
+              {selectedComprobanteHab.comprobanteUrl && (
+                <a
+                  href={selectedComprobanteHab.comprobanteUrl}
+                  download={selectedComprobanteHab.comprobanteFileName || 'comprobante_uppa.jpg'}
+                  className="min-h-[40px] px-3.5 rounded-xl bg-[#202329] hover:bg-white/10 border border-white/15 text-white text-xs font-bold flex items-center gap-1.5"
+                >
+                  <Download className="w-3.5 h-3.5 text-[#FFF19A]" />
+                  <span>Descargar</span>
+                </a>
+              )}
+              {selectedComprobanteHab.estado === 'pendiente' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const target = selectedComprobanteHab;
+                    setSelectedComprobanteHab(null);
+                    setSelectedHabIdForActivation(target.id);
+                    setActivationHours(target.horas || 12);
+                    setAdminActivationPin('');
+                  }}
+                  className="min-h-[40px] px-4 rounded-xl uppa-cta-green font-black text-xs flex items-center gap-1.5 cursor-pointer"
+                >
+                  <KeyRound className="w-3.5 h-3.5" />
+                  <span>Habilitar este Chofer</span>
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setSelectedComprobanteHab(null)}
+                className="min-h-[40px] px-3.5 rounded-xl bg-[#202329] border border-white/15 text-[#9299A5] hover:text-white text-xs font-bold cursor-pointer"
+              >
+                Cerrar
+              </button>
+            </div>
           </div>
         </div>
       )}

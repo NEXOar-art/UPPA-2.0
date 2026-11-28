@@ -190,8 +190,8 @@ export const DriverConnectionBar: React.FC<DriverConnectionBarProps> = ({
           </div>
         )}
 
-        {/* Renew / Add hours button */}
-        {onOpenRenewModal && (
+        {/* Renew / Add hours button (solo habilitado cuando finaliza el temporizador activo) */}
+        {onOpenRenewModal && timerDisplay.isExpired && (
           <button
             type="button"
             onClick={onOpenRenewModal}

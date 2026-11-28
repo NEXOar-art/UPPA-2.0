@@ -128,6 +128,10 @@
         "disponibilidad": { "type": "string", "enum": ["desocupado", "ocupado"] },
         "activadoConClaveAdmin": { "type": "boolean" },
         "activationCode": { "type": "string" },
+        "comprobanteUrl": { "type": "string", "description": "Imagen del comprobante guardada en base de datos (Data URL comprimida)" },
+        "comprobanteFileName": { "type": "string" },
+        "comprobanteSizeBytes": { "type": "number" },
+        "comprobanteSubidoEn": { "type": "number" },
         "startsAt": { "type": "number" },
         "endsAt": { "type": "number" }
       },
